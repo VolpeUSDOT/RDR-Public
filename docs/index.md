@@ -8,13 +8,13 @@ The RDR Tool Suite is a Python based tool.
 
 The RDR Exposure Analysis Tool is an ESRI ArcGIS Pro based tool.
 
-Detailed installation and usage instructions are explained in the RDR User Guide documentation here: (**link tbd**)
-* Clone or download the repository. (**link to release ZIP tbd**) Alternatively, the GitHub code repository is available here: (**link tbd**)
+Detailed installation and usage instructions are explained in the RDR User Guide documentation here: [https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf)
+* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/archive/refs/tags/v2022.1.zip) Alternatively, the GitHub code repository is available here: [https://github.com/VolpeUSDOT/RDR-Public](https://github.com/VolpeUSDOT/RDR-Public)
 * Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool).
 * The documentation and quick start scenario files are included with the code release.
 
 ### Using this code
-The Python dependencies are detailed in `environment.yml` (**link tbd**). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will install to the user's default R library when first run.
+The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will install to the R package library within the user's RDR conda environment.
 
 From your Anaconda Prompt terminal, navigate to the location where you cloned this repository and run the following:
 
