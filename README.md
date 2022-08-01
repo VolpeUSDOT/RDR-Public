@@ -13,13 +13,13 @@ The RDR Tool Suite is a Python based tool.
 
 The RDR Exposure Analysis Tool is an ESRI ArcGIS Pro based tool.
 
-Detailed installation and usage instructions are explained in the RDR User Guide documentation here: (**link tbd**)
-* Clone or download the repository.
+Detailed installation and usage instructions are explained in the RDR User Guide documentation here: [https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf)
+* Download the latest release on the [Releases page](https://github.com/VolpeUSDOT/RDR-Public/releases).
 * Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool).
-* Download the documentation and scenario datasets (**link tbd**)
+* The documentation and quick start scenario files are included with the code release.
 
 ### Using this code
-The Python dependencies are detailed in `environment.yml` (**link tbd**). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will install to the user's default R library when first run.
+The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will install to the R package library within the user's RDR conda environment.
 
 From your Anaconda Prompt terminal, navigate to the location where you cloned this repository and run the following:
 
@@ -51,4 +51,4 @@ The development of the RDR Tool Suite that contributed to this public version wa
 The RDR team thanks our beta testers and collaborators at the Hampton Roads Transportation Planning Organization, the Hampton Roads Planning District Commission, the Houston-Galveston Area Council, and the Hillsborough Transportation Planning Organization, as well as Virginia DOT and Florida DOT, for their input during development.
 
 ## License:
-This project is licensed under the terms of the RDR End User License Agreement. Please read it carefully. (**to be developed**)
+This project is licensed under the terms of the [RDR End User License Agreement](https://github.com/VolpeUSDOT/RDR-Public/blob/main/LICENSE). Please read it carefully.

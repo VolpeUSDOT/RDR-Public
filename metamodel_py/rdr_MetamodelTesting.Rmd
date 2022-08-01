@@ -1,0 +1,747 @@
+---
+title: "RDR Testing of Metamodel Refinements"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+params:
+  input_dir: 'C:/GitHub/RDR/Data/Metamodel_Testing'
+  output_dir: 'C:/GitHub/RDR/Data/Metamodel_Testing/outputs'
+  run_type: 'projgroup01'  # options are 'ALL' and 'projgroup01'
+  seed: '8888'
+  train_proportion: '0.5'
+---
+
+
+```{r test_setup, echo=FALSE, warning=FALSE, message=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+# first set working directory to C:\GitHub\RDR\metamodel_py
+source("rdr_Rutil.R")
+
+# testing framework also requires openxlsx
+use_lib <- ifelse(any(grepl("RDRenv", .libPaths())),
+  .libPaths()[grepl("RDRenv", .libPaths())],
+  .libPaths()[1]
+)
+
+for (i in c("yardstick", "openxlsx")) {
+  if (length(grep(i, (.packages(
+    all.available = TRUE,
+    lib.loc = use_lib
+  )))) == 0) {
+    print(paste("<<>> Installing R package", i, "in", use_lib, "<<>>"))
+
+    install.packages(i,
+      dependencies = c("Depends", "Imports"),
+      repos = "https://cran.us.r-project.org",
+      type = "binary",
+      lib = use_lib,
+      quiet = FALSE,
+      verbose = TRUE
+    )
+  }
+}
+
+# load required packages
+library(rmarkdown)
+library(dplyr)
+library(DT)
+library(yardstick)
+library(openxlsx)
+
+input_dir <- params$input_dir
+output_dir <- params$output_dir
+run_type <- params$run_type
+seed <- params$seed
+train_proportion <- as.numeric(params$train_proportion)
+
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+```
+
+# Metamodel Testing Framework
+
+This R Markdown document evaluates different metamodel formulations through a framework for training and testing using RDR Phase 1 HRTPO AequilibraE runs. The following steps are taken:
+
+- Set up input and output folders/files (for testing on either the (1) 'ALL' 756 runs version, (2) 'projgroup01' runs version).
+- Call 'lhs' module code once with a sampling percentage for the training set.
+- Use AequilibraE outputs to construct the 'aeq_compile' module output file used as input to the metamodel. (NOTE: Phase 1 HRTPO AequilibraE outputs are based on older 0.6.5 version of AequilibraE.)
+- For each metamodel method, run the R Markdown code for generating the metamodel output file.
+- For each metamodel method, calculate metrics: RMSE, MAE, and R^2 for validation scenarios only.
+
+```{r inputs, include=FALSE}
+
+if (!file.exists(file.path(input_dir, paste0("full_combos_", run_type, ".csv")))) {
+  stop(paste0("Error: could not find full_combos_", run_type, ".csv file."))
+}
+
+if (!file.exists(file.path(input_dir, paste0("validation_outputs_SP_", run_type, ".csv")))) {
+  stop(paste0("Error: could not find validation_outputs_SP_", run_type, ".csv file."))
+}
+
+if (!file.exists(file.path(input_dir, paste0("validation_outputs_RT_", run_type, ".csv")))) {
+  stop(paste0("Error: could not find validation_outputs_RT_", run_type, ".csv file."))
+}
+
+if (!file.exists(file.path(input_dir, paste0("Model_Parameters_", run_type, ".xlsx")))) {
+  stop(paste0("Error: could not find Model_Parameters_", run_type, ".xlsx file."))
+}
+
+full_combos <- read.csv(file.path(input_dir, paste0("full_combos_", run_type, ".csv")),
+  colClasses = c(
+    "socio" = "character", "projgroup" = "character", "hazard" = "character",
+    "recovery" = "character", "resil" = "character"
+  )
+)
+
+sp_full <- read.csv(file.path(input_dir, paste0("validation_outputs_SP_", run_type, ".csv")),
+  colClasses = c(
+    "socio" = "character", "projgroup" = "character", "hazard" = "character",
+    "recovery" = "character", "resil" = "character"
+  )
+)
+
+rt_full <- read.csv(file.path(input_dir, paste0("validation_outputs_RT_", run_type, ".csv")),
+  colClasses = c(
+    "socio" = "character", "projgroup" = "character", "hazard" = "character",
+    "recovery" = "character", "resil" = "character"
+  )
+)
+
+# create Model_Parameters.xlsx input file
+file.copy(file.path(input_dir, paste0("Model_Parameters_", run_type, ".xlsx")),
+          file.path(input_dir, "Model_Parameters.xlsx"), overwrite = TRUE)
+
+# copy full_combos file to output directory
+file.copy(file.path(input_dir, paste0("full_combos_", run_type, ".csv")), output_dir, overwrite = TRUE)
+```
+
+## Training/Testing Split
+
+```{r dataset_split, echo=FALSE}
+
+# split the data into training and testing
+lhs_sample_target <- as.character(round(train_proportion * nrow(full_combos)))
+lhs_sample_additional_target <- "0"
+```
+
+There are **`r nrow(full_combos)`** combinations possible for the provided inputs. Using a sample percentage of `r 100.0 * train_proportion`% for the training set, the LHS module will look for `r lhs_sample_target` combinations to create the training set.
+
+## Latin Hypercube Sampling
+
+Choose a sample covering the following dimensions:
+
+  + `socio`
+  + `projgroup`
+  + `resil`
+  + `elasticity`
+  + `hazard`
+  + `recovery`
+
+```{r lhs, include=FALSE}
+
+# Execute rdr_LHS.R, which reads from the Model_Parameters file and creates the AequilibraE design.
+# Note! A number of R package dependencies will be installed by rdr_Rutil.R.
+
+# inputs: Model_Parameters.xlsx (ProjectGroups tab), full_combos_{run_id}.csv
+if (!file.exists("rdr_LHS.R")) {
+  stop("Error: could not find rdr_LHS.R file.")
+}
+
+r_path <- file.path(R.home("bin"), "Rscript.exe")
+if (!file.exists(r_path)) {
+  stop(paste0("Error: could not find R executable at ", r_path, "."))
+}
+
+cmd_failed <- system(paste(r_path, "rdr_LHS.R", input_dir, output_dir,
+                           run_type, lhs_sample_target, lhs_sample_additional_target, run_type, seed))
+if (cmd_failed != 0) {
+  stop("Error: rdr_LHS.R ran into an error.")
+}
+```
+
+## Creating Common Training Set
+
+Use already-run AequilibraE outputs to construct the input file for the metamodel module. Note that Phase 1 HRTPO AequilibraE runs were done with an older version (0.6.5) of AequilibraE.
+
+```{r create_training, include=FALSE}
+
+if (!file.exists(file.path(output_dir, paste0("AequilibraE_LHS_Design_", run_type, "_", lhs_sample_target, ".csv")))) {
+  stop(paste0("Error: could not find AequilibraE_LHS_Design_", run_type, "_", lhs_sample_target, ".csv file."))
+}
+
+lhs_set <- read.csv(file.path(output_dir, paste0("AequilibraE_LHS_Design_", run_type, "_", lhs_sample_target, ".csv")),
+  colClasses = c(
+    "socio" = "character", "projgroup" = "character", "hazard" = "character", "recovery" = "character",
+    "resil" = "character", "ID" = "character", "LHS_ID" = "character"
+  )
+) %>%
+  filter(LHS_ID != "NA") %>%
+  rename(Scenario = ID) %>%
+  select(-LHS_ID) %>%
+  mutate(Type = "Disrupt")
+
+sp_full <- sp_full %>%
+  left_join(lhs_set, by = c("socio", "elasticity", "projgroup", "hazard", "recovery", "resil")) %>%
+  mutate("SP/RT" = "SP", lost_trips = 0, extra_miles = 0, extra_hours = 0, circuitous_trips_removed = 0)
+rt_full <- rt_full %>%
+  left_join(lhs_set, by = c("socio", "elasticity", "projgroup", "hazard", "recovery", "resil")) %>%
+  mutate("SP/RT" = "RT", lost_trips = 0, extra_miles = 0, extra_hours = 0, circuitous_trips_removed = 0)
+
+sp_training <- sp_full %>% filter(Scenario != "NA")
+rt_training <- rt_full %>% filter(Scenario != "NA")
+training_set <- rbind(sp_training, rt_training)
+
+sp_validation <- sp_full %>% filter(is.na(Scenario))
+rt_validation <- rt_full %>% filter(is.na(Scenario))
+validation_set <- rbind(sp_validation, rt_validation)
+
+write.xlsx(training_set, file = file.path(output_dir, paste0("AequilibraE_Runs_Compiled_", run_type, ".xlsx")))
+```
+
+# Fitting Metamodel Formulations
+
+For methods `base`, `interact`, `projgroupLM`, and `multitarget`, run regressions on `trips`, `miles`, and `hours` from the common training set of AequilibraE runs.
+
+```{r test_eqn_builder}
+Use_Names <- data.frame(
+  short = names(full_combos),
+  Name = c(
+    "DevelopmentScenario",
+    "ProjectGroup",
+    "Elasticity",
+    "Hazard",
+    "Recovery",
+    "ResilienceInvestment"
+  )
+)
+
+# from full_combos, only select variables which have more than one level
+use_pred_vars <- names(full_combos)[sapply(full_combos, function(x) length(levels(as.factor(x))) > 1)]
+use_pred_Names <- Use_Names[match(use_pred_vars, Use_Names$short), "Name"]
+len_pred <- 1:length(use_pred_vars)
+
+formula_text_base <- paste(
+  "EstimatedTrips = \\beta_0 + ",
+  paste(paste0("\\beta_", len_pred, " ", use_pred_Names), collapse = " + "),
+  " + \\epsilon"
+)
+
+# Make interaction between hazard and recovery if these exist
+use_pred_Names_interact <- use_pred_Names
+if (all(c("hazard", "recovery") %in% use_pred_vars)) {
+  use_pred_Names_interact <- c(use_pred_Names_interact, "Hazard \\times Recovery")
+}
+
+# Make interaction between resil and projgroup if these exist
+if (all(c("resil", "projgroup") %in% use_pred_vars)) {
+  use_pred_Names_interact <- c(use_pred_Names_interact, "Resil \\times ProjectGroup")
+  use_pred_Names_interact <- use_pred_Names_interact[!use_pred_Names_interact %in% c("ResilienceInvestment", "ProjectGroup")]
+}
+
+formula_text_interact <- paste(
+  "EstimatedTrips = \\beta_0 + ",
+  paste(paste0("\\beta_", len_pred, " ", use_pred_Names_interact), collapse = " + "),
+  " + \\epsilon"
+)
+
+# Make interaction between hazard and recovery if these exist
+use_pred_Names_projgroup <- use_pred_Names
+if (all(c("hazard", "recovery") %in% use_pred_vars)) {
+  use_pred_Names_projgroup <- c(use_pred_Names_projgroup, "Hazard \\times Recovery")
+}
+
+# Remove projgroup if this exists
+if ("projgroup" %in% use_pred_vars) {
+  use_pred_Names_projgroup <- use_pred_Names_projgroup[!use_pred_Names_projgroup %in% c("ProjectGroup")]
+}
+
+formula_text_projgroup <- paste("EstimatedTrips_j = \\beta_{0,j} + ", paste(paste0("\\beta_{", len_pred, ",j} ", use_pred_Names_projgroup), collapse = " + "), " + \\epsilon_j")
+
+# Single GP
+# http://www.gaussianprocess.org/gpml/chapters/RW2.pdf
+# https://www.researchgate.net/profile/Haitao-Liu-20/publication/322077462_Remarks_on_Multi-Output_Gaussian_Process_Regression/links/5a56db8845851547b1bf2d66/Remarks-on-Multi-Output-Gaussian-Process-Regression.pdf
+
+# f(x) ∼ GP(m(x), k(x, x'))
+# mean function m and covariance k
+
+formula_text_multitarget <- "[EstTrips,EstMiles,EstHours] = \\mathcal{GP}(m(\\boldsymbol{x}),k(\\boldsymbol{x},\\boldsymbol{x}\\prime))"
+
+formula_text_mixedeffects <- paste("EstimatedTrips_{ij} = \\gamma_{00} + ", paste(paste0("\\gamma_{0", len_pred, "} ", paste0(use_pred_Names, "_{ij}")), collapse = " + "), " + U_{0j} + U_{1j} Resil_{ij} + \\epsilon_{ij}")
+```
+
+### 'base' metamodel formulation
+Regressions will take the following form (for each response variable, separately). Note that the predictors are all categorical, with a separate estimated coefficient for each level of the predictor:
+
+$$
+`r formula_text_base`
+$$
+
+```{r descrip_base, echo=FALSE, results='asis'}
+cat("The metamodel assesses the best-fit values for the $\\beta$ coefficients, as well as the overall uncertainty $\\epsilon$.")
+```
+
+```{r mm_base, include=FALSE}
+
+method <- "base"
+
+# inputs: AequilibraE_Runs_Compiled_{run_id}.xlsx, full_combos_{run_id}.csv
+if (!file.exists("rdr_Metamodel_Regression.Rmd")) {
+  stop("Error: could not find rdr_Metamodel_Regression.Rmd file.")
+}
+
+# Execute rdr_LHS.R, which reads from the Model_Parameters file and creates the AequilibraE design.
+render("rdr_Metamodel_Regression.Rmd",
+  params = list(
+    input_dir = input_dir,
+    output_dir = output_dir,
+    run_id = run_type,
+    method = method,
+    testing = "true"
+  ),
+  quiet = TRUE, envir = new.env()
+)
+
+file.copy("rdr_Metamodel_Regression.html",
+          file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")),
+          overwrite = TRUE)
+file.remove("rdr_Metamodel_Regression.html")
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+```
+
+### 'interact' metamodel formulation
+Regressions will take the following form (for each response variable, separately). Note that the predictors are all categorical with a separate estimated coefficient for each level of the predictor:
+
+$$
+`r formula_text_interact`
+$$
+
+```{r descrip_interact, echo=FALSE, results='asis'}
+cat("The metamodel assesses the best-fit values for the $\\beta$ coefficients, as well as the overall uncertainty $\\epsilon$.")
+```
+
+```{r mm_interact, include=FALSE}
+
+method <- "interact"
+
+# inputs: AequilibraE_Runs_Compiled_{run_id}.xlsx, full_combos_{run_id}.csv
+if (!file.exists("rdr_Metamodel_Regression.Rmd")) {
+  stop("Error: could not find rdr_Metamodel_Regression.Rmd file.")
+}
+
+# Execute rdr_LHS.R, which reads from the Model_Parameters file and creates the AequilibraE design.
+# Note! A number of R package dependencies will be installed by rdr_Rutil.R.
+render("rdr_Metamodel_Regression.Rmd",
+  params = list(
+    input_dir = input_dir,
+    output_dir = output_dir,
+    run_id = run_type,
+    method = method,
+    testing = "true"
+  ),
+  quiet = TRUE, envir = new.env()
+)
+
+file.copy("rdr_Metamodel_Regression.html",
+          file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")),
+          overwrite = TRUE)
+file.remove("rdr_Metamodel_Regression.html")
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+```
+
+### 'projgroupLM' metamodel formulation
+Regressions will take the following form (for each response variable, separately). Note that the predictors are all categorical, with a separate estimated coefficient for each level of the predictor:
+
+$$
+`r formula_text_projgroup`
+$$
+
+```{r descrip_projgroup, echo=FALSE, results='asis'}
+cat("The metamodel assesses the best-fit values for the $\\beta$ coefficients, as well as the overall uncertainty $\\epsilon$.")
+cat("The subscript $j$ denotes the project group; a separate metamodel is fit for each project group.")
+```
+
+```{r mm_projgroup, include=FALSE}
+
+method <- "projgroupLM"
+
+# inputs: AequilibraE_Runs_Compiled_{run_id}.xlsx, full_combos_{run_id}.csv
+if (!file.exists("rdr_Metamodel_Regression.Rmd")) {
+  stop("Error: could not find rdr_Metamodel_Regression.Rmd file.")
+}
+
+# Execute rdr_LHS.R, which reads from the Model_Parameters file and creates the AequilibraE design.
+# Note! A number of R package dependencies will be installed by rdr_Rutil.R.
+render("rdr_Metamodel_Regression.Rmd",
+  params = list(
+    input_dir = input_dir,
+    output_dir = output_dir,
+    run_id = run_type,
+    method = method,
+    testing = "true"
+  ),
+  quiet = TRUE, envir = new.env()
+)
+
+file.copy("rdr_Metamodel_Regression.html", file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")), overwrite = TRUE)
+file.remove("rdr_Metamodel_Regression.html")
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+```
+
+### 'multitarget' metamodel formulation
+The Gaussian process has the following form (with all response variables estimated jointly). Note that the predictors are all categorical:
+
+$$
+`r formula_text_multitarget`
+$$
+```{r descrip_multitarget, echo=FALSE, results='asis', eval= params$method =='multitarget'}
+cat("Where  $\\boldsymbol{x}$ is the matrix of the input variables", paste(use_pred_Names, collapse = ", "), ".")
+cat("With the mean function $m$ and covariance function $k$, see [here](http://www.gaussianprocess.org/gpml/chapters/RW2.pdf) for more details.")
+```
+
+```{r mm_multitarget, include=FALSE}
+
+method <- "multitarget"
+
+# inputs: AequilibraE_Runs_Compiled_{run_id}.xlsx, full_combos_{run_id}.csv
+if (!file.exists("rdr_Metamodel_Regression.Rmd")) {
+  stop("Error: could not find rdr_Metamodel_Regression.Rmd file.")
+}
+
+# Execute rdr_LHS.R, which reads from the Model_Parameters file and creates the AequilibraE design.
+# Note! A number of R package dependencies will be installed by rdr_Rutil.R.
+render("rdr_Metamodel_Regression.Rmd",
+  params = list(
+    input_dir = input_dir,
+    output_dir = output_dir,
+    run_id = run_type,
+    method = method,
+    testing = "true"
+  ),
+  quiet = TRUE, envir = new.env()
+)
+
+file.copy("rdr_Metamodel_Regression.html", file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")), overwrite = TRUE)
+file.remove("rdr_Metamodel_Regression.html")
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+```
+
+
+### 'mixedeffects' metamodel formulation
+
+Regressions will take the following form (for each response variable, separately). Note that the predictors are all categorical with a separate estimated intercept for each :
+
+$$
+`r formula_text_mixedeffects`
+$$
+
+```{r descrip_mixedeffects, echo=FALSE, results='asis'}
+cat("The metamodel assesses the best-fit values for the $\\beta$ coefficients, as well as the overall uncertainty $\\epsilon$, with a random slipe for resilience projects and a random intercept for each project group.")
+```
+
+```{r mm_mixedeffects, include=FALSE}
+
+method <- "mixedeffects"
+
+# inputs: AequilibraE_Runs_Compiled_{run_id}.xlsx, full_combos_{run_id}.csv
+if (!file.exists("rdr_Metamodel_Regression.Rmd")) {
+  stop("Error: could not find rdr_Metamodel_Regression.Rmd file.")
+}
+
+# Execute rdr_LHS.R, which reads from the Model_Parameters file and creates the AequilibraE design.
+# Note! A number of R package dependencies will be installed by rdr_Rutil.R.
+render("rdr_Metamodel_Regression.Rmd",
+  params = list(
+    input_dir = input_dir,
+    output_dir = output_dir,
+    run_id = run_type,
+    method = method,
+    testing = "true"
+  ),
+  quiet = TRUE, envir = new.env()
+)
+
+file.copy("rdr_Metamodel_Regression.html", file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")), overwrite = TRUE)
+file.remove("rdr_Metamodel_Regression.html")
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+  overwrite = TRUE
+)
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+```
+
+
+# Analyzing Test Performance
+
+For each metamodel formulation and for SP/RT, calculate metrics: RMSE for validation scenarios only (record MAE and R^2 metrics as well).
+
+**Select a response (e.g., Hours) in the tables below to view the best model for a specific response.**
+
+- RMSE: Root Mean Square Error. A lower value indicates better model performance. Units are in the original measure units.
+- Mean Absolute Error: A lower value indicates better model performance. Units are in the original units.
+
+Use RMSE as the diagnostic of choice when individual large errors are particularly important to avoid. Use MAE when it is more important to have the errors minimized on average.
+
+- R-squared: Percent of the variance explained by a model. A high value is better, ranging from 0 - 1. This metric is one the the most frequently used measures of model performance, but does not account for the number of parameters used. Thus, a high $R^2$ value may reflect overfitting of a model, not just a well-performing model.
+
+- AIC: A metric which assesses the fit of a model, penalized by the number of parameters used. Many statisticians prefer AIC to R-squared as a model comparison metric because it favors the simplest model that delivers the best performance.
+
+Better values for a specific response variable are indicated in blue.
+
+
+
+```{r calc_metrics}
+
+methods <- c("base", "interact", "projgroupLM", "multitarget", "mixedeffects")
+
+metrics_df <- data.frame(
+  Method = character(),
+  Run_Type = character(),
+  Trips_RMSE = double(),
+  Miles_RMSE = double(),
+  Hours_RMSE = double(),
+  Trips_MAE = double(),
+  Miles_MAE = double(),
+  Hours_MAE = double(),
+  Trips_RSQ = double(),
+  Miles_RSQ = double(),
+  Hours_RSQ = double(),
+  stringsAsFactors = FALSE
+)
+
+for (aeq_type in c("SP", "RT")) {
+  for (method in methods) {
+    prediction_file <- file.path(output_dir,
+                                 paste0("Metamodel_scenarios_", aeq_type, "_futureyear_", method, "_", run_type, ".csv"))
+
+    if (!file.exists(prediction_file)) {
+      stop(paste0("Error: could not find Metamodel_scenarios_", aeq_type, "_futureyear_", method, "_", run_type, ".csv file."))
+    }
+
+    predictions <- read.csv(prediction_file,
+      colClasses = c(
+        "socio" = "character", "projgroup" = "character", "hazard" = "character",
+        "recovery" = "character", "resil" = "character"
+      )
+    )
+
+    val_set <- if (aeq_type == "SP") sp_validation else rt_validation
+
+    joined_set <- val_set %>%
+      left_join(predictions, by = c("socio", "elasticity", "projgroup", "hazard", "recovery", "resil"), suffix = c("", "_pred"))
+
+    metrics_df <- metrics_df %>% add_row(
+      Method = method, Run_Type = aeq_type,
+      Trips_RMSE = rmse_vec(joined_set$trips, joined_set$trips_pred),
+      Miles_RMSE = rmse_vec(joined_set$miles, joined_set$miles_pred),
+      Hours_RMSE = rmse_vec(joined_set$hours, joined_set$hours_pred),
+      Trips_MAE = mae_vec(joined_set$trips, joined_set$trips_pred),
+      Miles_MAE = mae_vec(joined_set$miles, joined_set$miles_pred),
+      Hours_MAE = mae_vec(joined_set$hours, joined_set$hours_pred),
+      Trips_RSQ = rsq_vec(joined_set$trips, joined_set$trips_pred),
+      Miles_RSQ = rsq_vec(joined_set$miles, joined_set$miles_pred),
+      Hours_RSQ = rsq_vec(joined_set$hours, joined_set$hours_pred)
+    )
+  }
+}
+
+# Add AIC
+aic_file <- paste0("AIC_", params$run_type, "_out.csv")
+
+AICs <- read.csv(file.path(output_dir, aic_file))
+
+AICs <- AICs %>%
+  tidyr::pivot_wider(
+    id_cols = c("Method", "Run_Type"),
+    names_from = "response",
+    values_from = "AIC"
+  )
+
+names(AICs)[!names(AICs) %in% c("Method", "Run_Type")] <- paste0(
+  names(AICs)[!names(AICs) %in% c("Method", "Run_Type")],
+  "_AIC"
+)
+metrics_df <- metrics_df %>%
+  left_join(AICs)
+
+
+m1 <- metrics_df %>%
+  tidyr::pivot_longer(
+    cols = ends_with("RMSE"),
+    names_to = "Response",
+    values_to = "RMSE"
+  ) %>%
+  select(Method, Run_Type, Response, RMSE) %>%
+  mutate(Response = unlist(lapply(strsplit(Response, "_"), function(x) x[1])))
+
+m2 <- metrics_df %>%
+  tidyr::pivot_longer(
+    cols = ends_with("MAE"),
+    names_to = "Response",
+    values_to = "MAE"
+  ) %>%
+  select(Method, Run_Type, Response, MAE) %>%
+  mutate(Response = unlist(lapply(strsplit(Response, "_"), function(x) x[1])))
+
+m3 <- metrics_df %>%
+  tidyr::pivot_longer(
+    cols = ends_with("RSQ"),
+    names_to = "Response",
+    values_to = "RSQ"
+  ) %>%
+  select(Method, Run_Type, Response, RSQ) %>%
+  mutate(Response = unlist(lapply(strsplit(Response, "_"), function(x) x[1])))
+
+m4 <- metrics_df %>%
+  tidyr::pivot_longer(
+    cols = ends_with("AIC"),
+    names_to = "Response",
+    values_to = "AIC"
+  ) %>%
+  select(Method, Run_Type, Response, AIC) %>%
+  mutate(Response = unlist(lapply(strsplit(Response, "_"), function(x) x[1])))
+
+m_df <- left_join(m1, m2) %>%
+  left_join(m3) %>%
+  left_join(m4)
+
+# write table to RMarkdown output
+metrics_sp <- m_df %>% filter(Run_Type == "SP")
+metrics_rt <- m_df %>% filter(Run_Type == "RT")
+
+min_vals <- metrics_sp %>%
+  group_by(Response) %>%
+  mutate(
+    RMSE_min = RMSE == min(RMSE),
+    MAE_min = MAE == min(MAE),
+    RSQ_max = RSQ == max(RSQ),
+    AIC_min = AIC == min(AIC)
+  ) %>%
+  mutate(
+    Method = as.factor(Method),
+    Response = as.factor(Response)
+  )
+
+DT::datatable(min_vals,
+  caption = "RDR Metamodel Comparisons - Shortest Path Routing",
+  filter = "top",
+  options = list(columnDefs = list(list(targets = 8:11, visible = FALSE)))
+) %>%
+  formatRound(
+    columns = c(4, 5, 7),
+    digits = 0
+  ) %>%
+  formatRound(
+    columns = 6,
+    digits = 3
+  ) %>%
+  formatStyle(
+    columns = c("RMSE", "MAE", "RSQ", "AIC"),
+    valueColumns = c("RMSE_min", "MAE_min", "RSQ_max", "AIC_min"),
+    color = styleEqual(c(TRUE, FALSE), c("blue", "grey50"))
+  )
+
+min_vals <- metrics_rt %>%
+  group_by(Response) %>%
+  mutate(
+    RMSE_min = RMSE == min(RMSE),
+    MAE_min = MAE == min(MAE),
+    RSQ_max = RSQ == max(RSQ),
+    AIC_min = AIC == min(AIC)
+  ) %>%
+  mutate(
+    Method = as.factor(Method),
+    Response = as.factor(Response)
+  )
+
+DT::datatable(min_vals,
+  caption = "RDR Metamodel Comparisons - Routing",
+  filter = "top",
+  options = list(columnDefs = list(list(targets = 8:11, visible = FALSE)))
+) %>%
+  formatRound(
+    columns = c(4, 5, 7),
+    digits = 0
+  ) %>%
+  formatRound(
+    columns = 6,
+    digits = 3
+  ) %>%
+  formatStyle(
+    columns = c("RMSE", "MAE", "RSQ", "AIC"),
+    valueColumns = c("RMSE_min", "MAE_min", "RSQ_max", "AIC_min"),
+    color = styleEqual(c(TRUE, FALSE), c("blue", "grey50"))
+  )
+
+write.csv(m_df,
+  file = file.path(
+    output_dir,
+    paste0(
+      "Metamodel_testing_metrics_", run_type, "_train",
+      as.character(train_proportion * 100), "_seed", seed, ".csv"
+    )
+  ),
+  row.names = FALSE
+)
+
+# Remove AIC file
+file.remove(file.path(output_dir, aic_file))
+```
