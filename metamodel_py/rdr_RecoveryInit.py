@@ -88,7 +88,10 @@ def main(input_folder, output_folder, cfg, logger):
     logger.config(("List of event frequency factors for " +
                    "scenario builder: \t{}".format(', '.join(str(e) for e in frequency_to_run))))
 
-    product1 = pd.DataFrame(list(product(economic_to_run, elasticity_to_run, frequency_to_run)),
+    user_input_combos = list(product(economic_to_run, elasticity_to_run, frequency_to_run))
+    user_input_combos.sort()
+
+    product1 = pd.DataFrame(user_input_combos,
                             columns=['Economic', 'Trip Loss Elasticity', 'Future Event Frequency'])
     product1['IDScenarioNoHazard'] = np.arange(len(product1)) + 1
     logger.debug("Size of uncertainty scenario table without hazards or projects: {}".format(product1.shape))

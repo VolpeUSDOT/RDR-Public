@@ -64,7 +64,10 @@ def main(input_folder, output_folder, cfg, logger):
     resil = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
     logger.config("List of resilience projects: \t{}".format(', '.join(str(e) for e in resil)))
 
-    product1 = pd.DataFrame(list(product(socio, projgroup, elasticity, hazard, recovery)),
+    combo_list = list(product(socio, projgroup, elasticity, hazard, recovery))
+    combo_list.sort()
+
+    product1 = pd.DataFrame(combo_list,
                             columns=['socio', 'projgroup', 'elasticity', 'hazard', 'recovery'])
     full_combos = pd.merge(product1, projgroup_to_resil, how='left',
                            left_on='projgroup', right_on='Project Groups', indicator=True)

@@ -1,16 +1,26 @@
 # Usage of automated tests
 
-RDR uses automated testing to ensure the quality of the code base. Three sets of tests are implemented currently:
+RDR uses automated testing to ensure the quality of the code base. The following tests are implemented currently:
 
 1. `config_test.py`
-2. `qs1_1full_test.py`
-3. `qs1_2add_test.py`
+2. `qs1_full_test.py`
+3. `qs2A_test.py`
+4. `qs2B_test.py`
+5. `qs2C_test.py`
+6. `qs3_test.py`
 
 The first validates that input folders are set up correctly, that the config file has the correct values, and that initial setup of the RDR run has been done.
 
-The second runs the Quick Start 1 scenario from scratch, reads the compiled model results, and validates that the AequilibraE outputs match expected values.
+The second runs Quick Start 1 from scratch, reads the compiled model results, and validates that the AequilibraE outputs match expected values.
 
-The third runs a modified Quick Start 1 scenario incorporating existing AequilibraE outputs and supplementing with additional core model runs.
+The third - fifth are tests of Quick Start 2, which modifies outputs of Quick Start 1. Therefore, QS1 has to be completed successfully first; the outputs in the `generated_files` directory of QS1 are copied over into the respective Data directories for each of the QS2 tests.
+  + Example A runs a subset of the hazard scenarios
+  + Example B changes parameters of the recovery module to analyze more hazard recovery cases
+  + Example C changes how damage metrics are calculated in the economic analysis
+
+The sixth runs Quick Start 3, which likewise modifies the outputs of QS1.
+
+A final 'test', `quickstart_cleanup_test.py`, removes all the `generated_files` directories from each test to ensure when running locally that a clean test is performed. When developing tests locally, remove this test file temporarily from the tests directory to keep generated outputs for debugging.
 
 ## Using the tests on GitHub
 
@@ -29,7 +39,7 @@ pytest
 
 Alternatively, specific test scripts can be run individually with this command:
 ```
-python -m pytest metamodel_py/tests/qs1_1full_test.py -v
+python -m pytest metamodel_py/tests/qs1_full_test.py -v
 ```
 
 Use pytest flag `-rP` for extra summary info for passed tests, `-rx` for failed tests.
@@ -47,7 +57,7 @@ def test_files_exists():
     ...
 ```
 
-- A test file can rely on dependent steps to first generate some output, and then evaluate the output matches expected values. For example, `qs1_1full_test.py` includes these steps to first run a full RDR run from a `.bat` file, and then assesses that the results match expected values.
+- A test file can rely on dependent steps to first generate some output, and then evaluate the output matches expected values. For example, `qs1_full_test.py` includes these steps to first run a full RDR run from a `.bat` file, and then assesses that the results match expected values.
 ```
 def call_qs1_bat():
     subprocess.call(os.path.join(file_dir_path, 'run_rdr_full.bat'))

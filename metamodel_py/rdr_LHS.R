@@ -17,11 +17,11 @@ if (!file.exists("rdr_Rutil.R")) {
 
 source("rdr_Rutil.R")
 
-suppressPackageStartupMessages(library(lhs))
-suppressPackageStartupMessages(library(dplyr, warn.conflicts = FALSE))
-suppressPackageStartupMessages(library(tidyr, warn.conflicts = FALSE))
-suppressPackageStartupMessages(library(tibble, warn.conflicts = FALSE))
-suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(lhs, lib.loc = use_lib))
+suppressPackageStartupMessages(library(dplyr, lib.loc = use_lib, warn.conflicts = FALSE))
+suppressPackageStartupMessages(library(tidyr, lib.loc = use_lib, warn.conflicts = FALSE))
+suppressPackageStartupMessages(library(tibble, lib.loc = use_lib, warn.conflicts = FALSE))
+suppressPackageStartupMessages(library(readxl, lib.loc = use_lib))
 
 # See rdr_LHS.py for order of the arguments
 args <- commandArgs(trailingOnly = TRUE)

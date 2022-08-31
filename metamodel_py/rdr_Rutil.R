@@ -17,7 +17,7 @@ loadpacks <- c(
 
 use_lib <- ifelse(any(grepl("RDRenv", .libPaths())),
   .libPaths()[grepl("RDRenv", .libPaths())],
-  .libPaths()[1]
+  .libPaths()
 )
 
 num_to_install <- sum(is.na(match(loadpacks, (.packages(all.available = TRUE, lib.loc = use_lib)))))

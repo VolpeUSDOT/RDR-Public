@@ -17,3 +17,7 @@ quick_starts/qs3_add_scenarios/Data/generated_files/*
 
 !metamodel_py/tests/*
 metamodel_py/tests/qs1_files/Data/generated_files/*
+metamodel_py/tests/qs2_files/Example_A/Data/generated_files/*
+metamodel_py/tests/qs2_files/Example_B/Data/generated_files/*
+metamodel_py/tests/qs2_files/Example_C/Data/generated_files/*
+metamodel_py/tests/qs3_files/Data/generated_files/*
