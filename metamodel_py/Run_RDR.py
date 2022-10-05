@@ -146,7 +146,7 @@ def main():
             from rdr_Metamodel import main
             logger.info("Running metamodel")
             main(input_folder, output_folder, cfg, logger)
-
+        
         # ---------------------------------------------------------------------------------------------------
         # None of the steps above should be re-run when conducting ROI analysis or generating visualizations,
         # only to create the metamodel in the first place

@@ -29,14 +29,19 @@ knitr::opts_chunk$set(
 )
 options(warn = -1) # Suppress warnings
 
-suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(DT))
-suppressPackageStartupMessages(library(knitr))
-suppressPackageStartupMessages(library(lme4)) # used for 'mixedeffects' method
-suppressPackageStartupMessages(library(mlegp)) # Gaussian Process regression for multitarget option
-suppressPackageStartupMessages(library(nlme)) # used for 'projgroupLM' method
-suppressPackageStartupMessages(library(readxl))
-suppressPackageStartupMessages(library(sjPlot))
+use_lib <- ifelse(any(grepl("RDRenv", .libPaths())),
+  .libPaths()[grepl("RDRenv", .libPaths())],
+  .libPaths()
+)
+
+suppressPackageStartupMessages(library(dplyr, lib.loc = use_lib))
+suppressPackageStartupMessages(library(DT, lib.loc = use_lib))
+suppressPackageStartupMessages(library(knitr, lib.loc = use_lib))
+suppressPackageStartupMessages(library(lme4, lib.loc = use_lib)) # used for 'mixedeffects' method
+suppressPackageStartupMessages(library(mlegp, lib.loc = use_lib)) # Gaussian Process regression for multitarget option
+suppressPackageStartupMessages(library(nlme, lib.loc = use_lib)) # used for 'projgroupLM' method
+suppressPackageStartupMessages(library(readxl, lib.loc = use_lib))
+suppressPackageStartupMessages(library(sjPlot, lib.loc = use_lib))
 
 input_dir <- params$input_dir
 output_dir <- params$output_dir

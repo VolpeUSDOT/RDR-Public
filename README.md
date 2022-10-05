@@ -19,7 +19,7 @@ Detailed installation and usage instructions are explained in the RDR User Guide
 * The documentation and quick start scenario files are included with the code release.
 
 ### Using this code
-The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will install to the R package library within the user's RDR conda environment.
+The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will be installed by conda in the R package library within the user's RDR conda environment.
 
 From your Anaconda Prompt terminal, navigate to the location where you cloned this repository and run the following:
 

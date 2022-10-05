@@ -7,7 +7,7 @@ if (!file.exists("rdr_Rutil.R")) {
 
 source("rdr_Rutil.R")
 
-suppressPackageStartupMessages(library(rmarkdown))
+suppressPackageStartupMessages(library(rmarkdown, lib.loc = use_lib))
 
 # See rdr_Metamodel.py for order of the arguments
 args <- commandArgs(trailingOnly = TRUE)
