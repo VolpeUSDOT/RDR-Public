@@ -1,22 +1,22 @@
 # Resilience and Disaster Recovery (RDR) Tool Suite
 
 ## Description:
-The RDR Tool Suite enables transportation agencies to assess transportation resilience return on investment (ROI) for specific transportation assets over a range of potential future conditions and hazard scenarios, which can then be used as a consideration in existing project prioritization processes. The tool suite utilizes established Robust Decision-Making concepts developed to build on current TDM analyses and address deeply uncertain future scenarios. The RDR Tool Suite was developed at the US Dept. of Transportation's Volpe National Transportation Systems Center in support of FHWA and the Office of the Secretary of Transportation.
+The RDR Tool Suite enables transportation agencies to assess transportation resilience return on investment (ROI) for specific transportation assets over a range of potential future conditions and hazard scenarios, which can then be used as a consideration in existing project prioritization processes. The tool suite utilizes established Robust Decision-Making concepts developed to build on current TDM analyses and address deeply uncertain future scenarios. The RDR Tool Suite was developed at the US Dept. of Transportation's Volpe National Transportation Systems Center in support of FHWA and the Office of the Secretary of Transportation. [Click here](https://github.com/VolpeUSDOT/RDR-Public/tree/main/documentation) to download the technical documentation, user guide, quick start tutorial, and scenario checklist, as well as a brief overview document.
 
 ## Installation and Usage:
 The RDR Tool Suite is a Python based tool.
 
 The RDR Exposure Analysis Tool is an ESRI ArcGIS Pro based tool.
 
-Detailed installation and usage instructions are explained in the RDR User Guide documentation here: [https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf)
-* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/archive/refs/tags/v2022.1.zip) Alternatively, the GitHub code repository is available here: [https://github.com/VolpeUSDOT/RDR-Public](https://github.com/VolpeUSDOT/RDR-Public)
+Detailed installation and usage instructions are explained in the [RDR User Guide documentation](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf). A [video tutorial](#installing-rdr) on how to install RDR is also available.
+* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/archive/refs/tags/v2022.1.zip) Alternatively, the GitHub code repository is available here: [https://github.com/VolpeUSDOT/RDR-Public](https://github.com/VolpeUSDOT/RDR-Public).
 * Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool).
 * The documentation and quick start scenario files are included with the code release.
 
 ### Using this code
-The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will install to the R package library within the user's RDR conda environment.
+The RDR Tool Suite runs in a custom Python environment built on conda and Python 3.7. The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). There are R components as well, which will install automatically to the R package library within the user's RDR conda environment when first running the Tool Suite. To set up the RDR conda environment, follow these steps based on [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file).
 
-From your Anaconda Prompt terminal, navigate to the location where you cloned this repository and run the following:
+Open Anaconda Prompt. From the Anaconda Prompt terminal, navigate to the location where you cloned the RDR repository and run the following:
 
 ```
 conda env create -f environment.yml
@@ -25,8 +25,23 @@ conda info --envs
 
 You should see `RDRenv` show up as an available environment.
 
+### Next steps
+At this point, you can verify that RDR is fully functional by running one of the pre-built quick start scenarios. For detailed instructions, consult the [RDR Quick Start Tutorial](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_QuickStartTutorial_final.pdf). You can also follow along with the [video tutorial](#running-quick-start-1) for running the first Quick Start scenario. Alternatively, consult the [RDR User Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf) and [RDR Run Checklist](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_Checklist_final.pdf) for guidance on developing your own scenarios.
+
 ## Contributing:
 Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub repository](https://github.com/VolpeUSDOT/RDR-Public/issues) for the Volpe Development Team to triage.
+
+## Video Series:
+
+#### Installing RDR
+{% include youtube.html id="DVLlfUF2EP8" %}
+<br>
+<br>
+
+#### Running Quick Start 1
+{% include youtube.html id="J3G2cRM2PJQ" %}
+<br>
+<br>
 
 ## Credits:
 * Kristin C. Lewis, PhD (Volpe) <Kristin.Lewis@dot.gov>
