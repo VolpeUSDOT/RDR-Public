@@ -50,6 +50,7 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 * Olivia Gillham (Volpe)
 * Michelle Gilmore (Volpe)
 * Alexander Oberg (Volpe)
+* Tess Perrone (Volpe)
 * Gretchen Reese (Volpe)
 * Scott Smith, PhD (Volpe)
 * Kevin Zhang, PhD (Volpe)
