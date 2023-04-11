@@ -9,12 +9,13 @@
 # Nodes as a .csv flat file in GMNS format
 # - Critical fields include node_id and node_type. If node_type = 'centroid', then the node is a centroid node
 # 
-# Trips as a .csv flat file, with the following columns: orig_node, dest_node, trips
+# Trips as one or two .csv flat files, with the following columns: orig_node, dest_node, trips
 # - The orig_node and dest_node must be centroids
+# - demand.csv is required,  demand_nocar.csv is optional
 # 
 # Output:
 # 
-# Trip table as an omx file
+# Trip table as an omx file, named demand_new.omx
 
 # Imports
 from os.path import join
@@ -57,7 +58,7 @@ trip_csvfile = join(topfldr, 'demand.csv')
 df_trip = pd.read_csv(trip_csvfile)  # data already has headers
 print(df_trip.head())  #DEBUG
 df_size = df_trip.shape[0]
-print(df_size)  #DEBUG
+print(trip_csvfile, 'Size =', df_size)  #DEBUG
 # stuff for debugging
 print(df_trip['trips'].sum())  # for debugging: total number of trips
 
@@ -87,6 +88,23 @@ for k in range(df_size):  # at most matrix_size * matrix_size
    
 f_output['matrix'] = output_demand  # Put the filled-in matrix into the OMX file
 
+#  New code block for demand_nocar  (used in transit)
+try:
+    trip_csvfile = join(topfldr, 'demand_nocar.csv')
+    df_trip = pd.read_csv(trip_csvfile)  # data already has headers
+    print(df_trip.head())  #DEBUG
+    df_size = df_trip.shape[0]
+    print(trip_csvfile, 'Size =', df_size)  #DEBUG
+    # stuff for debugging
+    print(df_trip['trips'].sum()) 
+    output_demand_nocar = np.zeros((matrix_size, matrix_size))
+    for k in range(df_size):  # at most matrix_size * matrix_size
+        i = tazdictrow[df_trip.iloc[k]['orig_node']]
+        j = tazdictrow[df_trip.iloc[k]['dest_node']]
+        output_demand_nocar[i][j] = df_trip.iloc[k]['trips']
+    f_output['nocar'] = output_demand_nocar
+except:
+	print("Exception on reading and processing demand_nocar")
 f_output.close()  # close the OMX and debugging files
 outdebugfile.close()
 

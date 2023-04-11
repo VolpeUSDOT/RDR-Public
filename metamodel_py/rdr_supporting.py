@@ -28,8 +28,14 @@ def log_subprocess_output(pipe, logger):
 
 
 def log_subprocess_error(pipe, logger):
+    is_error = False
+
     for line in iter(pipe.readline, b''):  # b'\n'-separated lines
+        if line != b'':
+            is_error = True
         logger.error('R PROCESS: %r', line.strip().decode('ascii'))
+
+    return is_error
 
 
 # ==================================================================

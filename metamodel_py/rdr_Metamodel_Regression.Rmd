@@ -13,7 +13,7 @@ params:
   output_dir: 'C:/GitHub/RDR/Data/SampleRun/generated_files'
   run_id: 'SampleRun'
   testing: false
-  method: 'base'  # options are 'base', 'interact', 'projgroupLM', 'multitarget', 'mixedeffects'
+  method: 'multitarget'  # options are 'base', 'interact', 'projgroupLM', 'multitarget' (default), 'mixedeffects'
 ---
 
 <!-- https://cran.r-project.org/web/packages/mlegp/vignettes/mlegp.pdf -->
@@ -37,9 +37,9 @@ use_lib <- ifelse(any(grepl("RDRenv", .libPaths())),
 suppressPackageStartupMessages(library(dplyr, lib.loc = use_lib))
 suppressPackageStartupMessages(library(DT, lib.loc = use_lib))
 suppressPackageStartupMessages(library(knitr, lib.loc = use_lib))
-suppressPackageStartupMessages(library(lme4, lib.loc = use_lib)) # used for 'mixedeffects' method
-suppressPackageStartupMessages(library(mlegp, lib.loc = use_lib)) # Gaussian Process regression for multitarget option
-suppressPackageStartupMessages(library(nlme, lib.loc = use_lib)) # used for 'projgroupLM' method
+suppressPackageStartupMessages(library(lme4, lib.loc = use_lib))  # used for 'mixedeffects' method
+suppressPackageStartupMessages(library(mlegp, lib.loc = use_lib))  # used for Gaussian Process regression for 'multitarget' method
+suppressPackageStartupMessages(library(nlme, lib.loc = use_lib))  # used for 'projgroupLM' method
 suppressPackageStartupMessages(library(readxl, lib.loc = use_lib))
 suppressPackageStartupMessages(library(sjPlot, lib.loc = use_lib))
 
@@ -239,8 +239,8 @@ if (params$method == "multitarget") {
 }
 
 if (params$method == "mixedeffects") {
-  # TODO: check Gelman textbook for correct notation for error term of the random slope in resil | projgroup
-  # Also reference Raudenbush and Bryk (2006) per https://rpubs.com/rslbliss/r_mlm_ws
+  # Refer to Gelman textbook for notation for error term of the random slope in resil | projgroup
+  # Also reference available in Raudenbush and Bryk (2006) per https://rpubs.com/rslbliss/r_mlm_ws
   formula_text <- paste0("EstimatedTrips_{ij} = \\gamma_{00} + ", paste(paste0("\\gamma_{0", len_pred, "} ", paste0(use_pred_Names, "_{ij}")), collapse = " + "), " + $u$_{0j} + $u$_{1j} Resil_{ij} + \\epsilon_{ij}")
 }
 ```
@@ -391,20 +391,22 @@ if (params$testing) {
 }
 
 if (params$method == "base" || params$method == "interact") {
-  if (params$method == "base") {
-    mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
+  if (sd(d_sp$trips) != 0) {
+    if (params$method == "base") {
+      mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
+        data = d_sp
+      )
+    } else if (params$method == "interact") {
+      mTrip_scaled <- lm(as.formula(paste0(
+        "scale(trips) ~ ",
+        paste(use_add_vars, collapse = " + "),
+        " hazard * recovery_num + projgroup:resil"
+      )),
       data = d_sp
-    )
-  } else if (params$method == "interact") {
-    mTrip_scaled <- lm(as.formula(paste0(
-      "scale(trips) ~ ",
-      paste(use_add_vars, collapse = " + "),
-      " hazard * recovery_num + projgroup:resil"
-    )),
-    data = d_sp
-    )
+      )
+    }
+    sjPlot::tab_model(mTrip_scaled)
   }
-  sjPlot::tab_model(mTrip_scaled)
 }
 ```
 
@@ -453,21 +455,23 @@ if (params$testing) {
 }
 
 if (params$method == "base" || params$method == "interact") {
-  if (params$method == "base") {
-    mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ",
-                                          paste(use_pred_vars, collapse = " + "))),
-                        data = d_sp
-                        )
-  } else if (params$method == "interact") {
-    mMiles_scaled <- lm(as.formula(paste0(
-      "scale(miles) ~ ",
-      paste(use_add_vars, collapse = " + "),
-      " hazard * recovery_num + projgroup:resil"
-    )),
-    data = d_sp
-    )
+  if (sd(d_sp$miles) != 0) {
+    if (params$method == "base") {
+      mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ",
+                                            paste(use_pred_vars, collapse = " + "))),
+                          data = d_sp
+                          )
+    } else if (params$method == "interact") {
+      mMiles_scaled <- lm(as.formula(paste0(
+        "scale(miles) ~ ",
+        paste(use_add_vars, collapse = " + "),
+        " hazard * recovery_num + projgroup:resil"
+      )),
+      data = d_sp
+      )
+    }
+    sjPlot::tab_model(mMiles_scaled)
   }
-  sjPlot::tab_model(mMiles_scaled)
 }
 ```
 
@@ -516,20 +520,22 @@ if (params$testing) {
 }
 
 if (params$method == "base" || params$method == "interact") {
-  if (params$method == "base") {
-    mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
+  if (sd(d_sp$hours) != 0) {
+    if (params$method == "base") {
+      mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
+        data = d_sp
+      )
+    } else if (params$method == "interact") {
+      mHours_scaled <- lm(as.formula(paste0(
+        "scale(hours) ~ ",
+        paste(use_add_vars, collapse = " + "),
+        " hazard * recovery_num + projgroup:resil"
+      )),
       data = d_sp
-    )
-  } else if (params$method == "interact") {
-    mHours_scaled <- lm(as.formula(paste0(
-      "scale(hours) ~ ",
-      paste(use_add_vars, collapse = " + "),
-      " hazard * recovery_num + projgroup:resil"
-    )),
-    data = d_sp
-    )
+      )
+    }
+    sjPlot::tab_model(mHours_scaled)
   }
-  sjPlot::tab_model(mHours_scaled)
 }
 
 # full_combos
@@ -700,20 +706,22 @@ if (params$testing) {
 }
 
 if (params$method == "base" || params$method == "interact") {
-  if (params$method == "base") {
-    mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
+  if (sd(d_rt$trips) != 0) {
+    if (params$method == "base") {
+      mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
+        data = d_rt
+      )
+    } else if (params$method == "interact") {
+      mTrip_scaled <- lm(as.formula(paste0(
+        "scale(trips) ~ ",
+        paste(use_add_vars, collapse = " + "),
+        " hazard * recovery_num + projgroup:resil"
+      )),
       data = d_rt
-    )
-  } else if (params$method == "interact") {
-    mTrip_scaled <- lm(as.formula(paste0(
-      "scale(trips) ~ ",
-      paste(use_add_vars, collapse = " + "),
-      " hazard * recovery_num + projgroup:resil"
-    )),
-    data = d_rt
-    )
+      )
+    }
+    sjPlot::tab_model(mTrip_scaled)
   }
-  sjPlot::tab_model(mTrip_scaled)
 }
 ```
 
@@ -762,20 +770,22 @@ if (params$testing) {
 }
 
 if (params$method == "base" || params$method == "interact") {
-  if (params$method == "base") {
-    mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ", paste(use_pred_vars, collapse = " + "))),
+  if (sd(d_rt$miles) != 0) {
+    if (params$method == "base") {
+      mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ", paste(use_pred_vars, collapse = " + "))),
+        data = d_rt
+      )
+    } else if (params$method == "interact") {
+      mMiles_scaled <- lm(as.formula(paste0(
+        "scale(miles) ~ ",
+        paste(use_add_vars, collapse = " + "),
+        " hazard * recovery_num + projgroup:resil"
+      )),
       data = d_rt
-    )
-  } else if (params$method == "interact") {
-    mMiles_scaled <- lm(as.formula(paste0(
-      "scale(miles) ~ ",
-      paste(use_add_vars, collapse = " + "),
-      " hazard * recovery_num + projgroup:resil"
-    )),
-    data = d_rt
-    )
+      )
+    }
+    sjPlot::tab_model(mMiles_scaled)
   }
-  sjPlot::tab_model(mMiles_scaled)
 }
 ```
 
@@ -824,20 +834,22 @@ if (params$testing) {
 }
 
 if (params$method == "base" || params$method == "interact") {
-  if (params$method == "base") {
-    mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
+  if (sd(d_rt$hours) != 0) {
+    if (params$method == "base") {
+      mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
+        data = d_rt
+      )
+    } else if (params$method == "interact") {
+      mHours_scaled <- lm(as.formula(paste0(
+        "scale(hours) ~ ",
+        paste(use_add_vars, collapse = " + "),
+        " hazard * recovery_num + projgroup:resil"
+      )),
       data = d_rt
-    )
-  } else if (params$method == "interact") {
-    mHours_scaled <- lm(as.formula(paste0(
-      "scale(hours) ~ ",
-      paste(use_add_vars, collapse = " + "),
-      " hazard * recovery_num + projgroup:resil"
-    )),
-    data = d_rt
-    )
+      )
+    }
+    sjPlot::tab_model(mHours_scaled)
   }
-  sjPlot::tab_model(mHours_scaled)
 }
 
 # full_combos

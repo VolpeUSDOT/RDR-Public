@@ -1,11 +1,13 @@
+# Development-related files
 *.pyc
-
 .Rproj.user
 .Rhistory
 metamodel_py/metamodel_py.Rproj
 .idea/
 .vs/
+.ipynb_checkpoints
 
+# Generated files
 Data/*
 !Data/.gitkeep
 quick_starts/qs1_full_run/Data/generated_files/*
@@ -13,11 +15,22 @@ quick_starts/qs2_analysis_run/Example_A/Data/generated_files/*
 quick_starts/qs2_analysis_run/Example_B/Data/generated_files/*
 quick_starts/qs2_analysis_run/Example_C/Data/generated_files/*
 quick_starts/qs3_add_scenarios/Data/generated_files/*
-*.ipynb
+quick_starts/qs4_transit/Data/generated_files/*
 
+# Test files
 !metamodel_py/tests/*
 metamodel_py/tests/qs1_files/Data/generated_files/*
 metamodel_py/tests/qs2_files/Example_A/Data/generated_files/*
 metamodel_py/tests/qs2_files/Example_B/Data/generated_files/*
 metamodel_py/tests/qs2_files/Example_C/Data/generated_files/*
 metamodel_py/tests/qs3_files/Data/generated_files/*
+
+# Shapefiles
+*.cpg
+*.dbf
+*.sbx
+*.shp
+*.sbn
+*.prj
+*.shx
+*.shp.xml

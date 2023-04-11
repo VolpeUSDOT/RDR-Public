@@ -53,7 +53,7 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
     # We grab the graph for cars
     graph = project.network.graphs['c']
 
-    # Let's say we want to minimize free_flow_time
+    # Let's say we want to minimize travel time
     graph.set_graph('free_flow_time')
 
     # And will skim time and distance while we are at it
@@ -92,7 +92,8 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
 
     demand = AequilibraeMatrix()
     demand.load(join(fldr, mtx_fldr, socio + '_demand_summed.omx'))
-    demand.computational_view(['matrix'])  # We will only assign one user class stored as 'matrix' inside the OMX file
+    # Either 'matrix' or 'nocar'
+    demand.computational_view([run_params['matrix_name']])  # We will only assign one user class stored as 'matrix' or 'nocar' inside the OMX file
 
     assig = TrafficAssignment()
 
@@ -107,7 +108,7 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
 
     assig.set_vdf_parameters({"alpha": "alpha", "beta": "beta"})  # Get parameters from link file
 
-    assig.set_capacity_field("capacity")  # The capacity and free flow travel times as they exist in the graph
+    assig.set_capacity_field("capacity")  # The capacity and travel times as they exist in the graph
     assig.set_time_field("free_flow_time")
 
     # And the algorithm we want to use to assign
@@ -117,7 +118,6 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
     # config variable is in dollars per hour
     cent_per_min = (100.0/60.0)*cfg['vot_per_hour']
     assigclass.set_vot(cent_per_min)
-    # TODO: do we need to change anything here to use 'toll' field in links table?
     assigclass.set_fixed_cost("toll", 1.0)
 
     # Since I haven't checked the parameters file, let's make sure convergence criteria is good
