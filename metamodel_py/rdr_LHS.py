@@ -137,8 +137,8 @@ def main(input_folder, output_folder, cfg, logger):
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     log_subprocess_output(R_process.stdout, logger)
-    log_subprocess_error(R_process.stderr, logger)
-    if R_process.stderr.readline() != b'':
+    is_error = log_subprocess_error(R_process.stderr, logger)
+    if is_error:
         logger.error("LHS R CODE ERROR: rdr_LHS.R encountered an error")
         raise Exception("LHS R CODE ERROR: rdr_LHS.R encountered an error")
 

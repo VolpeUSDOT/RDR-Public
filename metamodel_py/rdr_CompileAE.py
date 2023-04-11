@@ -35,10 +35,22 @@ def main(input_folder, output_folder, cfg, logger, base_year):
     # step through each completed run, read in NetSkim.csv, and append results
     for run in completed_runs:
         try:
-            run_result = pd.read_csv(os.path.join(aeq_runs_folder, run, 'NetSkim.csv'),
+            run_result = pd.read_csv(os.path.join(aeq_runs_folder, run, 'matrix', 'NetSkim.csv'),
                                      converters={'Type': str, 'SP/RT': str, 'socio': str, 'projgroup': str,
                                                  'resil': str, 'elasticity': float, 'hazard': str, 'recovery': str,
                                                  'Scenario': str})
+            # check if there is a 'nocar' folder as well, if so then read NetSkim.csv and add results together cell-by-cell
+            if os.path.exists(os.path.join(aeq_runs_folder, run, 'nocar')):
+                run_result_2 = pd.read_csv(os.path.join(aeq_runs_folder, run, 'nocar', 'NetSkim.csv'),
+                                           usecols=['trips', 'miles', 'hours', 'lost_trips', 'extra_miles',
+                                                    'extra_hours', 'circuitous_trips_removed'])
+                run_result.loc[:, ['trips', 'miles', 'hours', 'lost_trips',
+                                   'extra_miles', 'extra_hours',
+                                   'circuitous_trips_removed']] = run_result.loc[:, ['trips', 'miles', 'hours', 'lost_trips',
+                                                                                     'extra_miles', 'extra_hours',
+                                                                                     'circuitous_trips_removed']].add(run_result_2,
+                                                                                                                      fill_value=0)
+
             compiled_results.append(run_result)
         except:
             logger.warning('Error reading run ' + run + ' while compiling results')

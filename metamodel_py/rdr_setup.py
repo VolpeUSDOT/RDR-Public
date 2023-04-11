@@ -2,7 +2,7 @@
 # coding: utf-8
 
 
-from os.path import dirname, exists, join, normpath, realpath
+import os
 import configparser
 from pathlib import Path
 import re
@@ -32,7 +32,7 @@ def read_config_file_helper(config, section, key, required_or_optional):
 def read_config_file(cfg_file):
     cfg_dict = {}  # return value
 
-    if not exists(cfg_file):
+    if not os.path.exists(cfg_file):
         raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_file))
 
     cfg = configparser.RawConfigParser()
@@ -45,48 +45,35 @@ def read_config_file(cfg_file):
     cfg_dict['input_dir'] = read_config_file_helper(cfg, 'common', 'input_dir', 'REQUIRED')
 
     if re.search('^\\.\\\\tests', cfg_dict['input_dir']):
-        cfg_dict['input_dir'] = normpath(join(dirname(realpath(__file__)), cfg_dict['input_dir']))
+        cfg_dict['input_dir'] = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_dict['input_dir']))
 
-    if not exists(cfg_dict['input_dir']):
+    if not os.path.exists(cfg_dict['input_dir']):
         raise Exception("CONFIG FILE ERROR: input directory {} can't be found".format(cfg_dict['input_dir']))
 
     cfg_dict['output_dir'] = read_config_file_helper(cfg, 'common', 'output_dir', 'REQUIRED')
 
     if re.search('^\\.\\\\tests', cfg_dict['output_dir']):
-        cfg_dict['output_dir'] = normpath(join(dirname(realpath(__file__)), cfg_dict['output_dir']))
+        cfg_dict['output_dir'] = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_dict['output_dir']))
 
-    if not exists(cfg_dict['output_dir']):
+    if not os.path.exists(cfg_dict['output_dir']):
         p = Path(cfg_dict['output_dir'])
         p.mkdir(parents=True, exist_ok=True)
         print('Created ' + cfg_dict['output_dir'])
 
     cfg_dict['run_id'] = read_config_file_helper(cfg, 'common', 'run_id', 'REQUIRED')
 
-    # ===================
-    # ANALYSIS VALUES
-    # ===================
-
-    cfg_dict['start_year'] = int(read_config_file_helper(cfg, 'analysis', 'start_year', 'REQUIRED'))
-    cfg_dict['end_year'] = int(read_config_file_helper(cfg, 'analysis', 'end_year', 'REQUIRED'))
-    cfg_dict['base_year'] = int(read_config_file_helper(cfg, 'analysis', 'base_year', 'REQUIRED'))
-    cfg_dict['future_year'] = int(read_config_file_helper(cfg, 'analysis', 'future_year', 'REQUIRED'))
-
-    cfg_dict['discount_factor'] = float(read_config_file_helper(cfg, 'analysis', 'discount_factor', 'REQUIRED'))
-    cfg_dict['vehicle_occupancy'] = float(read_config_file_helper(cfg, 'analysis', 'vehicle_occupancy', 'REQUIRED'))
-
-    cfg_dict['dollar_year'] = int(read_config_file_helper(cfg, 'analysis', 'dollar_year', 'REQUIRED'))
-    veh_oper_cost = read_config_file_helper(cfg, 'analysis', 'veh_oper_cost', 'REQUIRED')
-    cfg_dict['veh_oper_cost'] = float(veh_oper_cost.replace('$', '').replace(',', ''))
-    vot_per_hour = read_config_file_helper(cfg, 'analysis', 'vot_per_hour', 'REQUIRED')
-    cfg_dict['vot_per_hour'] = float(vot_per_hour.replace('$', '').replace(',', ''))
+    cfg_dict['start_year'] = int(read_config_file_helper(cfg, 'common', 'start_year', 'REQUIRED'))
+    cfg_dict['end_year'] = int(read_config_file_helper(cfg, 'common', 'end_year', 'REQUIRED'))
+    cfg_dict['base_year'] = int(read_config_file_helper(cfg, 'common', 'base_year', 'REQUIRED'))
+    cfg_dict['future_year'] = int(read_config_file_helper(cfg, 'common', 'future_year', 'REQUIRED'))
 
     # ===================
     # METAMODEL VALUES
     # ===================
 
     metamodel_type = read_config_file_helper(cfg, 'metamodel', 'metamodel_type', 'OPTIONAL')
-    # Set default to 'base' if this is not specified
-    cfg_dict['metamodel_type'] = 'base'
+    # Set default to 'multitarget' if this is not specified
+    cfg_dict['metamodel_type'] = 'multitarget'
     if metamodel_type is not None:
         if metamodel_type not in ['base', 'interact', 'projgroupLM', 'multitarget', 'mixedeffects']:
             raise Exception(
@@ -312,6 +299,60 @@ def read_config_file(cfg_file):
         cfg_dict['repair_time_csv'] = read_config_file_helper(cfg, 'recovery', 'repair_time_csv', 'REQUIRED')
     else:
         cfg_dict['repair_time_csv'] = None
+
+    # ===================
+    # ANALYSIS VALUES
+    # ===================
+
+    roi_analysis_type = read_config_file_helper(cfg, 'analysis', 'roi_analysis_type', 'REQUIRED')
+    if roi_analysis_type not in ['BCA', 'Regret', 'Breakeven']:
+        raise Exception(
+            "CONFIG FILE ERROR: {} is an invalid value for roi_analysis_type, see config file for possible options (case sensitive)".format(
+                roi_analysis_type))
+    else:
+        cfg_dict['roi_analysis_type'] = roi_analysis_type
+
+    cfg_dict['discount_factor'] = float(read_config_file_helper(cfg, 'analysis', 'discount_factor', 'REQUIRED'))
+    cfg_dict['vehicle_occupancy'] = float(read_config_file_helper(cfg, 'analysis', 'vehicle_occupancy', 'REQUIRED'))
+
+    cfg_dict['dollar_year'] = int(read_config_file_helper(cfg, 'analysis', 'dollar_year', 'REQUIRED'))
+    veh_oper_cost = read_config_file_helper(cfg, 'analysis', 'veh_oper_cost', 'REQUIRED')
+    cfg_dict['veh_oper_cost'] = float(veh_oper_cost.replace('$', '').replace(',', ''))
+    vot_per_hour = read_config_file_helper(cfg, 'analysis', 'vot_per_hour', 'REQUIRED')
+    cfg_dict['vot_per_hour'] = float(vot_per_hour.replace('$', '').replace(',', ''))
+
+    # Parameters for additional benefit calculations
+
+    # Parameters for fatality/injury/property damage only crash rates
+    cfg_dict['fatality_rate'] = float(read_config_file_helper(cfg, 'analysis', 'fatality_rate', 'REQUIRED'))
+    cfg_dict['injury_rate'] = float(read_config_file_helper(cfg, 'analysis', 'injury_rate', 'REQUIRED'))
+    cfg_dict['pdo_rate'] = float(read_config_file_helper(cfg, 'analysis', 'pdo_rate', 'REQUIRED'))
+
+    # Parameter for safety monetization CSV table
+    # If blank set to default location in config folder
+    safety_monetization_csv = read_config_file_helper(cfg, 'analysis', 'safety_monetization_csv', 'OPTIONAL')
+    if safety_monetization_csv is not None:
+        cfg_dict['safety_monetization_csv'] = safety_monetization_csv
+    else:
+        # Set default to binary if this is not specified
+        cfg_dict['safety_monetization_csv'] = os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)),
+                                                           'config', 'default_safety-monetization_table.csv')
+
+    # Parameters for CO2/NOX/SO2/PM2.5 emission rates
+    cfg_dict['co2_rate'] = float(read_config_file_helper(cfg, 'analysis', 'co2_rate', 'REQUIRED'))
+    cfg_dict['nox_rate'] = float(read_config_file_helper(cfg, 'analysis', 'nox_rate', 'REQUIRED'))
+    cfg_dict['so2_rate'] = float(read_config_file_helper(cfg, 'analysis', 'so2_rate', 'REQUIRED'))
+    cfg_dict['pm25_rate'] = float(read_config_file_helper(cfg, 'analysis', 'pm25_rate', 'REQUIRED'))
+
+    # Parameter for emissions monetization CSV table
+    # If blank set to default location in config folder
+    emissions_monetization_csv = read_config_file_helper(cfg, 'analysis', 'emissions_monetization_csv', 'OPTIONAL')
+    if emissions_monetization_csv is not None:
+        cfg_dict['emissions_monetization_csv'] = emissions_monetization_csv
+    else:
+        # Set default to binary if this is not specified
+        cfg_dict['emissions_monetization_csv'] = os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)),
+                                                              'config', 'default_emissions-monetization_table.csv')
 
     # ===================
     # TESTING VALUES

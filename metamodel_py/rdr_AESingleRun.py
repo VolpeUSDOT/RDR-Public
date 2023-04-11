@@ -22,6 +22,7 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
     # run_params['hazard'] = '100yr3SLR'  # string, e.g., '100yr3SLR'
     # run_params['recovery'] = '0'  # string, e.g., X ft of exposure to subtract for intermediate recovery stage
     # run_params['run_minieq'] = 1  # possibilities: 0 or 1
+    # run_params['matrix_name'] = 'matrix'  # possibilities: 'matrix' or 'nocar'
 
     logger.config("running AequilibraE with run parameter: socio = {}".format(run_params['socio']))
     logger.config("running AequilibraE with run parameter: projgroup = {}".format(run_params['projgroup']))
@@ -30,23 +31,27 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
     logger.config("running AequilibraE with run parameter: hazard = {}".format(run_params['hazard']))
     logger.config("running AequilibraE with run parameter: recovery = {}".format(run_params['recovery']))
     logger.config("running AequilibraE with run parameter: run_minieq = {}".format(run_params['run_minieq']))
+    logger.config("running AequilibraE with run parameter: matrix_name = {}".format(run_params['matrix_name']))
 
     elasname = str(int(10 * -run_params['elasticity']))
 
     # to avoid issues with a set of runs going past midnight, using cfg['run_id'] in folder name instead of date
     basescenname = run_params['socio'] + run_params['projgroup']
     if run_params['socio'] == 'baseyear':
-        base_run_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'base', str(cfg['run_id']), basescenname)
+        base_run_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'base',
+                                       str(cfg['run_id']), basescenname, run_params['matrix_name'])
     else:
-        base_run_folder = os.path.join(output_folder, 'aeq_runs', 'base', str(cfg['run_id']), basescenname)
+        base_run_folder = os.path.join(output_folder, 'aeq_runs', 'base',
+                                       str(cfg['run_id']), basescenname, run_params['matrix_name'])
 
     disruptscenname = (basescenname + '_' + run_params['resil'] + '_' + elasname + '_' + run_params['hazard'] +
                        '_' + run_params['recovery'])
     if run_params['socio'] == 'baseyear':
         disrupt_run_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'disrupt',
-                                          str(cfg['run_id']), disruptscenname)
+                                          str(cfg['run_id']), disruptscenname, run_params['matrix_name'])
     else:
-        disrupt_run_folder = os.path.join(output_folder, 'aeq_runs', 'disrupt', str(cfg['run_id']), disruptscenname)
+        disrupt_run_folder = os.path.join(output_folder, 'aeq_runs', 'disrupt',
+                                          str(cfg['run_id']), disruptscenname, run_params['matrix_name'])
 
     # check if AequilibraE run has already been done successfully (look for NetSkim.csv output) for this run ID
     if os.path.exists(os.path.join(disrupt_run_folder, 'NetSkim.csv')):
@@ -87,7 +92,7 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
             sql2 = """insert into links(ogc_fid, link_id, a_node, b_node, direction, distance, modes,
                     link_type, capacity_ab, speed_ab, free_flow_time, toll, alpha, beta)
                     select link_id, link_id, from_node_id, to_node_id, directed, length, allowed_uses,
-                    facility_type, capacity, free_speed, free_flow_time, toll, alpha, beta
+                    facility_type, capacity, free_speed, travel_time, toll, alpha, beta
                     from GMNS_link
                     where GMNS_link.link_available > 0
                     ;"""
@@ -145,7 +150,7 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
         sql2 = """insert into links(ogc_fid, link_id, a_node, b_node, direction, distance, modes, link_type,
                 capacity_ab, speed_ab, free_flow_time, toll, alpha, beta)
                 select link_id, link_id, from_node_id, to_node_id, directed, length, allowed_uses,
-                facility_type, capacity, free_speed, free_flow_time, toll, alpha, beta
+                facility_type, capacity, free_speed, travel_time, toll, alpha, beta
                 from GMNS_link where GMNS_link.link_available > 0;"""
         db_cur.execute(sql2)
         sql3 = "update links set capacity_ba = 0, speed_ba = 0"
@@ -358,11 +363,8 @@ def calc_link_availability(run_params, input_folder, output_folder, cfg, logger)
 
 def create_network_link_csv(run_type, run_params, input_folder, output_folder, cfg, logger):
     logger.debug(("start: create {} network csv file for ".format(run_type) +
-                  "hazard = {}, recovery = {}, socio = {}, projgroup = {}, resil = {}".format(run_params['hazard'],
-                                                                                              run_params['recovery'],
-                                                                                              run_params['socio'],
-                                                                                              run_params['projgroup'],
-                                                                                              run_params['resil'])))
+                  "hazard = {}, recovery = {}, socio = {}, ".format(run_params['hazard'], run_params['recovery'], run_params['socio']) +
+                  "projgroup = {}, resil = {}, trip table = {}".format(run_params['projgroup'], run_params['resil'], run_params['matrix_name'])))
 
     # inputs are GMNS-formatted network file, true shapes file (optional),
     # and link availability file from calc_link_availability (if run_type = 'disrupt')
@@ -392,12 +394,24 @@ def create_network_link_csv(run_type, run_params, input_folder, output_folder, c
 
     logger.debug("loading input files and look-up tables")
 
-    network = pd.read_csv(projgroup_network_table,
-                          usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
-                                   'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll'],
-                          converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
-                                      'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
-                                      'lanes': int, 'allowed_uses': str, 'toll': float})
+    if run_params['matrix_name'] == 'matrix':
+        network = pd.read_csv(projgroup_network_table,
+                              usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
+                                       'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time'],
+                              converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                                          'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
+                                          'lanes': int, 'allowed_uses': str, 'toll': float, 'travel_time': float})
+    elif run_params['matrix_name'] == 'nocar':
+        network = pd.read_csv(projgroup_network_table,
+                              usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
+                                       'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll_nocar', 'travel_time_nocar'],
+                              converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                                          'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
+                                          'lanes': int, 'allowed_uses': str, 'toll_nocar': float, 'travel_time_nocar': float})
+        network.rename({'toll_nocar': 'toll', 'travel_time_nocar': 'travel_time'}, axis='columns', inplace=True)
+    else:
+        logger.error("create_network_link_csv method requires 'matrix' or 'nocar' for matrix_name variable in run_params.")
+        raise Exception("Invalid option for variable matrix_name in run_params in create_network_link_csv method.")
     logger.debug("Size of input project group network table: {}".format(network.shape))
 
     if run_type == 'disrupt':
@@ -460,9 +474,11 @@ def create_network_link_csv(run_type, run_params, input_folder, output_folder, c
     # GMNS capacity is in veh/day/lane, while AequilibraE capacity is in veh/day
     output_links['capacity'] = output_links['capacity'] * output_links['lanes'] * output_links['link_available']
 
+    # travel_time is taken directly from network file as it may incorporate user-defined wait times
     # free_flow_time (min) = 60 * length / free_speed
-    # NOTE: toll adjustments to free flow travel time are handled by AequilibraE
-    output_links['free_flow_time'] = 60 * output_links['length'] / output_links['free_speed']
+    # output_links['free_flow_time'] = 60 * output_links['length'] / output_links['free_speed']
+    # toll adjustments to free flow travel time are handled by AequilibraE
+    # travel_cost = travel_time + toll / value_of_time is handled by AequilibraE
 
     # volume-delay function parameters are specified by link type in an optional input file
     link_types_file = os.path.join(input_folder, 'LookupTables', 'link_types_table.csv')
@@ -496,16 +512,13 @@ def create_network_link_csv(run_type, run_params, input_folder, output_folder, c
     with open(output_network_fullfile, "w", newline='') as f:
         output_links.to_csv(f, index=False, columns=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length',
                                                      'facility_type', 'capacity', 'free_speed', 'lanes', 'allowed_uses',
-                                                     'free_flow_time', 'toll', 'alpha', 'beta', 'link_available',
+                                                     'travel_time', 'toll', 'alpha', 'beta', 'link_available',
                                                      'wkt'])
         logger.result("AequilibraE network links table written to {}".format(output_network_fullfile))
 
     logger.debug(("finished: create {} network csv file for ".format(run_type) +
-                  "hazard = {}, recovery = {}, socio = {}, projgroup = {}, resil = {}".format(run_params['hazard'],
-                                                                                              run_params['recovery'],
-                                                                                              run_params['socio'],
-                                                                                              run_params['projgroup'],
-                                                                                              run_params['resil'])))
+                  "hazard = {}, recovery = {}, socio = {}, ".format(run_params['hazard'], run_params['recovery'], run_params['socio']) +
+                  "projgroup = {}, resil = {}, trip table = {}".format(run_params['projgroup'], run_params['resil'], run_params['matrix_name'])))
 
 
 # ==============================================================================

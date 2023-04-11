@@ -2,8 +2,9 @@
 import sys
 import os
 import argparse
-import sqlite3
 import pandas as pd
+import openmatrix as omx
+import sqlite3
 from itertools import product
 
 # Import modules from core code (two levels up) by setting path
@@ -13,8 +14,8 @@ import rdr_setup
 import rdr_supporting
 import rdr_CompileAE
 
-VERSION_NUMBER = "1.0"
-VERSION_DATE = "03/11/2022"
+VERSION_NUMBER = "2023.1"
+VERSION_DATE = "04/10/2023"
 # ---------------------------------------------------------------------------------------------------
 # The following code processes an existing scenario configuration to automatically
 # generate the outputs of all of the AequilibraE base year runs into one consolidated CSV file
@@ -129,8 +130,24 @@ def main():
         run_params['hazard'] = str(hazard)  # examples: strings containing storm surge + sea-level rise details
         run_params['recovery'] = str(recovery)  # format: strings like X ft of exposure to subtract for recovery stage
         run_params['run_minieq'] = cfg['run_minieq']  # possibilities: 1 or 0
+        run_params['matrix_name'] = 'matrix'  # always run AequilibraE for the default 'matrix'
 
         rdr_AESingleRun.run_AESingleRun(run_params, input_dir, output_dir, cfg, logger)
+
+        # run AequilibraE a second time if a 'nocar' trip table exists
+        mtx_fldr = 'matrices'
+        demand_file = os.path.join(input_dir, 'AEMaster', mtx_fldr, run_params['socio'] + '_demand_summed.omx')
+        if not os.path.exists(demand_file):
+            logger.error("DEMAND OMX FILE ERROR: {} could not be found".format(demand_file))
+            raise Exception("DEMAND OMX FILE ERROR: {} could not be found".format(demand_file))
+        f = omx.open_file(demand_file)
+        if 'nocar' in f.list_matrices():
+            f.close()
+            run_params['matrix_name'] = 'nocar'
+
+            rdr_AESingleRun.run_AESingleRun(run_params, input_dir, output_dir, cfg, logger)
+        else:
+            f.close()
 
     # An AequilibraE run produces one line in the NetSkim CSV
     # This row has to be pulled out of the output file and compiled into the output CSV

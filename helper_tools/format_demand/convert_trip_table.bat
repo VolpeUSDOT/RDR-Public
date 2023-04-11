@@ -11,8 +11,8 @@ REM ==============================================
 REM ======== ENVIRONMENT VARIABLES ===============
 REM ==============================================
 set drive=%~d0
-if %drive%==C: set PATH=C:\Users\%USERNAME%\AppData\Local\Continuum\Anaconda3\Scripts;%PATH%
-if %drive%==C: (set PYTHON="C:\Users\%USERNAME%\AppData\Local\Continuum\Anaconda3\envs\RDRenv\python.exe") else (set PYTHON="python")
+if %drive%==C: set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
+if %drive%==C: (set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe") else (set PYTHON="python")
 set FD_CONVERT_TRIP_TABLE="C:\GitHub\RDR\helper_tools\format_demand\fd_ConvertTripTable.py"
 
 call activate RDRenv

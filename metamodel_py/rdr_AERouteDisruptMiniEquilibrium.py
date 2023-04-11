@@ -74,7 +74,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
     # We grab the graph for cars
     graph = project.network.graphs['c']
 
-    # Let's say we want to minimize free_flow_time
+    # Let's say we want to minimize travel time
     graph.set_graph('free_flow_time')
 
     # And will skim time and distance while we are at it
@@ -82,6 +82,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
     # And we will allow paths to be computed going through other centroids/centroid connectors as specified by user
     # Should be set to False for the Sioux Falls Quick Start network, as all nodes are centroids
+    logger.debug("blocked_centroid_flows parameter set to {}".format(cfg['blocked_centroid_flows']))
     graph.set_blocked_centroid_flows(cfg['blocked_centroid_flows'])
 
     # look at the matrices - not essential to workflow
@@ -134,7 +135,8 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
     # Read the input demand file
     f_input = omx.open_file(infile)
-    m1 = f_input['matrix']
+    # Either 'matrix' or 'nocar'
+    m1 = f_input[run_params['matrix_name']]
     tazs = f_input.mapping('taz')
     logger.debug("Mappings: {}".format(f_input.list_mappings()))
     input_demand = np.array(m1)
@@ -211,7 +213,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
     assig.set_vdf_parameters({"alpha": "alpha", "beta": "beta"})  # Get parameters from link file
 
-    assig.set_capacity_field("capacity")  # The capacity and free flow travel times as they exist in the graph
+    assig.set_capacity_field("capacity")  # The capacity and travel times as they exist in the graph
     assig.set_time_field("free_flow_time")
 
     # And the algorithm we want to use to assign
@@ -294,7 +296,8 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
         # Read the input demand file
         f_input = omx.open_file(infile)
-        m1 = f_input['matrix']
+        # Either 'matrix' or 'nocar'
+        m1 = f_input[run_params['matrix_name']]
         tazs = f_input.mapping('taz')
         logger.debug("Mappings: {}".format(f_input.list_mappings()))
         input_demand = np.array(m1)
@@ -368,7 +371,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
         assig.set_vdf_parameters({"alpha": "alpha", "beta": "beta"})  # Get parameters from link file
 
-        assig.set_capacity_field("capacity")  # The capacity and free flow travel times as they exist in the graph
+        assig.set_capacity_field("capacity")  # The capacity and travel times as they exist in the graph
         assig.set_time_field("free_flow_time")
 
         # And the algorithm we want to use to assign
@@ -423,7 +426,8 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
     f = omx.open_file(join(fldr, mtx_fldr, socio + '_demand_summed.omx'), 'r')
     logger.debug("DEMAND FILE Shape: {}   Tables: {}   Mappings: {}".format(f.shape(), f.list_matrices(),
                                                                             f.list_mappings()))
-    dem = f['matrix']
+    # Either 'matrix' or 'nocar'
+    dem = f[run_params['matrix_name']]
 
     nf = omx.open_file(join(fldr, mtx_fldr, 'new_demand_summed.omx'), 'r')
     logger.debug("DEMAND FILE Shape: {}   Tables: {}   Mappings: {}".format(nf.shape(), nf.list_matrices(),
