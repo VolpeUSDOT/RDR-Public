@@ -1,0 +1,3 @@
+socio,projgroup,resil,elasticity,hazard,recovery,trips,miles,hours,lost_trips,extra_miles,extra_hours,circuitous_trips_removed
+baseyear,,no,-1.0,haz,0,72.75738199999999,221.108309,13.5875,27.242618,63.805417000000006,3.4725802,27.242618
+baseyear,,no,-1.0,haz,1,100.0,203.0,13.5875,0.0,0.0,0.0,0.0

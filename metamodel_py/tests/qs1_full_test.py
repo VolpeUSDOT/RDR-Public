@@ -5,7 +5,7 @@
 #   cd C:/GitHub/RDR
 #   pytest
 # or to run just this file
-#   python -m pytest metamodel_py/tests/qs1_1full_test.py -v
+#   python -m pytest metamodel_py/tests/qs1_full_test.py -v
 # use pytest flag -rP for extra summary info for passed tests, -rx for failed tests
 
 import os
@@ -60,7 +60,7 @@ def test_qs1(add_sample = True):
 
     # Read outputs - start with compiled runs Excel
     assert os.path.exists(os.path.join(output_folder, 'full_combos_QS1.csv'))
-    assert os.path.exists(os.path.join(output_folder, 'aeq_runs/base/QS1/base02/matrices/sp_base02.omx'))
+    assert os.path.exists(os.path.join(output_folder, 'aeq_runs/base/QS1/base02/matrix/matrices/sp_base02.omx'))
     assert os.path.exists(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_QS1.xlsx'))
 
     compiled_runs = pd.read_excel(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_QS1.xlsx'),

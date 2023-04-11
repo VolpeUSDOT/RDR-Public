@@ -11,6 +11,7 @@
 import os
 import copy
 import pandas as pd
+import openmatrix as omx
 import sqlite3
 import rdr_AESingleRun
 
@@ -78,8 +79,25 @@ def main(input_folder, output_folder, cfg, logger):
         if row['LHS_ID'] != 'NA':
             run_params = copy.deepcopy(row)
             run_params['run_minieq'] = cfg['run_minieq']
+            run_params['matrix_name'] = 'matrix'  # always run AequilibraE for the default 'matrix'
 
             # determining whether run has already been done takes place within run_AESingleRun method
             rdr_AESingleRun.run_AESingleRun(run_params, input_folder, output_folder, cfg, logger)
+
+            # run AequilibraE a second time if a 'nocar' trip table exists
+            mtx_fldr = 'matrices'
+            demand_file = os.path.join(input_folder, 'AEMaster', mtx_fldr, run_params['socio'] + '_demand_summed.omx')
+            if not os.path.exists(demand_file):
+                logger.error("DEMAND OMX FILE ERROR: {} could not be found".format(demand_file))
+                raise Exception("DEMAND OMX FILE ERROR: {} could not be found".format(demand_file))
+            f = omx.open_file(demand_file)
+            if 'nocar' in f.list_matrices():
+                f.close()
+                run_params['matrix_name'] = 'nocar'
+                
+                # determining whether run has already been done takes place within run_AESingleRun method
+                rdr_AESingleRun.run_AESingleRun(run_params, input_folder, output_folder, cfg, logger)
+            else:
+                f.close()
 
     logger.info("Finished: AequilibraE run module")

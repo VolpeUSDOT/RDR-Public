@@ -23,8 +23,8 @@ import rdr_setup
 import rdr_supporting
 from rdr_LHS import check_model_params_coverage
 
-VERSION_NUMBER = "1.0"
-VERSION_DATE = "08/30/2022"
+VERSION_NUMBER = "2023.1"
+VERSION_DATE = "04/10/2023"
 
 
 def main():
@@ -213,6 +213,14 @@ def main():
                     error_text = "MODEL PARAMETERS FILE ERROR: Event Probability in Start Year column could not be converted to float"
                     logger.error(error_text)
                     error_list.append(error_text)
+                else:
+                    if cfg['roi_analysis_type'] == 'Regret':
+                        try:
+                            assert(all(hazard_events['Event Probability in Start Year'] == 1.0))
+                        except:
+                            error_text = "MODEL PARAMETERS FILE ERROR: Event Probability in Start Year column must be set to 1 for regret analysis"
+                            logger.error(error_text)
+                            error_list.append(error_text)
 
                 # Confirm hazards are a subset of those listed in this tab
                 if not has_error_model_params:
@@ -374,10 +382,11 @@ def main():
     # 3) Check that node_id has no duplicate values
     # For each socio and project group listed in Model_Parameters.xlsx:
     # 1) Is there a links CSV file
-    # 2) Check that link_id, from_node_id, to_node_id, directed, length, facility_type, capacity, free_speed, lanes, allowed_uses, toll exist;
-    #    link_id, from_node_id, to_node_id, directed, lanes must be int, length, capacity, free_speed, toll must be float
+    # 2) Check that link_id, from_node_id, to_node_id, directed, length, facility_type, capacity, free_speed, lanes, allowed_uses, toll, travel_time exist;
+    #    link_id, from_node_id, to_node_id, directed, lanes must be int, length, capacity, free_speed, toll, travel_time must be float
     # 3) Check that link_id has no duplicate values
     # 4) Check that directed is always 1, allowed_uses is always c
+    # 5) If 'nocar' trip table matrix exists, check that toll_nocar, travel_time_nocar exist; both must be float
     networks_folder = os.path.join(input_folder, 'Networks')
 
     if os.path.isdir(networks_folder):
@@ -456,10 +465,10 @@ def main():
                         try:
                             links = pd.read_csv(os.path.join(networks_folder, link_file),
                                                 usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
-                                                         'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll'],
+                                                         'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time'],
                                                 converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': str,
                                                             'length': str, 'facility_type': str, 'capacity': str, 'free_speed': str,
-                                                            'lanes': str, 'allowed_uses': str, 'toll': str})
+                                                            'lanes': str, 'allowed_uses': str, 'toll': str, 'travel_time': str})
                         except:
                             error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns".format(i, j)
                             logger.error(error_text)
@@ -546,6 +555,14 @@ def main():
                                 logger.error(error_text)
                                 error_list.append(error_text)
 
+                            # Test travel_time can be converted to float
+                            try:
+                                links['travel_time'] = pd.to_numeric(links['travel_time'], downcast='float')
+                            except:
+                                error_text = "NETWORK LINK FILE ERROR: Column travel_time could not be converted to float for socio {} and project group {}".format(i, j)
+                                logger.error(error_text)
+                                error_list.append(error_text)
+
                             # Test allowed_uses is always equal to 'c'
                             try:
                                 assert(all(links['allowed_uses'] == 'c'))
@@ -553,6 +570,44 @@ def main():
                                 error_text = "NETWORK LINK FILE ERROR: Column allowed_uses must have values 'c' only for socio {} and project group {}".format(i, j)
                                 logger.error(error_text)
                                 error_list.append(error_text)
+
+                            demand_folder = os.path.join(input_folder, 'AEMaster', 'matrices')
+                            demand_file = i + '_demand_summed.omx'
+                            if not os.path.exists(os.path.join(demand_folder, demand_file)):
+                                error_text = "DEMAND FILE ERROR: No demand OMX file is present for socio {} corresponding to network link file {}".format(i, link_file)
+                                logger.error(error_text)
+                                error_list.append(error_text)
+                            else:
+                                omx_file = omx.open_file(os.path.join(demand_folder, demand_file))
+                                if 'nocar' in omx_file.list_matrices():
+                                    omx_file.close()
+                                    try:
+                                        links = pd.read_csv(os.path.join(networks_folder, link_file),
+                                                usecols=['toll_nocar', 'travel_time_nocar'],
+                                                converters={'toll': str, 'travel_time': str})
+                                    except:
+                                        error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns corresponding to no car trip table".format(i, j)
+                                        logger.error(error_text)
+                                        error_list.append(error_text)
+                                    else:
+                                        # Test toll_nocar can be converted to float
+                                        try:
+                                            links['toll_nocar'] = pd.to_numeric(links['toll_nocar'], downcast='float')
+                                        except:
+                                            error_text = "NETWORK LINK FILE ERROR: Column toll_nocar could not be converted to float for socio {} and project group {}".format(i, j)
+                                            logger.error(error_text)
+                                            error_list.append(error_text)
+
+                                        # Test travel_time_nocar can be converted to float
+                                        try:
+                                            links['travel_time_nocar'] = pd.to_numeric(links['travel_time_nocar'], downcast='float')
+                                        except:
+                                            error_text = "NETWORK LINK FILE ERROR: Column travel_time_nocar could not be converted to float for socio {} and project group {}".format(i, j)
+                                            logger.error(error_text)
+                                            error_list.append(error_text)
+
+                                else:
+                                    omx_file.close()
     else:
         error_text = "NETWORK FOLDER ERROR: Networks directory for network attribute files does not exist"
         logger.error(error_text)
@@ -563,6 +618,7 @@ def main():
     # For each socio listed in Model_Parameters.xlsx:
     # 1) Is there a demand OMX file
     # 2) Check OMX file has 'matrix' square demand matrix and 'taz' mapping
+    # 3) If 'nocar' trip table matrix, check that it is square
     demand_folder = os.path.join(input_folder, 'AEMaster', 'matrices')
 
     if os.path.isdir(demand_folder):
@@ -591,13 +647,22 @@ def main():
                         omx_file = omx.open_file(os.path.join(demand_folder, demand_file))
                         assert('matrix' in omx_file.list_matrices())
                         assert('taz' in omx_file.list_mappings())
-                        matrix_shape = omx_file.shape()
+                        matrix_shape = omx_file['matrix'].shape
                         assert(matrix_shape[0] == matrix_shape[1])
-                        omx_file.close()
                     except:
                         error_text = "DEMAND FILE ERROR: OMX file is missing required attributes for socio {}".format(i)
                         logger.error(error_text)
                         error_list.append(error_text)
+                    else:
+                        if 'nocar' in omx_file.list_matrices():
+                            try:
+                                matrix_shape = omx_file['nocar'].shape
+                                assert(matrix_shape[0] == matrix_shape[1])
+                            except:
+                                error_text = "DEMAND FILE ERROR: OMX file 'nocar' trip table is not square for socio {}".format(i)
+                                logger.error(error_text)
+                                error_list.append(error_text)
+                        omx_file.close()
     else:
         error_text = "DEMAND FOLDER ERROR: Matrices directory for demand OMX files does not exist"
         logger.error(error_text)
@@ -709,7 +774,7 @@ def main():
     # ---------------------------------------------------------------------------------------------------
     # Resilience projects files
     # 1) Are project_info.csv and project_table.csv files present
-    # 2) Check that project_info.csv has columns Project ID, Project Name, Asset, Project Cost; Project Cost should be converted to dollar
+    # 2) Check that project_info.csv has columns Project ID, Project Name, Asset, Project Cost, Project Lifespan, Annual Maintenance Cost; Project Cost and Annual Maintenance Cost should be converted to dollar
     # 3) Check that project_table.csv has columns link_id, Project ID, Category; link_id must be int, Exposure Reduction must be float if exists
     resil_folder = os.path.join(input_folder, 'LookupTables')
 
@@ -723,8 +788,10 @@ def main():
         else:
             # CSV STEP 2: Check file has necessary columns
             try:
-                project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost'],
-                                           converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str})
+                project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
+                                                                       'Project Lifespan', 'Annual Maintenance Cost'],
+                                           converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
+                                                       'Project Lifespan': str, 'Annual Maintenance Cost': str})
             except:
                 error_text = "RESILIENCE PROJECTS FILE ERROR: Project info input file is missing required columns"
                 logger.error(error_text)
@@ -735,6 +802,31 @@ def main():
                     project_cost = project_info['Project Cost'].replace('[\$,]', '', regex=True).astype(float)
                 except:
                     error_text = "RESILIENCE PROJECTS FILE ERROR: Column Project Cost could not be translated to dollar amount in project info input file"
+                    logger.error(error_text)
+                    error_list.append(error_text)
+                else:
+                    if cfg['roi_analysis_type'] == 'Breakeven':
+                        try:
+                            assert(all(project_cost == 0))
+                        except:
+                            error_text = "RESILIENCE PROJECTS FILE ERROR: For breakeven analysis, Project Cost should be set to zero in project info input file"
+                            logger.error(error_text)
+                            error_list.append(error_text)
+
+                # Test Project Lifespan can be converted to int
+                try:
+                    project_info['Project Lifespan'] = pd.to_numeric(project_info['Project Lifespan'], downcast='integer')
+                    assert(all(project_info['Project Lifespan'] >= 0))
+                except:
+                    error_text = "RESILIENCE PROJECTS FILE ERROR: Column Project Lifespan could not be converted to positive integers in project info input file"
+                    logger.error(error_text)
+                    error_list.append(error_text)
+
+                # Test Annual Maintenance Cost can be converted to dollar amount
+                try:
+                    project_cost = project_info['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).astype(float)
+                except:
+                    error_text = "RESILIENCE PROJECTS FILE ERROR: Column Annual Maintenance Cost could not be translated to dollar amount in project info input file"
                     logger.error(error_text)
                     error_list.append(error_text)
 
@@ -786,12 +878,12 @@ def main():
                     logger.error(error_text)
                     error_list.append(error_text)
 
-                # Confirm Category is either 'Highway' or 'Bridge' if using default repair tables
+                # Confirm Category is either 'Highway', 'Bridge', or 'Transit' if using default repair tables
                 if cfg['repair_cost_approach'] == 'Default' or cfg['repair_time_approach'] == 'Default':
                     try:
-                        assert(all(project_table['Category'].isin(['Highway', 'Bridge'])))
+                        assert(all(project_table['Category'].isin(['Highway', 'Bridge', 'Transit'])))
                     except:
-                        error_text = "RESILIENCE PROJECTS FILE ERROR: Category values in project table input file must be 'Highway' or 'Bridge' if using default repair tables"
+                        error_text = "RESILIENCE PROJECTS FILE ERROR: Category values in project table input file must be 'Highway', 'Bridge', or 'Transit' if using default repair tables"
                         logger.error(error_text)
                         error_list.append(error_text)
     else:

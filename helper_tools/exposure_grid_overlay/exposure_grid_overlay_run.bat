@@ -9,7 +9,7 @@ REM -------------------------------------------------
 REM ==============================================
 REM ======== ENVIRONMENT VARIABLES ===============
 REM ==============================================
-set PYTHON="C:\Python27\ArcGIS10.8\python.exe"
+set PYTHON="C:\Program Files\ArcGIS\Pro\bin\Python\envs\arcgispro-py3\python.exe"
 set EXPOSURE_GRID_OVERLAY_HELPER="C:\GitHub\RDR\helper_tools\exposure_grid_overlay\exposure_grid_overlay.py"
 set CONFIG="C:\GitHub\RDR\helper_tools\exposure_grid_overlay\exposure_grid_sample.config"
 

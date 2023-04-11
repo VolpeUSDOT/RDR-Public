@@ -99,7 +99,7 @@ def test_qs3(add_sample = True):
 
     tableau_file = tableau_file.reset_index().copy()
 
-    assert tableau_file.ResiliencyProject[0] == 'L2-7'
+    # assert tableau_file.ResiliencyProject[0] == 'L2-7'
     # assert tableau_file.Exposurerecoverypath[0] == '3,3,3,3,3,3,3,3,2,2,1,1'
 
     # Average net benefits

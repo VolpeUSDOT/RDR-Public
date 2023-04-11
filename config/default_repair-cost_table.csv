@@ -1,27 +1,30 @@
 Asset Type,Network Type,Facility Type,Unit,Damage Repair Cost,Total Repair Cost
-Highway,Rural Flat,Interstate,Lane-mile,1339513.546,1339513.546
-Highway,Rural Flat,Other Principal Arterial,Lane-mile,1072022.362,1072022.362
-Highway,Rural Flat,Minor Arterial,Lane-mile,941363.2063,941363.2063
-Highway,Rural Flat,Major Collector,Lane-mile,996919.0677,996919.0677
-Highway,Rural Rolling,Interstate,Lane-mile,1373464.35,1373464.35
-Highway,Rural Rolling,Other Principal Arterial,Lane-mile,1101857.917,1101857.917
-Highway,Rural Rolling,Minor Arterial,Lane-mile,1042186.807,1042186.807
-Highway,Rural Rolling,Major Collector,Lane-mile,1013380.064,1013380.064
-Highway,Rural Mountainous,Interstate,Lane-mile,3008247.011,3008247.011
-Highway,Rural Mountainous,Other Principal Arterial,Lane-mile,2480466.328,2480466.328
-Highway,Rural Mountainous,Minor Arterial,Lane-mile,1924907.715,1924907.715
-Highway,Rural Mountainous,Major Collector,Lane-mile,1585399.673,1585399.673
-Highway,Small Urban,Freeway/Expressway/Interstate,Lane-mile,2390959.663,2390959.663
-Highway,Small Urban,Other Principal Arterial,Lane-mile,2030875.376,2030875.376
-Highway,Small Urban,Minor Arterial/Collector,Lane-mile,1533959.061,1533959.061
-Highway,Small Urbanized,Freeway/Expressway/Interstate,Lane-mile,2411535.908,2411535.908
-Highway,Small Urbanized,Other Principal Arterial,Lane-mile,2055566.87,2055566.87
-Highway,Small Urbanized,Minor Arterial/Collector,Lane-mile,1551448.869,1551448.869
-Highway,Large Urbanized,Freeway/Expressway/Interstate,Lane-mile,3947552.593,3947552.593
-Highway,Large Urbanized,Other Principal Arterial,Lane-mile,3013391.073,3013391.073
-Highway,Large Urbanized,Minor Arterial/Collector,Lane-mile,2075114.303,2075114.303
-Highway,Major Urbanized,Freeway/Expressway/Interstate,Lane-mile,7896133.998,7896133.998
-Highway,Major Urbanized,Other Principal Arterial,Lane-mile,6025753.333,6025753.333
-Highway,Major Urbanized,Minor Arterial/Collector,Lane-mile,4149199.794,4149199.794
-Bridge,National Highway System,National,Square foot,223,223
-Bridge,Non-National,Non-National,Square foot,252,252
+Highway,Rural Flat,Interstate,Lane-mile,1497300,1497300
+Highway,Rural Flat,Other Principal Arterial,Lane-mile,1198300,1198300
+Highway,Rural Flat,Minor Arterial,Lane-mile,1052250,1052250
+Highway,Rural Flat,Major Collector,Lane-mile,1114350,1114350
+Highway,Rural Rolling,Interstate,Lane-mile,1535250,1535250
+Highway,Rural Rolling,Other Principal Arterial,Lane-mile,1231650,1231650
+Highway,Rural Rolling,Minor Arterial,Lane-mile,1164950,1164950
+Highway,Rural Rolling,Major Collector,Lane-mile,1132750,1132750
+Highway,Rural Mountainous,Interstate,Lane-mile,3362600,3362600
+Highway,Rural Mountainous,Other Principal Arterial,Lane-mile,2772650,2772650
+Highway,Rural Mountainous,Minor Arterial,Lane-mile,2151650,2151650
+Highway,Rural Mountainous,Major Collector,Lane-mile,1772150,1772150
+Highway,Small Urban,Freeway/Expressway/Interstate,Lane-mile,2672600,2672600
+Highway,Small Urban,Other Principal Arterial,Lane-mile,2270100,2270100
+Highway,Small Urban,Minor Arterial/Collector,Lane-mile,1714650,1714650
+Highway,Small Urbanized,Freeway/Expressway/Interstate,Lane-mile,2695600,2695600
+Highway,Small Urbanized,Other Principal Arterial,Lane-mile,2297700,2297700
+Highway,Small Urbanized,Minor Arterial/Collector,Lane-mile,1734200,1734200
+Highway,Large Urbanized,Freeway/Expressway/Interstate,Lane-mile,4412550,4412550
+Highway,Large Urbanized,Other Principal Arterial,Lane-mile,3368350,3368350
+Highway,Large Urbanized,Minor Arterial/Collector,Lane-mile,2319550,2319550
+Highway,Major Urbanized,Freeway/Expressway/Interstate,Lane-mile,8826250,8826250
+Highway,Major Urbanized,Other Principal Arterial,Lane-mile,6735550,6735550
+Highway,Major Urbanized,Minor Arterial/Collector,Lane-mile,4637950,4637950
+Bridge,National Highway System,13,Square foot,309,309
+Bridge,Non-National,14,Square foot,285,285
+Transit,Dedicated Guideway - Subway,21,Lane-mile,15888945.6,15888945.6
+Transit,Dedicated Guideway - Light Rail,22,Lane-mile,15888945.6,15888945.6
+Transit,On-Road - Bus,23,Lane-mile,0,0

@@ -252,7 +252,7 @@ def main(input_folder, output_folder, cfg, logger):
     initial_stages = initial_stages[initial_stages['Resiliency Project'] != 'no']
 
     # read in tables mapping ID-Resiliency-Scenario to repair costs and times
-    # default 'Category' choices are "Bridge" and "Highway"
+    # default 'Category' choices are "Bridge", "Highway", and "Transit"
 
     # damage on resilience project network links depends on mitigation impact
     # options are 'binary' (default), 'manual'
@@ -490,7 +490,7 @@ def main(input_folder, output_folder, cfg, logger):
                             converters={'Asset Type': str, 'Network Type': str, 'Facility Type': str,
                                         'Damage Repair Cost': float, 'Total Repair Cost': float})
         repair_network_type = cfg['repair_network_type']
-        costs = costs[(costs['Asset Type'] == 'Bridge') | (costs['Network Type'] == repair_network_type)]
+        costs = costs[(costs['Asset Type'] == 'Bridge') | (costs['Asset Type'] == 'Transit') | (costs['Network Type'] == repair_network_type)]
 
         if 'Rural' in repair_network_type:
             merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
@@ -518,7 +518,8 @@ def main(input_folder, output_folder, cfg, logger):
 
     elif repair_cost_approach == 'user-defined':
         # use user-defined repair cost look-up table
-        # repair cost look-up table matches on 'Asset Type' and 'Category'
+        # repair cost look-up table matches 'Asset Type' to 'Category' in project table CSV
+        # repair cost look-up table matches 'Facility Type' to 'facility_type' in link CSV
         repair_cost_table = cfg['repair_cost_csv']
         if not os.path.exists(repair_cost_table):
             logger.error("USER-DEFINED REPAIR COST FILE ERROR: {} could not be found".format(repair_cost_table))
@@ -569,7 +570,8 @@ def main(input_folder, output_folder, cfg, logger):
                                          'default_repair-time_table.csv')
     elif repair_time_approach == 'user-defined':
         # use user-defined repair time look-up table
-        # repair time look-up table table matches on 'Asset Type' and between 'category_min' and 'category_max'
+        # repair time look-up table matches 'Asset Type' to 'Category' in project table CSV
+        # repair time look-up table sorts 'repair_category' (see below for definition) between 'category_min' and 'category_max'
         repair_time_table = cfg['repair_time_csv']
     else:
         logger.error("Invalid option selected for repair time approach.")
@@ -586,14 +588,13 @@ def main(input_folder, output_folder, cfg, logger):
 
     # look up 'repair_time' for each network link based on 'category_min' and 'category_max' and 'Asset Type'
     # NOTE: currently 'repair_category' is created in code
-    # 'repair_category' field equals (1) float('FACTYPE') if 'Category' = 'Highway' (and other asset types),
+    # 'repair_category' field equals (1) float('FACTYPE') if 'Category' = 'Highway' or 'Transit' (or other asset type),
     # (2) (only if default) sum of 'DISTANCE' (in ft) across 'Bridge' network links for each
     # 'ID-Resiliency-Scenario-Stage' if 'Category' = 'Bridge'
     asset_lengths = merged5.loc[:, ['ID-Resiliency-Scenario-Stage', 'Category',
                                     'DISTANCE']].groupby(by=['ID-Resiliency-Scenario-Stage', 'Category'],
                                                          as_index=False, sort=False).sum()
     asset_lengths.rename({'DISTANCE': 'Project-Asset Distance'}, axis='columns', inplace=True)
-    # NOTE: merge may add rows if multiple 'Category' within an 'ID-Resiliency-Scenario-Stage'
     num_rows = merged5.shape[0]
     merged5 = pd.merge(merged5, asset_lengths, how='left', on=['ID-Resiliency-Scenario-Stage', 'Category'])
     if merged5.shape[0] != num_rows:

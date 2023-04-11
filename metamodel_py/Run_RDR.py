@@ -17,8 +17,8 @@ import traceback
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "1.1"
-VERSION_DATE = "8/31/2021"
+VERSION_NUMBER = "2023.1"
+VERSION_DATE = "04/10/2023"
 
 # ===================================================================================================
 # set up config file and logger
@@ -117,6 +117,15 @@ def main():
     logger.info("============== RDR RUN STARTING.  Run Option = {} ====================".format(str(args.task).upper()))
     logger.info("=========================================================================")
 
+    # check output of ROI analysis check and log error/exit as needed
+    from rdr_RecoveryAnalysis import check_roi_required_inputs
+    is_covered = check_roi_required_inputs(input_folder, cfg, logger)
+    if is_covered == 0:
+        logger.error(("INCORRECT DATA FOR ROI ANALYSIS ERROR: incorrect input file data for " +
+                      "ROI analysis type {} specified".format(cfg['roi_analysis_type'])))
+        raise Exception(("INCORRECT DATA FOR ROI ANALYSIS ERROR: incorrect input file data for " +
+                         "ROI analysis type {} specified, check log files for error".format(cfg['roi_analysis_type'])))
+
     # run the task
     # ----------------------------------------------------------------------------------------------
     try:
@@ -182,6 +191,7 @@ def main():
             run_params['hazard'] = 'haz3'  # examples: strings containing storm surge + sea-level rise details
             run_params['recovery'] = '2'  # format: strings like X ft of exposure to subtract for recovery stage
             run_params['run_minieq'] = 1  # possibilities: 1 or 0
+            run_params['matrix_name'] = 'matrix'  # possibilities: 'matrix' or 'nocar'
             from rdr_AESingleRun import run_AESingleRun
             run_AESingleRun(run_params, input_folder, output_folder, cfg, logger)
 

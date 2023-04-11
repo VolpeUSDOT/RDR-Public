@@ -1,5 +1,6 @@
 name: RDRenv
 channels:
+  - plotly
   - conda-forge
   - defaults
 dependencies:
@@ -13,8 +14,8 @@ dependencies:
   - backcall=0.2.0=pyhd3eb1b0_0
   - beautifulsoup4=4.11.1=py37haa95532_0
   - bleach=4.1.0=pyhd3eb1b0_0
-  - ca-certificates=2022.4.26=haa95532_0
-  - certifi=2022.6.15=py37haa95532_0
+  - ca-certificates=2023.01.10=haa95532_0
+  - certifi=2022.12.7=py37haa95532_0
   - cffi=1.15.0=py37h2bbff1b_1
   - colorama=0.4.5=py37haa95532_0
   - console_shortcut=0.1.1=4
@@ -82,13 +83,14 @@ dependencies:
   - nest-asyncio=1.5.5=py37haa95532_0
   - notebook=6.4.11=py37haa95532_0
   - openpyxl=3.0.9=pyhd3eb1b0_0
-  - openssl=1.1.1p=h2bbff1b_0
+  - openssl=1.1.1t=h2bbff1b_0
   - packaging=21.3=pyhd3eb1b0_0
   - pandoc=2.12=haa95532_0
   - pandocfilters=1.5.0=pyhd3eb1b0_0
   - parso=0.8.3=pyhd3eb1b0_0
   - pickleshare=0.7.5=pyhd3eb1b0_1003
   - pip=21.2.4=py37haa95532_0
+  - plotly=5.13.1=py_0
   - pluggy=1.0.0=py37haa95532_1
   - prometheus_client=0.13.1=pyhd3eb1b0_0
   - prompt-toolkit=3.0.20=pyhd3eb1b0_0
@@ -113,6 +115,7 @@ dependencies:
   - soupsieve=2.3.1=pyhd3eb1b0_0
   - sqlite=3.38.5=h2bbff1b_0
   - tbb=2021.5.0=h59b6b97_0
+  - tenacity=8.0.1=py37haa95532_1
   - terminado=0.13.1=py37haa95532_0
   - testpath=0.6.0=py37haa95532_0
   - toml=0.10.2=pyhd3eb1b0_0
@@ -155,3 +158,4 @@ dependencies:
     - tzdata==2021.5
     - tzlocal==4.1
     - urllib3==1.26.8
+prefix: C:\Users\Andrew.Breck\Anaconda3\envs\RDRenv
