@@ -469,8 +469,9 @@ def main():
                                                 converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': str,
                                                             'length': str, 'facility_type': str, 'capacity': str, 'free_speed': str,
                                                             'lanes': str, 'allowed_uses': str, 'toll': str, 'travel_time': str})
-                        except:
-                            error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns".format(i, j)
+                        except ValueError as e:
+                            cols = str(e.args[0]).split(': ')[-1]
+                            error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns: {}".format(i, j, cols)
                             logger.error(error_text)
                             error_list.append(error_text)
                         else:
@@ -792,8 +793,9 @@ def main():
                                                                        'Project Lifespan', 'Annual Maintenance Cost'],
                                            converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
                                                        'Project Lifespan': str, 'Annual Maintenance Cost': str})
-            except:
-                error_text = "RESILIENCE PROJECTS FILE ERROR: Project info input file is missing required columns"
+            except ValueError as e:
+                cols = str(e.args[0]).split(': ')[-1]
+                error_text = "RESILIENCE PROJECTS FILE ERROR: Project info input file is missing required columns: {}".format(cols)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
@@ -857,8 +859,9 @@ def main():
                 elif resil_mitigation_approach == 'manual':
                     project_table = pd.read_csv(project_table_file, usecols=['Project ID', 'link_id', 'Category', 'Exposure Reduction'],
                                                 converters={'Project ID': str, 'link_id': str, 'Category': str, 'Exposure Reduction': str})
-            except:
-                error_text = "RESILIENCE PROJECTS FILE ERROR: Project table input file is missing required columns"
+            except ValueError as e:
+                cols = str(e.args[0]).split(': ')[-1]
+                error_text = "RESILIENCE PROJECTS FILE ERROR: Project table input file is missing required columns: {}".format(cols)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
