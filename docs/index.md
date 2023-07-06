@@ -46,6 +46,7 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 ## Credits:
 * Kristin C. Lewis, PhD (Volpe) <Kristin.Lewis@dot.gov>
 * Jonathan Badgley (Volpe)
+* Andrew Breck (Volpe)
 * Daniel Flynn, PhD (Volpe)
 * Olivia Gillham (Volpe)
 * Michelle Gilmore (Volpe)
