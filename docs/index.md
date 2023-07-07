@@ -10,7 +10,7 @@ The RDR Exposure Analysis Tool is an ESRI ArcGIS Pro based tool.
 
 Detailed installation and usage instructions are explained in the [RDR User Guide documentation](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf). A [video tutorial](#installing-rdr) on how to install RDR is also available.
 * Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool).
-* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/archive/refs/tags/v2022.1.1.zip) Alternatively, the GitHub code repository is available here: [https://github.com/VolpeUSDOT/RDR-Public](https://github.com/VolpeUSDOT/RDR-Public). Unzip the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-Master_.)
+* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/archive/refs/tags/v2023.1.zip) Alternatively, the GitHub code repository is available here: [https://github.com/VolpeUSDOT/RDR-Public](https://github.com/VolpeUSDOT/RDR-Public). Unzip the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-Master_.)
 * The documentation and quick start scenario files are included with the code release.
 
 ### Using this code
