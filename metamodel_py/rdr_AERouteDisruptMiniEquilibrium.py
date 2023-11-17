@@ -5,7 +5,7 @@
 #
 # Inputs: demand, disrupted network, sp and rt skims from non-disrupted network (sp_base.omx, rt_base.omx)
 #
-# Outputs: adjusted demand, shortest path skims, routing results with disrupted network, comparison with non-disrupted
+# Outputs: adjusted demand, shortest path skims, routing results with disrupted network for road and transit metrics, comparison with non-disrupted
 #
 # Major steps
 # 1. Set up AequilibraE environment
@@ -38,9 +38,8 @@ from aequilibrae.paths import NetworkSkimming
 from aequilibrae.matrix import AequilibraeMatrix
 from aequilibrae.paths import TrafficAssignment, TrafficClass
 
-
-def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
-    fldr = run_folder
+def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_folder, cfg, logger):
+    fldr = disrupt_run_folder
     mtx_fldr = 'matrices'
     largeval = 99999  # constant used as an upper bound for travel times in disruption analysis
 
@@ -121,7 +120,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
     if not exists(infile):
         logger.error("DEMAND OMX FILE ERROR: {} could not be found".format(infile))
         raise Exception("DEMAND OMX FILE ERROR: {} could not be found".format(infile))
-    baseskimfile = join(fldr, mtx_fldr, 'sp_' + basescenname + '.omx')
+    baseskimfile = join(base_run_folder, mtx_fldr, 'sp_' + basescenname + '.omx')
     if not exists(baseskimfile):
         logger.error("BASE SKIMS FILE ERROR: {} could not be found".format(baseskimfile))
         raise Exception("BASE SKIMS FILE ERROR: {} could not be found".format(baseskimfile))
@@ -237,27 +236,8 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
     # The blended skims are here
     avg_skims = assigclass.results.skims
 
-    # Assembling a single final skim file can be done like this
-    # We will want only the time for the last iteration and the distance averaged out for all iterations
-    kwargs = {'file_name': join(fldr, 'skim_adjdem_' + scenname + '.aem'),
-              'zones': graph.num_zones,
-              'matrix_names': ['time_final', 'distance_blended']}
-
-    # Create the matrix file
-    out_skims = AequilibraeMatrix()
-    out_skims.create_empty(**kwargs)
-    out_skims.index[:] = avg_skims.index[:]
-
-    # Transfer the data
-    # The names of the skims are the name of the fields
-    out_skims.matrix['time_final'][:, :] = avg_skims.matrix['free_flow_time'][:, :]
-    # It is CRITICAL to assign the matrix values using the [:,:]
-    out_skims.matrix['distance_blended'][:, :] = avg_skims.matrix['distance'][:, :]
-
-    out_skims.matrices.flush()  # Make sure that all data went to the disk
-
-    # Export to OMX as well
-    out_skims.export(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
+    # Export to OMX
+    avg_skims.export(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
     demand.close()
 
     # MINI-EQUILIBRIUM #
@@ -268,7 +248,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
         # Re-adjust demand and rerun routing
         #
         # We now use the congested travel times from the routing run, and reduce the elasticity by 50%
-        # If new travel time is very large, then new_demand = 0.
+        # If new travel time is very large, then new_demand = 0
         #
         # If there is little difference between travel times (< 0.5 minutes), then new_demand = old_demand
         # (this also takes care of the case where both travel times are zero)
@@ -278,11 +258,11 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
         # and t_base is the baseline (no disruption) shortest-path travel time
         #
         # Note: we might want to compare to the baseline (no disruption) routing (congested) travel time
-        logger.debug("Starting mini-equilibrium portion of AequilibraE run.")
+        logger.debug("Starting mini-equilibrium portion of AequilibraE run")
 
         # Input files
         infile = join(fldr, mtx_fldr, socio + '_demand_summed.omx')
-        baseskimfile = join(fldr, mtx_fldr, 'rt_' + basescenname + '.omx')
+        baseskimfile = join(base_run_folder, mtx_fldr, 'rt_' + basescenname + '.omx')
         if not exists(baseskimfile):
             logger.error("BASE SKIMS FILE ERROR: {} could not be found".format(baseskimfile))
             raise Exception("BASE SKIMS FILE ERROR: {} could not be found".format(baseskimfile))
@@ -321,8 +301,8 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
         f_base = omx.open_file(baseskimfile)
         f_disrupt = omx.open_file(disruptskimfile)
-        t_base = f_base['time_final']
-        t_disrupt = f_disrupt['time_final']
+        t_base = f_base['free_flow_time']
+        t_disrupt = f_disrupt['free_flow_time']
         logger.debug("Base Skim Shape: {}".format(f_base.shape()))
         logger.debug("Number of tables: {}".format(len(f_base)))
         logger.debug("Table names: {}".format(f_base.list_matrices()))
@@ -398,27 +378,8 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
         # The ones for the last iteration are here
         last_skims = assigclass._aon_results.skims
 
-        # Assembling a single final skim file can be done like this
-        # We will want only the time for the last iteration and the distance averaged out for all iterations
-        kwargs = {'file_name': join(fldr, 'skim_adjdem_' + scenname + '.aem'),
-                  'zones': graph.num_zones,
-                  'matrix_names': ['time_final', 'distance_blended']}
-
-        # Create the matrix file
-        out_skims = AequilibraeMatrix()
-        out_skims.create_empty(**kwargs)
-        out_skims.index[:] = avg_skims.index[:]
-
-        # Transfer the data
-        # The names of the skims are the name of the fields
-        out_skims.matrix['time_final'][:, :] = avg_skims.matrix['free_flow_time'][:, :]
-        # It is CRITICAL to assign the matrix values using the [:,:]
-        out_skims.matrix['distance_blended'][:, :] = avg_skims.matrix['distance'][:, :]
-
-        out_skims.matrices.flush()  # Make sure that all data went to the disk
-
-        # Export to OMX as well
-        out_skims.export(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
+        # Export to OMX 
+        avg_skims.export(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
         demand.close()
 
     # Calculate summary statistics
@@ -434,17 +395,17 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
                                                                             nf.list_mappings()))
     newdem = nf['matrix']
 
-    spbf = omx.open_file(join(fldr, mtx_fldr, 'sp_' + basescenname + '.omx'), 'r')
+    spbf = omx.open_file(join(base_run_folder, mtx_fldr, 'sp_' + basescenname + '.omx'), 'r')
     logger.debug("SP BASE SKIM FILE Shape: {}   Tables: {}   Mappings: {}".format(spbf.shape(), spbf.list_matrices(),
                                                                                   spbf.list_mappings()))
     spbt = spbf['free_flow_time']
     spbd = spbf['distance']
 
-    rtbf = omx.open_file(join(fldr, mtx_fldr, 'rt_' + basescenname + '.omx'), 'r')
+    rtbf = omx.open_file(join(base_run_folder, mtx_fldr, 'rt_' + basescenname + '.omx'), 'r')
     logger.debug("RT BASE SKIM FILE Shape: {}   Tables: {}   Mappings: {}".format(rtbf.shape(), rtbf.list_matrices(),
                                                                                   rtbf.list_mappings()))
-    rtbt = rtbf['time_final']
-    rtbd = rtbf['distance_blended']
+    rtbt = rtbf['free_flow_time']
+    rtbd = rtbf['distance']
 
     df_spbt = pd.DataFrame(data=spbt)
     df_spbd = pd.DataFrame(data=spbd)
@@ -468,7 +429,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
     # Shortest path base times and distances
     # matrix same size as spbt, true where each entry is <largeval, otherwise false
     bool_spbt = df_spbt < largeval
-    # sums demand where spbt<largeval
+    # sums demand where spbt < largeval
     spb_cumtripcount = (df_dem.where(bool_spbt, other=0)).sum().sum()
     spb_cumtime = ((df_dem.where(bool_spbt, other=0))*df_spbt).sum().sum()
     spb_cumdist = ((df_dem.where(bool_spbt, other=0))*df_spbd).sum().sum()
@@ -487,21 +448,20 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
 
     logger.debug("Base,RT,{},{:.8},{:.8},{:.8}".format(basescenname, rtb_cumtripcount, rtb_cumdist, rtb_cumtime/60))
 
-    # Open Disruption skim files, and assemble the totals
-    # Open disruption skim files
+    # Open disruption skim files and assemble the totals
     spdf = omx.open_file(join(fldr, mtx_fldr, 'sp_disrupt_' + scenname + '.omx'), 'r')
-    logger.debug("SP DISRUPT 3new SKIM FILE Shape: {}   Tables: {}   Mappings: {}".format(spbf.shape(),
+    logger.debug("SP DISRUPT SKIM FILE Shape: {}   Tables: {}   Mappings: {}".format(spbf.shape(),
                                                                                           spbf.list_matrices(),
                                                                                           spbf.list_mappings()))
     spdt = spdf['free_flow_time']
     spdd = spdf['distance']
 
     rtdf = omx.open_file(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'), 'r')
-    logger.debug("RT DISRUPT 3new SKIM FILE Shape: {}   Tables: {}   Mappings: {}".format(rtdf.shape(),
+    logger.debug("RT DISRUPT SKIM FILE Shape: {}   Tables: {}   Mappings: {}".format(rtdf.shape(),
                                                                                           rtdf.list_matrices(),
                                                                                           rtdf.list_mappings()))
-    rtdt = rtdf['time_final']
-    rtdd = rtdf['distance_blended']
+    rtdt = rtdf['free_flow_time']
+    rtdd = rtdf['distance']
 
     df_spdt = pd.DataFrame(data=spdt)
     df_spdd = pd.DataFrame(data=spdd)
@@ -545,10 +505,86 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
                                                                       rtd_cumtime/60, rtd_basecumdist,
                                                                       rtd_basecumtime/60))
 
+    # Calculate separate car and transit metrics
+    if cfg['calc_transit_metrics']:
+        logger.info("Calculating transit-specific metrics for scenario {}".format(scenname))
+        # Read in network attributes file
+        network_file = join(cfg['input_dir'], 'Networks', basescenname + '.csv')
+        if not exists(network_file):
+            logger.error("NETWORK FILE ERROR: {} could not be found".format(network_file))
+            raise Exception("NETWORK FILE ERROR: {} could not be found".format(network_file))
+
+        if run_params['matrix_name'] == 'matrix':
+            network = pd.read_csv(network_file, usecols=['link_id', 'length', 'facility_type', 'toll', 'travel_time'],
+                                  converters={'link_id': int, 'length': float, 'facility_type': str, 'toll': float, 'travel_time': float})
+        elif run_params['matrix_name'] == 'nocar':
+            network = pd.read_csv(network_file, usecols=['link_id', 'length', 'facility_type', 'toll_nocar', 'travel_time_nocar'],
+                                  converters={'link_id': int, 'length': float, 'facility_type': str, 'toll_nocar': float, 'travel_time_nocar': float})
+            network.rename({'toll_nocar': 'toll', 'travel_time_nocar': 'travel_time'}, axis='columns', inplace=True)
+        else:
+            logger.error("AEquilibraE disrupt run requires 'matrix' or 'nocar' for matrix_name variable in run_params.")
+            raise Exception("Invalid option for variable matrix_name in run_params in AEquilibraE disrupt run.")
+
+        # Read in link flows file
+        link_flow_file = join(fldr, 'link_flow_adjdem_' + scenname + '.csv')
+        if not exists(link_flow_file):
+            logger.error("LINK FLOW FILE ERROR: {} could not be found".format(link_flow_file))
+            raise Exception("LINK FLOW FILE ERROR: {} could not be found".format(link_flow_file))
+
+        link_flows = pd.read_csv(link_flow_file, usecols=['index', 'matrix_tot'],
+                                 converters={'index': int, 'matrix_tot': float})
+
+        transit_calcs = pd.merge(network, link_flows, how='left', left_on='link_id', right_on='index', indicator=True)
+        logger.debug(("Number of links not found in link flows " +
+                      "table: {}".format(sum(transit_calcs['_merge'] == 'left_only'))))
+        if sum(transit_calcs['_merge'] == 'left_only') == transit_calcs.shape[0]:
+            logger.error(("TABLE JOIN ERROR: Join of network links file with link flows table " +
+                         "failed to produce any matches for scenario {}. Check the corresponding table columns.".format(scenname)))
+            raise Exception(("TABLE JOIN ERROR: Join of network links file with link flows table " +
+                             "failed to produce any matches for scenario {}. Check the corresponding table columns.".format(scenname)))
+        transit_calcs.drop(labels=['index', '_merge'], axis=1, inplace=True)
+        transit_calcs['matrix_tot'] = np.where(transit_calcs['matrix_tot'].isna(), 0, transit_calcs['matrix_tot'])
+        transit_calcs = transit_calcs.assign(miles_tot=transit_calcs['matrix_tot'] * transit_calcs['length'],
+                                             hours_tot=transit_calcs['matrix_tot'] * transit_calcs['travel_time'] / 60)
+
+        # Pull out transit and car metrics based on facility type
+        # Calculate four light rail (lr) metrics, four heavy rail/subway (hr) metrics, four bus metrics, and three car metrics
+        # Unlinked trip counts
+        rtd_lrtrips = transit_calcs.loc[transit_calcs['facility_type'] == '600', 'matrix_tot'].sum().sum()
+        rtd_hrtrips = transit_calcs.loc[transit_calcs['facility_type'].isin(['601', '602']), 'matrix_tot'].sum().sum()
+        rtd_bustrips = transit_calcs.loc[transit_calcs['facility_type'] == '603', 'matrix_tot'].sum().sum()
+        # Count on road centroid connectors then divide by 2
+        rtd_cartrips = transit_calcs.loc[transit_calcs['facility_type'] == '901', 'matrix_tot'].sum().sum() / 2
+        # Passenger miles traveled
+        rtd_lrpmt = transit_calcs.loc[transit_calcs['facility_type'] == '100', 'miles_tot'].sum().sum()
+        rtd_hrpmt = transit_calcs.loc[transit_calcs['facility_type'].isin(['101', '102']), 'miles_tot'].sum().sum()
+        rtd_buspmt = transit_calcs.loc[transit_calcs['facility_type'] == '103', 'miles_tot'].sum().sum()
+        rtd_carpmt = transit_calcs.loc[transit_calcs['facility_type'].isin(['1', '2', '3', '4', '5', '6', '7', '11', '12']), 'miles_tot'].sum().sum()
+        # Transit wait times
+        rtd_lrphtwait = transit_calcs.loc[transit_calcs['facility_type'] == '600', 'hours_tot'].sum().sum()
+        rtd_hrphtwait = transit_calcs.loc[transit_calcs['facility_type'].isin(['601', '602']), 'hours_tot'].sum().sum()
+        rtd_busphtwait = transit_calcs.loc[transit_calcs['facility_type'] == '603', 'hours_tot'].sum().sum()
+        # Passenger travel times
+        rtd_lrphtenroute = transit_calcs.loc[transit_calcs['facility_type'] == '100', 'hours_tot'].sum().sum()
+        rtd_hrphtenroute = transit_calcs.loc[transit_calcs['facility_type'].isin(['101', '102']), 'hours_tot'].sum().sum()
+        rtd_busphtenroute = transit_calcs.loc[transit_calcs['facility_type'] == '103', 'hours_tot'].sum().sum()
+        rtd_carpht = transit_calcs.loc[transit_calcs['facility_type'].isin(['1', '2', '3', '4', '5', '6', '7', '11', '12']), 'hours_tot'].sum().sum()
+    else:
+        logger.info("Only calculating overall metrics for scenario {}".format(scenname))
+        if cfg['aeq_run_type'] == 'RT':
+            logger.info("If transit-specific benefits are desired, set calc_transit_metrics to 1 in the config file and use default facility type fields")
+    
     # Write outputs to csv file
-    outfile = open(join(run_folder, "NetSkim.csv"), "w")
-    print("Type,SP/RT,socio,projgroup,resil,elasticity,hazard,recovery,Scenario,trips,miles,hours," +
-          "lost_trips,extra_miles,extra_hours,circuitous_trips_removed", file=outfile)
+    outfile = open(join(disrupt_run_folder, "NetSkim.csv"), "w")
+    # TODO: Create extra column headers if calc_transit_metrics (and print extra empty data values)
+    if cfg['calc_transit_metrics']:
+        print("Type,SP/RT,socio,projgroup,resil,elasticity,hazard,recovery,Scenario,trips,miles,hours," +
+              "lost_trips,extra_miles,extra_hours,circuitous_trips_removed,lr_trips,hr_trips,bus_trips," +
+              "car_trips,lr_miles,hr_miles,bus_miles,car_miles,lr_hours_wait,hr_hours_wait,bus_hours_wait," +
+              "lr_hours_enroute,hr_hours_enroute,bus_hours_enroute,car_hours", file=outfile)
+    else:
+        print("Type,SP/RT,socio,projgroup,resil,elasticity,hazard,recovery,Scenario,trips,miles,hours," +
+              "lost_trips,extra_miles,extra_hours,circuitous_trips_removed", file=outfile)
     print("Base,SP," + socio + ',' + projgroup + ',' + resil + ',' + str(elasticity) + ',' + hazard + ',' + recovery +
           ',' + basescenname + ',' + '{:.8},{:.8},{:.8}'.format(spb_cumtripcount, spb_cumdist, spb_cumtime/60),
           file=outfile)
@@ -566,10 +602,23 @@ def run_aeq_disrupt_miniequilibrium(run_params, run_folder, cfg, logger):
     lost_trips = rtb_cumtripcount - rtd_cumtripcount
     extra_mi = rtd_cumdist - rtd_basecumdist
     extra_hr = (rtd_cumtime - rtd_basecumtime)/60
-    print("Disrupt,RT," + socio + ',' + projgroup + ',' + resil + ',' +
-          str(elasticity) + ',' + hazard + ',' + recovery + ',' + scenname + ',' +
-          '{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}'.format(rtd_cumtripcount, rtd_cumdist, rtd_cumtime/60, lost_trips,
-                                                       extra_mi, extra_hr), file=outfile)
+    # Add extra calculated values if calc_transit_metrics is True
+    if cfg['calc_transit_metrics']:
+        # circuitous_trips_removed is set as 0.0 for a placeholder
+        print("Disrupt,RT," + socio + ',' + projgroup + ',' + resil + ',' +
+              str(elasticity) + ',' + hazard + ',' + recovery + ',' + scenname + ',' +
+              '{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},'.format(rtd_cumtripcount, rtd_cumdist, rtd_cumtime/60, lost_trips,
+                                                            extra_mi, extra_hr, 0.0) +
+              '{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},'.format(rtd_lrtrips, rtd_hrtrips, rtd_bustrips, rtd_cartrips,
+                                                                        rtd_lrpmt, rtd_hrpmt, rtd_buspmt, rtd_carpmt) +
+              '{:.8},{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}'.format(rtd_lrphtwait, rtd_hrphtwait, rtd_busphtwait,
+                                                                 rtd_lrphtenroute, rtd_hrphtenroute, rtd_busphtenroute,
+                                                                 rtd_carpht), file=outfile)
+    else:
+        print("Disrupt,RT," + socio + ',' + projgroup + ',' + resil + ',' +
+              str(elasticity) + ',' + hazard + ',' + recovery + ',' + scenname + ',' +
+              '{:.8},{:.8},{:.8},{:.8},{:.8},{:.8}'.format(rtd_cumtripcount, rtd_cumdist, rtd_cumtime/60, lost_trips,
+                                                           extra_mi, extra_hr), file=outfile)
 
     # Reporting run statistics to log file
     logger.debug("total pht: {}  average per trip: {}".format(spb_cumtime/60, spb_cumtime/60/df_dem.sum().sum()))

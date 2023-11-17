@@ -22,7 +22,7 @@ from rdr_RecoveryInit import make_hazard_levels
 def main(input_folder, output_folder, cfg, logger):
     logger.info("Start: recovery analysis module")
 
-    logger.debug("reading in parameters for metamodel analysis")
+    logger.debug("Reading in parameters for ROI analysis")
     roi_analysis_type = cfg['roi_analysis_type']
 
     start_year = cfg['start_year']
@@ -32,22 +32,50 @@ def main(input_folder, output_folder, cfg, logger):
 
     # cost inputs and outputs are reported in dollar_year units
     dollar_year = cfg['dollar_year']
-    miles_cost = cfg['veh_oper_cost']
-    hours_cost = cfg['vot_per_hour']
-    vehicle_occupancy = cfg['vehicle_occupancy']
     discount_factor = cfg['discount_factor']
+    co2_discount_factor = cfg['co2_discount_factor']
 
-    # safety parameters
-    fatality_rate = cfg['fatality_rate']
-    injury_rate = cfg['injury_rate']
-    pdo_rate = cfg['pdo_rate']
-    safety_monetization_csv = cfg['safety_monetization_csv']
+    # vehicle occupancy rates
+    vehicle_occupancy = cfg['vehicle_occupancy']
+    if cfg['calc_transit_metrics']:
+        vehicle_occupancy_b = cfg['vehicle_occupancy_bus']
+        vehicle_occupancy_lr = cfg['vehicle_occupancy_light_rail']
+        vehicle_occupancy_hr = cfg['vehicle_occupancy_heavy_rail']
+
+    # vehicle operating costs
+    miles_cost = cfg['veh_oper_cost']
+    if cfg['calc_transit_metrics']:
+        miles_cost_b = cfg['veh_oper_cost_bus']
+        miles_cost_lr = cfg['veh_oper_cost_light_rail']
+        miles_cost_hr = cfg['veh_oper_cost_heavy_rail']
+
+    # value of time and transit fare parameters
+    hours_cost = cfg['vot_per_hour']
+    if cfg['calc_transit_metrics']:
+        hours_wait_cost = cfg['vot_wait_per_hour']
+        transit_fare = cfg['transit_fare']
+
+    # maintenance and redeployment parameters
+    maintenance = cfg['maintenance']
+    redeployment = cfg['redeployment']
+
+    # safety and noise parameters
+    safety_cost = cfg['safety_cost']
+    noise_cost = cfg['noise_cost']
+    if cfg['calc_transit_metrics']:
+        safety_cost_b = cfg['safety_cost_bus']
+        noise_cost_b = cfg['noise_cost_bus']
 
     # emissions parameters
     co2_rate = cfg['co2_rate']
     nox_rate = cfg['nox_rate']
     so2_rate = cfg['so2_rate']
     pm25_rate = cfg['pm25_rate']
+    if cfg['calc_transit_metrics']:
+        co2_rate_b = cfg['co2_rate_bus']
+        nox_rate_b = cfg['nox_rate_bus']
+        so2_rate_b = cfg['so2_rate_bus']
+        pm25_rate_b = cfg['pm25_rate_bus']
     emissions_monetization_csv = cfg['emissions_monetization_csv']
 
     logger.config("ReportingParameters: ROI analysis type is {}".format(roi_analysis_type))
@@ -55,17 +83,34 @@ def main(input_folder, output_folder, cfg, logger):
     logger.config(("ReportingParameters: base year runs are for year {}, ".format(str(base_year)) +
                    "future year runs are for year {}".format(str(future_year))))
     logger.config("ReportingParameters: monetary values are in units of year {} dollars".format(str(dollar_year)))
+    logger.config(("ReportingParameters: general discounting factor = {}, ".format(str(discount_factor)) +
+                   "CO2 discounting factor = {}".format(str(co2_discount_factor))))
+    logger.config("ReportingParameters: average vehicle occupancy = {}".format(str(vehicle_occupancy)))
+    if cfg['calc_transit_metrics']:
+        logger.config("ReportingParameters: transit vehicle occupancies for bus = {}, light rail = {}, heavy rail = {}".format(str(vehicle_occupancy_b),
+                                                                                                                               str(vehicle_occupancy_lr),
+                                                                                                                               str(vehicle_occupancy_hr)))
     logger.config("ReportingParameters: cost of vehicle-mile = ${}, cost of person-hour = ${}".format(str(miles_cost),
                                                                                                       str(hours_cost)))
-    logger.config(("ReportingParameters: average vehicle occupancy = {}, ".format(str(vehicle_occupancy)) +
-                   "discounting factor = {}".format(str(discount_factor))))
-    logger.config("ReportingParameters: safety rates for fatality = {}, injury = {}, property damage only = {}".format(str(fatality_rate),
-                                                                                                                       str(injury_rate),
-                                                                                                                       str(pdo_rate)))
+    if cfg['calc_transit_metrics']:
+        logger.config("ReportingParameters: transit operating costs for bus = ${}, light rail = ${}, heavy rail = ${}".format(str(miles_cost_b),
+                                                                                                                              str(miles_cost_lr),
+                                                                                                                              str(miles_cost_hr)))
+        logger.config("ReportingParameters: value of transit wait time = ${}".format(str(hours_wait_cost)))
+        logger.config("ReportingParameters: transit fare = ${}".format(str(transit_fare)))
+    logger.config("ReportingParameters: maintenance cost toggle set to {}, redeployment cost toggle set to {}".format(str(maintenance),
+                                                                                                                      str(redeployment)))
+    logger.config("ReportingParameters: safety cost = {}, noise cost = {}".format(str(safety_cost), str(noise_cost)))
     logger.config("ReportingParameters: emissions rates for CO2 = {}, NOx = {}, SO2 = {}, PM2.5 = {}".format(str(co2_rate),
                                                                                                              str(nox_rate),
                                                                                                              str(so2_rate),
                                                                                                              str(pm25_rate)))
+    if cfg['calc_transit_metrics']:
+        logger.config("ReportingParameters: bus safety cost = {}, bus noise cost = {}".format(str(safety_cost_b), str(noise_cost_b)))
+        logger.config("ReportingParameters: bus emissions rates for CO2 = {}, NOx = {}, SO2 = {}, PM2.5 = {}".format(str(co2_rate_b),
+                                                                                                                     str(nox_rate_b),
+                                                                                                                     str(so2_rate_b),
+                                                                                                                     str(pm25_rate_b)))
 
     # uncertainty scenario information, regression outputs, repair costs and times
     logger.debug("reading in output files from previous modules")
@@ -102,6 +147,8 @@ def main(input_folder, output_folder, cfg, logger):
                                                  'Resiliency Project': str, 'Trip Loss Elasticity': float,
                                                  'Initial Hazard Level': int})
     repair_data = pd.read_csv(repair_table)
+
+    # reads in car and transit mode columns if cfg['calc_transit_metrics'] is True
     base_regression_output = pd.read_csv(base_regression_table,
                                          converters={'hazard': str, 'recovery': str})
     future_regression_output = pd.read_csv(future_regression_table,
@@ -128,12 +175,29 @@ def main(input_folder, output_folder, cfg, logger):
     if not os.path.exists(project_table):
         logger.error("RESILIENCE PROJECTS FILE ERROR: {} could not be found".format(project_table))
         raise Exception("RESILIENCE PROJECTS FILE ERROR: {} could not be found".format(project_table))
-    projects = pd.read_csv(project_table, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost', 'Project Lifespan', 'Annual Maintenance Cost'],
-                           converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
-                                       'Project Lifespan': int, 'Annual Maintenance Cost': str})
-    # convert 'Project Cost' and 'Annual Maintenance Cost' columns to float type
+    
+    usecols = ['Project ID', 'Project Name', 'Asset', 'Project Cost', 'Project Lifespan']
+    converters = {'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
+                  'Project Lifespan': int}
+    if maintenance:
+        usecols.append('Annual Maintenance Cost')
+        converters['Annual Maintenance Cost'] = str
+    if redeployment:
+        usecols.append('Redeployment Cost')
+        converters['Redeployment Cost'] = str
+
+    projects = pd.read_csv(project_table, usecols=usecols, converters=converters)
+    # convert 'Project Cost', 'Annual Maintenance Cost', 'Redeployment Cost' columns to float type
     projects['Estimated Project Cost'] = projects['Project Cost'].replace('[\$,]', '', regex=True).astype(float)
-    projects['Estimated Maintenance Cost'] = projects['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).astype(float)
+    projects['Estimated Maintenance Cost'] = 0
+    projects['Estimated Redeployment Cost'] = 0
+
+    # assign maintenance and redeployment costs only if they are set to be included in config
+    if maintenance:
+        projects['Estimated Maintenance Cost'] = projects['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).astype(float)
+    if redeployment:
+        projects['Estimated Redeployment Cost'] = projects['Redeployment Cost'].replace('[\$,]', '', regex=True).astype(float)
+    
     logger.debug("Size of resilience project information table: {}".format(projects.shape))
 
     # create table of unique project-asset rows
@@ -141,7 +205,8 @@ def main(input_folder, output_folder, cfg, logger):
     # row in project table is created for baseline 'no' case with Estimated Project Cost = 0
     temp_row = {'Project ID': 'no', 'Project Name': 'No Vulnerability Projects', 'Asset': 'None',
                 'Estimated Project Cost': 0.0, 'Project Lifespan': end_year - start_year + 1,
-                'Estimated Maintenance Cost': 0.0}
+                'Estimated Maintenance Cost': 0.0,
+                'Estimated Redeployment Cost': 0.0}
     project_list = project_list.append(temp_row, ignore_index=True)
 
     # calculate metrics for Tableau dashboard
@@ -181,9 +246,19 @@ def main(input_folder, output_folder, cfg, logger):
     # merge with base_regression_output in left outer merge on 'Hazard Event' = 'hazard', 'Recovery' = 'recovery'
     # NOTE: merge with base year regression outputs is only based on hazard and recovery
     logger.warning("variation in base year regression outputs is solely due to hazard event and recovery parameters")
-    merged2 = pd.merge(merged2, base_regression_output.loc[:, ['hazard', 'recovery', 'trips', 'miles', 'hours']],
-                       how='left', left_on=['Hazard Event', 'Recovery'], right_on=['hazard', 'recovery'],
-                       suffixes=(None, "_baseyr"), indicator=True)
+    if cfg['calc_transit_metrics']:
+        merged2 = pd.merge(merged2, base_regression_output.loc[:, ['hazard', 'recovery', 'trips', 'miles', 'hours',
+                                                                   'lr_trips', 'hr_trips', 'bus_trips', 'car_trips',
+                                                                   'lr_miles', 'hr_miles', 'bus_miles', 'car_miles',
+                                                                   'lr_hours_wait', 'hr_hours_wait', 'bus_hours_wait',
+                                                                   'lr_hours_enroute', 'hr_hours_enroute',
+                                                                   'bus_hours_enroute', 'car_hours']],
+                           how='left', left_on=['Hazard Event', 'Recovery'], right_on=['hazard', 'recovery'],
+                           suffixes=(None, "_baseyr"), indicator=True)
+    else:
+        merged2 = pd.merge(merged2, base_regression_output.loc[:, ['hazard', 'recovery', 'trips', 'miles', 'hours']],
+                           how='left', left_on=['Hazard Event', 'Recovery'], right_on=['hazard', 'recovery'],
+                           suffixes=(None, "_baseyr"), indicator=True)
     logger.debug(("Number of extended scenario snapshots not matched to " +
                   "model outputs for base year: {}".format(sum(merged2['_merge'] == 'left_only'))))
     if sum(merged2['_merge'] == 'left_only') > 0:
@@ -195,81 +270,412 @@ def main(input_folder, output_folder, cfg, logger):
 
     # calculate new columns 'initTripslevels'/'initVMTlevels'/'initPHTlevels' as
     # 'trips'/'miles'/'hours' for 'Stage Number' == 1 and 0 otherwise (and dividing by vehicle_occupancy for VMT)
-    merged2['initTripslevels'] = np.where(merged2['Stage Number'] == 1, merged2['trips'], 0.0)
-    merged2['initVMTlevels'] = np.where(merged2['Stage Number'] == 1, merged2['miles'] / vehicle_occupancy, 0.0)
-    merged2['initPHTlevels'] = np.where(merged2['Stage Number'] == 1, merged2['hours'], 0.0)
-    merged2['initTripslevels_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['trips_baseyr'], 0.0)
-    merged2['initVMTlevels_baseyr'] = np.where(merged2['Stage Number'] == 1,
-                                               merged2['miles_baseyr'] / vehicle_occupancy, 0.0)
-    merged2['initPHTlevels_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['hours_baseyr'], 0.0)
+    if cfg['calc_transit_metrics']:
+        merged2['initTripslevels_lr'] = np.where(merged2['Stage Number'] == 1, merged2['lr_trips'], 0.0)
+        merged2['initTripslevels_hr'] = np.where(merged2['Stage Number'] == 1, merged2['hr_trips'], 0.0)
+        merged2['initTripslevels_b'] = np.where(merged2['Stage Number'] == 1, merged2['bus_trips'], 0.0)
+        merged2['initTripslevels_c'] = np.where(merged2['Stage Number'] == 1, merged2['car_trips'], 0.0)
+        merged2['initVMTlevels_lr'] = np.where(merged2['Stage Number'] == 1, merged2['lr_miles'] / vehicle_occupancy_lr, 0.0)
+        merged2['initVMTlevels_hr'] = np.where(merged2['Stage Number'] == 1, merged2['hr_miles'] / vehicle_occupancy_hr, 0.0)
+        merged2['initVMTlevels_b'] = np.where(merged2['Stage Number'] == 1, merged2['bus_miles'] / vehicle_occupancy_b, 0.0)
+        merged2['initVMTlevels_c'] = np.where(merged2['Stage Number'] == 1, merged2['car_miles'] / vehicle_occupancy, 0.0)
+        merged2['initPHTlevels_lr_w'] = np.where(merged2['Stage Number'] == 1, merged2['lr_hours_wait'], 0.0)
+        merged2['initPHTlevels_hr_w'] = np.where(merged2['Stage Number'] == 1, merged2['hr_hours_wait'], 0.0)
+        merged2['initPHTlevels_b_w'] = np.where(merged2['Stage Number'] == 1, merged2['bus_hours_wait'], 0.0)
+        merged2['initPHTlevels_lr_e'] = np.where(merged2['Stage Number'] == 1, merged2['lr_hours_enroute'], 0.0)
+        merged2['initPHTlevels_hr_e'] = np.where(merged2['Stage Number'] == 1, merged2['hr_hours_enroute'], 0.0)
+        merged2['initPHTlevels_b_e'] = np.where(merged2['Stage Number'] == 1, merged2['bus_hours_enroute'], 0.0)
+        merged2['initPHTlevels_c'] = np.where(merged2['Stage Number'] == 1, merged2['car_hours'], 0.0)
+
+        merged2['initTripslevels_lr_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['lr_trips_baseyr'], 0.0)
+        merged2['initTripslevels_hr_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['hr_trips_baseyr'], 0.0)
+        merged2['initTripslevels_b_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['bus_trips_baseyr'], 0.0)
+        merged2['initTripslevels_c_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['car_trips_baseyr'], 0.0)
+        merged2['initVMTlevels_lr_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['lr_miles_baseyr'] / vehicle_occupancy_lr, 0.0)
+        merged2['initVMTlevels_hr_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['hr_miles_baseyr'] / vehicle_occupancy_hr, 0.0)
+        merged2['initVMTlevels_b_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['bus_miles_baseyr'] / vehicle_occupancy_b, 0.0)
+        merged2['initVMTlevels_c_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['car_miles_baseyr'] / vehicle_occupancy, 0.0)
+        merged2['initPHTlevels_lr_w_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['lr_hours_wait_baseyr'], 0.0)
+        merged2['initPHTlevels_hr_w_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['hr_hours_wait_baseyr'], 0.0)
+        merged2['initPHTlevels_b_w_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['bus_hours_wait_baseyr'], 0.0)
+        merged2['initPHTlevels_lr_e_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['lr_hours_enroute_baseyr'], 0.0)
+        merged2['initPHTlevels_hr_e_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['hr_hours_enroute_baseyr'], 0.0)
+        merged2['initPHTlevels_b_e_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['bus_hours_enroute_baseyr'], 0.0)
+        merged2['initPHTlevels_c_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['car_hours_baseyr'], 0.0)
+
+        merged2 = merged2.assign(initTripslevels=(merged2['initTripslevels_lr'] + merged2['initTripslevels_hr'] +
+                                                  merged2['initTripslevels_b'] + merged2['initTripslevels_c']),
+                                 initVMTlevels=(merged2['initVMTlevels_lr'] + merged2['initVMTlevels_hr'] +
+                                                merged2['initVMTlevels_b'] + merged2['initVMTlevels_c']),
+                                 initPHTlevels=(merged2['initPHTlevels_lr_w'] + merged2['initPHTlevels_hr_w'] +
+                                                merged2['initPHTlevels_b_w'] + merged2['initPHTlevels_lr_e'] +
+                                                merged2['initPHTlevels_hr_e'] + merged2['initPHTlevels_b_e'] +
+                                                merged2['initPHTlevels_c']),
+                                 initTripslevels_baseyr=(merged2['initTripslevels_lr_baseyr'] + merged2['initTripslevels_hr_baseyr'] +
+                                                         merged2['initTripslevels_b_baseyr'] + merged2['initTripslevels_c_baseyr']),
+                                 initVMTlevels_baseyr=(merged2['initVMTlevels_lr_baseyr'] + merged2['initVMTlevels_hr_baseyr'] +
+                                                       merged2['initVMTlevels_b_baseyr'] + merged2['initVMTlevels_c_baseyr']),
+                                 initPHTlevels_baseyr=(merged2['initPHTlevels_lr_w_baseyr'] + merged2['initPHTlevels_hr_w_baseyr'] +
+                                                       merged2['initPHTlevels_b_w_baseyr'] + merged2['initPHTlevels_lr_e_baseyr'] +
+                                                       merged2['initPHTlevels_hr_e_baseyr'] + merged2['initPHTlevels_b_e_baseyr'] +
+                                                       merged2['initPHTlevels_c_baseyr']))
+    else:
+        merged2['initTripslevels'] = np.where(merged2['Stage Number'] == 1, merged2['trips'], 0.0)
+        merged2['initVMTlevels'] = np.where(merged2['Stage Number'] == 1, merged2['miles'] / vehicle_occupancy, 0.0)
+        merged2['initPHTlevels'] = np.where(merged2['Stage Number'] == 1, merged2['hours'], 0.0)
+        merged2['initTripslevels_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['trips_baseyr'], 0.0)
+        merged2['initVMTlevels_baseyr'] = np.where(merged2['Stage Number'] == 1,
+                                                   merged2['miles_baseyr'] / vehicle_occupancy, 0.0)
+        merged2['initPHTlevels_baseyr'] = np.where(merged2['Stage Number'] == 1, merged2['hours_baseyr'], 0.0)
 
     # calculate new columns 'expTripslevels'/'expVMTlevels'/'expPHTlevels' by multiplying
     # 'Stage Duration' and 'trips'/'miles'/'hours' (and dividing by vehicle_occupancy for VMT)
-    merged2 = merged2.assign(expTripslevels=merged2['Stage Duration'] * merged2['trips'],
-                             expVMTlevels=merged2['Stage Duration'] * merged2['miles']/vehicle_occupancy,
-                             expPHTlevels=merged2['Stage Duration'] * merged2['hours'])
-    merged2 = merged2.assign(expTripslevels_baseyr=merged2['Stage Duration'] * merged2['trips_baseyr'],
-                             expVMTlevels_baseyr=merged2['Stage Duration'] * merged2['miles_baseyr']/vehicle_occupancy,
-                             expPHTlevels_baseyr=merged2['Stage Duration'] * merged2['hours_baseyr'])
+    if cfg['calc_transit_metrics']:
+        merged2 = merged2.assign(expTripslevels_lr=merged2['Stage Duration'] * merged2['lr_trips'],
+                                 expTripslevels_hr=merged2['Stage Duration'] * merged2['hr_trips'],
+                                 expTripslevels_b=merged2['Stage Duration'] * merged2['bus_trips'],
+                                 expTripslevels_c=merged2['Stage Duration'] * merged2['car_trips'],
+                                 expVMTlevels_lr=merged2['Stage Duration'] * merged2['lr_miles']/vehicle_occupancy_lr,
+                                 expVMTlevels_hr=merged2['Stage Duration'] * merged2['hr_miles']/vehicle_occupancy_hr,
+                                 expVMTlevels_b=merged2['Stage Duration'] * merged2['bus_miles']/vehicle_occupancy_b,
+                                 expVMTlevels_c=merged2['Stage Duration'] * merged2['car_miles']/vehicle_occupancy,
+                                 expPHTlevels_lr_w=merged2['Stage Duration'] * merged2['lr_hours_wait'],
+                                 expPHTlevels_hr_w=merged2['Stage Duration'] * merged2['hr_hours_wait'],
+                                 expPHTlevels_b_w=merged2['Stage Duration'] * merged2['bus_hours_wait'],
+                                 expPHTlevels_lr_e=merged2['Stage Duration'] * merged2['lr_hours_enroute'],
+                                 expPHTlevels_hr_e=merged2['Stage Duration'] * merged2['hr_hours_enroute'],
+                                 expPHTlevels_b_e=merged2['Stage Duration'] * merged2['bus_hours_enroute'],
+                                 expPHTlevels_c=merged2['Stage Duration'] * merged2['car_hours'])
+        merged2 = merged2.assign(expTripslevels_lr_baseyr=merged2['Stage Duration'] * merged2['lr_trips_baseyr'],
+                                 expTripslevels_hr_baseyr=merged2['Stage Duration'] * merged2['hr_trips_baseyr'],
+                                 expTripslevels_b_baseyr=merged2['Stage Duration'] * merged2['bus_trips_baseyr'],
+                                 expTripslevels_c_baseyr=merged2['Stage Duration'] * merged2['car_trips_baseyr'],
+                                 expVMTlevels_lr_baseyr=merged2['Stage Duration'] * merged2['lr_miles_baseyr']/vehicle_occupancy_lr,
+                                 expVMTlevels_hr_baseyr=merged2['Stage Duration'] * merged2['hr_miles_baseyr']/vehicle_occupancy_hr,
+                                 expVMTlevels_b_baseyr=merged2['Stage Duration'] * merged2['bus_miles_baseyr']/vehicle_occupancy_b,
+                                 expVMTlevels_c_baseyr=merged2['Stage Duration'] * merged2['car_miles_baseyr']/vehicle_occupancy,
+                                 expPHTlevels_lr_w_baseyr=merged2['Stage Duration'] * merged2['lr_hours_wait_baseyr'],
+                                 expPHTlevels_hr_w_baseyr=merged2['Stage Duration'] * merged2['hr_hours_wait_baseyr'],
+                                 expPHTlevels_b_w_baseyr=merged2['Stage Duration'] * merged2['bus_hours_wait_baseyr'],
+                                 expPHTlevels_lr_e_baseyr=merged2['Stage Duration'] * merged2['lr_hours_enroute_baseyr'],
+                                 expPHTlevels_hr_e_baseyr=merged2['Stage Duration'] * merged2['hr_hours_enroute_baseyr'],
+                                 expPHTlevels_b_e_baseyr=merged2['Stage Duration'] * merged2['bus_hours_enroute_baseyr'],
+                                 expPHTlevels_c_baseyr=merged2['Stage Duration'] * merged2['car_hours_baseyr'])
+
+        merged2 = merged2.assign(expTripslevels=(merged2['expTripslevels_lr'] + merged2['expTripslevels_hr'] +
+                                                 merged2['expTripslevels_b'] + merged2['expTripslevels_c']),
+                                 expVMTlevels=(merged2['expVMTlevels_lr'] + merged2['expVMTlevels_hr'] +
+                                               merged2['expVMTlevels_b'] + merged2['expVMTlevels_c']),
+                                 expPHTlevels=(merged2['expPHTlevels_lr_w'] + merged2['expPHTlevels_hr_w'] +
+                                               merged2['expPHTlevels_b_w'] + merged2['expPHTlevels_lr_e'] +
+                                               merged2['expPHTlevels_hr_e'] + merged2['expPHTlevels_b_e'] +
+                                               merged2['expPHTlevels_c']),
+                                 expTripslevels_baseyr=(merged2['expTripslevels_lr_baseyr'] + merged2['expTripslevels_hr_baseyr'] +
+                                                        merged2['expTripslevels_b_baseyr'] + merged2['expTripslevels_c_baseyr']),
+                                 expVMTlevels_baseyr=(merged2['expVMTlevels_lr_baseyr'] + merged2['expVMTlevels_hr_baseyr'] +
+                                                      merged2['expVMTlevels_b_baseyr'] + merged2['expVMTlevels_c_baseyr']),
+                                 expPHTlevels_baseyr=(merged2['expPHTlevels_lr_w_baseyr'] + merged2['expPHTlevels_hr_w_baseyr'] +
+                                                      merged2['expPHTlevels_b_w_baseyr'] + merged2['expPHTlevels_lr_e_baseyr'] +
+                                                      merged2['expPHTlevels_hr_e_baseyr'] + merged2['expPHTlevels_b_e_baseyr'] +
+                                                      merged2['expPHTlevels_c_baseyr']))
+    else:
+        merged2 = merged2.assign(expTripslevels=merged2['Stage Duration'] * merged2['trips'],
+                                 expVMTlevels=merged2['Stage Duration'] * merged2['miles']/vehicle_occupancy,
+                                 expPHTlevels=merged2['Stage Duration'] * merged2['hours'])
+        merged2 = merged2.assign(expTripslevels_baseyr=merged2['Stage Duration'] * merged2['trips_baseyr'],
+                                 expVMTlevels_baseyr=merged2['Stage Duration'] * merged2['miles_baseyr']/vehicle_occupancy,
+                                 expPHTlevels_baseyr=merged2['Stage Duration'] * merged2['hours_baseyr'])
 
     # create table of maximum recovery stage metrics for partial repair calculation
     # using one row per project-scenario
     logger.debug("identifying maximum recovery stages for partial repair calculation")
     merged2['recovery_depth'] = merged2['Recovery'].astype(float)
-    maximum_recovery_data = merged2.loc[merged2.reset_index().groupby(['ID-Resiliency-Scenario'])['recovery_depth'].idxmax(),
-                                        ['ID-Resiliency-Scenario', 'trips', 'miles', 'hours',
-                                         'trips_baseyr', 'miles_baseyr', 'hours_baseyr']]
-    maximum_recovery_data['miles'] = maximum_recovery_data['miles'] / vehicle_occupancy
-    maximum_recovery_data['miles_baseyr'] = maximum_recovery_data['miles_baseyr'] / vehicle_occupancy
-    maximum_recovery_data.rename({'trips': 'initTripslevels', 'miles': 'initVMTlevels', 'hours': 'initPHTlevels',
-                                  'trips_baseyr': 'initTripslevels_baseyr', 'miles_baseyr': 'initVMTlevels_baseyr',
-                                  'hours_baseyr': 'initPHTlevels_baseyr'},
-                                 axis='columns', inplace=True)
+    if cfg['calc_transit_metrics']:
+        maximum_recovery_data = merged2.loc[merged2.reset_index().groupby(['ID-Resiliency-Scenario'])['recovery_depth'].idxmax(),
+                                            ['ID-Resiliency-Scenario', 'lr_trips', 'hr_trips', 'bus_trips', 'car_trips',
+                                             'lr_miles', 'hr_miles', 'bus_miles', 'car_miles', 'lr_hours_wait',
+                                             'hr_hours_wait', 'bus_hours_wait', 'lr_hours_enroute', 'hr_hours_enroute',
+                                             'bus_hours_enroute', 'car_hours', 'lr_trips_baseyr', 'hr_trips_baseyr',
+                                             'bus_trips_baseyr', 'car_trips_baseyr', 'lr_miles_baseyr', 'hr_miles_baseyr',
+                                             'bus_miles_baseyr', 'car_miles_baseyr', 'lr_hours_wait_baseyr',
+                                             'hr_hours_wait_baseyr', 'bus_hours_wait_baseyr', 'lr_hours_enroute_baseyr',
+                                             'hr_hours_enroute_baseyr', 'bus_hours_enroute_baseyr', 'car_hours_baseyr']]
+        maximum_recovery_data['lr_miles'] = maximum_recovery_data['lr_miles'] / vehicle_occupancy_lr
+        maximum_recovery_data['hr_miles'] = maximum_recovery_data['hr_miles'] / vehicle_occupancy_hr
+        maximum_recovery_data['bus_miles'] = maximum_recovery_data['bus_miles'] / vehicle_occupancy_b
+        maximum_recovery_data['car_miles'] = maximum_recovery_data['car_miles'] / vehicle_occupancy
+        maximum_recovery_data['lr_miles_baseyr'] = maximum_recovery_data['lr_miles_baseyr'] / vehicle_occupancy_lr
+        maximum_recovery_data['hr_miles_baseyr'] = maximum_recovery_data['hr_miles_baseyr'] / vehicle_occupancy_hr
+        maximum_recovery_data['bus_miles_baseyr'] = maximum_recovery_data['bus_miles_baseyr'] / vehicle_occupancy_b
+        maximum_recovery_data['car_miles_baseyr'] = maximum_recovery_data['car_miles_baseyr'] / vehicle_occupancy
+        maximum_recovery_data = maximum_recovery_data.assign(initTripslevels=(maximum_recovery_data['lr_trips'] +
+                                                                              maximum_recovery_data['hr_trips'] +
+                                                                              maximum_recovery_data['bus_trips'] +
+                                                                              maximum_recovery_data['car_trips']),
+                                                             initVMTlevels=(maximum_recovery_data['lr_miles'] +
+                                                                            maximum_recovery_data['hr_miles'] +
+                                                                            maximum_recovery_data['bus_miles'] +
+                                                                            maximum_recovery_data['car_miles']),
+                                                             initPHTlevels=(maximum_recovery_data['lr_hours_wait'] +
+                                                                            maximum_recovery_data['hr_hours_wait'] +
+                                                                            maximum_recovery_data['bus_hours_wait'] +
+                                                                            maximum_recovery_data['lr_hours_enroute'] +
+                                                                            maximum_recovery_data['hr_hours_enroute'] +
+                                                                            maximum_recovery_data['bus_hours_enroute'] +
+                                                                            maximum_recovery_data['car_hours']),
+                                                             initTripslevels_baseyr=(maximum_recovery_data['lr_trips_baseyr'] +
+                                                                                     maximum_recovery_data['hr_trips_baseyr'] +
+                                                                                     maximum_recovery_data['bus_trips_baseyr'] +
+                                                                                     maximum_recovery_data['car_trips_baseyr']),
+                                                             initVMTlevels_baseyr=(maximum_recovery_data['lr_miles_baseyr'] +
+                                                                                   maximum_recovery_data['hr_miles_baseyr'] +
+                                                                                   maximum_recovery_data['bus_miles_baseyr'] +
+                                                                                   maximum_recovery_data['car_miles_baseyr']),
+                                                             initPHTlevels_baseyr=(maximum_recovery_data['lr_hours_wait_baseyr'] +
+                                                                                   maximum_recovery_data['hr_hours_wait_baseyr'] +
+                                                                                   maximum_recovery_data['bus_hours_wait_baseyr'] +
+                                                                                   maximum_recovery_data['lr_hours_enroute_baseyr'] +
+                                                                                   maximum_recovery_data['hr_hours_enroute_baseyr'] +
+                                                                                   maximum_recovery_data['bus_hours_enroute_baseyr'] +
+                                                                                   maximum_recovery_data['car_hours_baseyr']))
+        maximum_recovery_data.rename({'lr_trips': 'initTripslevels_lr', 'hr_trips': 'initTripslevels_hr',
+                                      'bus_trips': 'initTripslevels_b', 'car_trips': 'initTripslevels_c',
+                                      'lr_miles': 'initVMTlevels_lr', 'hr_miles': 'initVMTlevels_hr',
+                                      'bus_miles': 'initVMTlevels_b', 'car_miles': 'initVMTlevels_c',
+                                      'lr_hours_wait': 'initPHTlevels_lr_w', 'hr_hours_wait': 'initPHTlevels_hr_w',
+                                      'bus_hours_wait': 'initPHTlevels_b_w', 'lr_hours_enroute': 'initPHTlevels_lr_e',
+                                      'hr_hours_enroute': 'initPHTlevels_hr_e', 'bus_hours_enroute': 'initPHTlevels_b_e',
+                                      'car_hours': 'initPHTlevels_c',
+                                      'lr_trips_baseyr': 'initTripslevels_lr_baseyr', 'hr_trips_baseyr': 'initTripslevels_hr_baseyr',
+                                      'bus_trips_baseyr': 'initTripslevels_b_baseyr', 'car_trips_baseyr': 'initTripslevels_c_baseyr',
+                                      'lr_miles_baseyr': 'initVMTlevels_lr_baseyr', 'hr_miles_baseyr': 'initVMTlevels_hr_baseyr',
+                                      'bus_miles_baseyr': 'initVMTlevels_b_baseyr', 'car_miles_baseyr': 'initVMTlevels_c_baseyr',
+                                      'lr_hours_wait_baseyr': 'initPHTlevels_lr_w_baseyr', 'hr_hours_wait_baseyr': 'initPHTlevels_hr_w_baseyr',
+                                      'bus_hours_wait_baseyr': 'initPHTlevels_b_w_baseyr', 'lr_hours_enroute_baseyr': 'initPHTlevels_lr_e_baseyr',
+                                      'hr_hours_enroute_baseyr': 'initPHTlevels_hr_e_baseyr', 'bus_hours_enroute_baseyr': 'initPHTlevels_b_e_baseyr',
+                                      'car_hours_baseyr': 'initPHTlevels_c_baseyr'},
+                                     axis='columns', inplace=True)
+    else:
+        maximum_recovery_data = merged2.loc[merged2.reset_index().groupby(['ID-Resiliency-Scenario'])['recovery_depth'].idxmax(),
+                                            ['ID-Resiliency-Scenario', 'trips', 'miles', 'hours',
+                                             'trips_baseyr', 'miles_baseyr', 'hours_baseyr']]
+        maximum_recovery_data['miles'] = maximum_recovery_data['miles'] / vehicle_occupancy
+        maximum_recovery_data['miles_baseyr'] = maximum_recovery_data['miles_baseyr'] / vehicle_occupancy
+        maximum_recovery_data.rename({'trips': 'initTripslevels', 'miles': 'initVMTlevels', 'hours': 'initPHTlevels',
+                                      'trips_baseyr': 'initTripslevels_baseyr', 'miles_baseyr': 'initVMTlevels_baseyr',
+                                      'hours_baseyr': 'initPHTlevels_baseyr'},
+                                     axis='columns', inplace=True)
 
     # consolidate extended scenarios into one row per project-scenario
     # group by 'ID-Resiliency-Scenario', sum metrics columns
     logger.debug("consolidating extended scenario snapshots into uncertainty scenarios")
-    hazard_recession_data = merged2.loc[:, ['ID-Resiliency-Scenario', 'initTripslevels', 'initVMTlevels',
-                                            'initPHTlevels', 'initTripslevels_baseyr', 'initVMTlevels_baseyr',
-                                            'initPHTlevels_baseyr', 'expTripslevels', 'expVMTlevels', 'expPHTlevels',
-                                            'expTripslevels_baseyr', 'expVMTlevels_baseyr',
-                                            'expPHTlevels_baseyr']].groupby('ID-Resiliency-Scenario', as_index=False,
-                                                                            sort=False).sum()
+    if cfg['calc_transit_metrics']:
+        hazard_recession_data = merged2.loc[:, ['ID-Resiliency-Scenario', 'initTripslevels', 'initVMTlevels',
+                                                'initPHTlevels', 'initTripslevels_baseyr', 'initVMTlevels_baseyr',
+                                                'initPHTlevels_baseyr', 'expTripslevels', 'expVMTlevels', 'expPHTlevels',
+                                                'expTripslevels_baseyr', 'expVMTlevels_baseyr',
+                                                'expPHTlevels_baseyr', 'initTripslevels_lr', 'initTripslevels_hr',
+                                                'initTripslevels_b', 'initTripslevels_c', 'initVMTlevels_lr',
+                                                'initVMTlevels_hr', 'initVMTlevels_b', 'initVMTlevels_c', 'initPHTlevels_lr_w',
+                                                'initPHTlevels_hr_w', 'initPHTlevels_b_w', 'initPHTlevels_lr_e',
+                                                'initPHTlevels_hr_e', 'initPHTlevels_b_e', 'initPHTlevels_c',
+                                                'initTripslevels_lr_baseyr', 'initTripslevels_hr_baseyr',
+                                                'initTripslevels_b_baseyr', 'initTripslevels_c_baseyr',
+                                                'initVMTlevels_lr_baseyr', 'initVMTlevels_hr_baseyr',
+                                                'initVMTlevels_b_baseyr', 'initVMTlevels_c_baseyr',
+                                                'initPHTlevels_lr_w_baseyr', 'initPHTlevels_hr_w_baseyr',
+                                                'initPHTlevels_b_w_baseyr', 'initPHTlevels_lr_e_baseyr',
+                                                'initPHTlevels_hr_e_baseyr', 'initPHTlevels_b_e_baseyr',
+                                                'initPHTlevels_c_baseyr', 'expTripslevels_lr', 'expTripslevels_hr',
+                                                'expTripslevels_b', 'expTripslevels_c', 'expVMTlevels_lr',
+                                                'expVMTlevels_hr', 'expVMTlevels_b', 'expVMTlevels_c', 'expPHTlevels_lr_w',
+                                                'expPHTlevels_hr_w', 'expPHTlevels_b_w', 'expPHTlevels_lr_e',
+                                                'expPHTlevels_hr_e', 'expPHTlevels_b_e', 'expPHTlevels_c',
+                                                'expTripslevels_lr_baseyr', 'expTripslevels_hr_baseyr',
+                                                'expTripslevels_b_baseyr', 'expTripslevels_c_baseyr',
+                                                'expVMTlevels_lr_baseyr', 'expVMTlevels_hr_baseyr',
+                                                'expVMTlevels_b_baseyr', 'expVMTlevels_c_baseyr',
+                                                'expPHTlevels_lr_w_baseyr', 'expPHTlevels_hr_w_baseyr',
+                                                'expPHTlevels_b_w_baseyr', 'expPHTlevels_lr_e_baseyr',
+                                                'expPHTlevels_hr_e_baseyr', 'expPHTlevels_b_e_baseyr',
+                                                'expPHTlevels_c_baseyr']].groupby('ID-Resiliency-Scenario', as_index=False,
+                                                                                  sort=False).sum()
+    else:
+        hazard_recession_data = merged2.loc[:, ['ID-Resiliency-Scenario', 'initTripslevels', 'initVMTlevels',
+                                                'initPHTlevels', 'initTripslevels_baseyr', 'initVMTlevels_baseyr',
+                                                'initPHTlevels_baseyr', 'expTripslevels', 'expVMTlevels', 'expPHTlevels',
+                                                'expTripslevels_baseyr', 'expVMTlevels_baseyr',
+                                                'expPHTlevels_baseyr']].groupby('ID-Resiliency-Scenario', as_index=False,
+                                                                                sort=False).sum()
 
     # calculate dollar values for Trips/VMT/PHT
     logger.debug("calculating dollar values for Trips/VMT/PHT metrics")
-    hazard_recession_data = hazard_recession_data.assign(initTripslevel_dollar=(0.5 * vehicle_occupancy *
-                                                                                hazard_recession_data['initTripslevels'] *
-                                                                                hazard_recession_data['initVMTlevels'] /
-                                                                                hazard_recession_data['initPHTlevels']),
-                                                         initVMTlevel_dollar=(hazard_recession_data['initVMTlevels'] *
-                                                                              miles_cost),
-                                                         initPHTlevel_dollar=(hazard_recession_data['initPHTlevels'] *
-                                                                              hours_cost),
-                                                         expTripslevel_dollar=(0.5 * vehicle_occupancy *
-                                                                               hazard_recession_data['expTripslevels'] *
-                                                                               hazard_recession_data['expVMTlevels'] /
-                                                                               hazard_recession_data['expPHTlevels']),
-                                                         expVMTlevel_dollar=(hazard_recession_data['expVMTlevels'] *
-                                                                             miles_cost),
-                                                         expPHTlevel_dollar=(hazard_recession_data['expPHTlevels'] *
-                                                                             hours_cost))
-    hazard_recession_data = hazard_recession_data.assign(initTripslevel_dollar_baseyr=(0.5 * vehicle_occupancy *
-                                                                                       hazard_recession_data['initTripslevels_baseyr'] *
-                                                                                       hazard_recession_data['initVMTlevels_baseyr'] /
-                                                                                       hazard_recession_data['initPHTlevels_baseyr']),
-                                                         initVMTlevel_dollar_baseyr=(hazard_recession_data['initVMTlevels_baseyr'] *
-                                                                                     miles_cost),
-                                                         initPHTlevel_dollar_baseyr=(hazard_recession_data['initPHTlevels_baseyr'] *
-                                                                                     hours_cost),
-                                                         expTripslevel_dollar_baseyr=(0.5 * vehicle_occupancy *
-                                                                                      hazard_recession_data['expTripslevels_baseyr'] *
-                                                                                      hazard_recession_data['expVMTlevels_baseyr'] /
-                                                                                      hazard_recession_data['expPHTlevels_baseyr']),
-                                                         expVMTlevel_dollar_baseyr=(hazard_recession_data['expVMTlevels_baseyr'] *
-                                                                                    miles_cost),
-                                                         expPHTlevel_dollar_baseyr=(hazard_recession_data['expPHTlevels_baseyr'] *
-                                                                                    hours_cost))
+    if cfg['calc_transit_metrics']:
+        hazard_recession_data = hazard_recession_data.assign(initTripslevel_dollar=((0.5 * vehicle_occupancy_lr *
+                                                                                     (hazard_recession_data['initTripslevels_lr'] *
+                                                                                      hazard_recession_data['initVMTlevels_lr'] /
+                                                                                      (hazard_recession_data['initPHTlevels_lr_w'] +
+                                                                                       hazard_recession_data['initPHTlevels_lr_e'])).fillna(0)) +
+                                                                                    (0.5 * vehicle_occupancy_hr *
+                                                                                     (hazard_recession_data['initTripslevels_hr'] *
+                                                                                      hazard_recession_data['initVMTlevels_hr'] /
+                                                                                      (hazard_recession_data['initPHTlevels_hr_w'] +
+                                                                                       hazard_recession_data['initPHTlevels_hr_e'])).fillna(0)) +
+                                                                                    (0.5 * vehicle_occupancy_b *
+                                                                                     (hazard_recession_data['initTripslevels_b'] *
+                                                                                      hazard_recession_data['initVMTlevels_b'] /
+                                                                                      (hazard_recession_data['initPHTlevels_b_w'] +
+                                                                                       hazard_recession_data['initPHTlevels_b_e'])).fillna(0)) +
+                                                                                    (0.5 * vehicle_occupancy *
+                                                                                     (hazard_recession_data['initTripslevels_c'] *
+                                                                                      hazard_recession_data['initVMTlevels_c'] /
+                                                                                      hazard_recession_data['initPHTlevels_c']).fillna(0)) +
+                                                                                    transit_fare * (hazard_recession_data['initTripslevels_lr'] +
+                                                                                                    hazard_recession_data['initTripslevels_hr'] +
+                                                                                                    hazard_recession_data['initTripslevels_b'])),
+                                                             initVMTlevel_dollar=(hazard_recession_data['initVMTlevels_lr'] * miles_cost_lr +
+                                                                                  hazard_recession_data['initVMTlevels_hr'] * miles_cost_hr +
+                                                                                  hazard_recession_data['initVMTlevels_b'] * miles_cost_b +
+                                                                                  hazard_recession_data['initVMTlevels_c'] * miles_cost),
+                                                             initPHTlevel_dollar=(hours_cost * (hazard_recession_data['initPHTlevels_lr_e'] +
+                                                                                                hazard_recession_data['initPHTlevels_hr_e'] +
+                                                                                                hazard_recession_data['initPHTlevels_b_e'] +
+                                                                                                hazard_recession_data['initPHTlevels_c']) +
+                                                                                  hours_wait_cost * (hazard_recession_data['initPHTlevels_lr_w'] +
+                                                                                                     hazard_recession_data['initPHTlevels_hr_w'] +
+                                                                                                     hazard_recession_data['initPHTlevels_b_w'])),
+                                                             expTripslevel_dollar=((0.5 * vehicle_occupancy_lr *
+                                                                                    (hazard_recession_data['expTripslevels_lr'] *
+                                                                                     hazard_recession_data['expVMTlevels_lr'] /
+                                                                                     (hazard_recession_data['expPHTlevels_lr_w'] +
+                                                                                      hazard_recession_data['expPHTlevels_lr_e'])).fillna(0)) +
+                                                                                   (0.5 * vehicle_occupancy_hr *
+                                                                                    (hazard_recession_data['expTripslevels_hr'] *
+                                                                                     hazard_recession_data['expVMTlevels_hr'] /
+                                                                                     (hazard_recession_data['expPHTlevels_hr_w'] +
+                                                                                      hazard_recession_data['expPHTlevels_hr_e'])).fillna(0)) +
+                                                                                   (0.5 * vehicle_occupancy_b *
+                                                                                    (hazard_recession_data['expTripslevels_b'] *
+                                                                                     hazard_recession_data['expVMTlevels_b'] /
+                                                                                     (hazard_recession_data['expPHTlevels_b_w'] +
+                                                                                      hazard_recession_data['expPHTlevels_b_e'])).fillna(0)) +
+                                                                                   (0.5 * vehicle_occupancy *
+                                                                                    (hazard_recession_data['expTripslevels_c'] *
+                                                                                     hazard_recession_data['expVMTlevels_c'] /
+                                                                                     hazard_recession_data['expPHTlevels_c']).fillna(0)) +
+                                                                                   transit_fare * (hazard_recession_data['expTripslevels_lr'] +
+                                                                                                   hazard_recession_data['expTripslevels_hr'] +
+                                                                                                   hazard_recession_data['expTripslevels_b'])),
+                                                             expVMTlevel_dollar=(hazard_recession_data['expVMTlevels_lr'] * miles_cost_lr +
+                                                                                 hazard_recession_data['expVMTlevels_hr'] * miles_cost_hr +
+                                                                                 hazard_recession_data['expVMTlevels_b'] * miles_cost_b +
+                                                                                 hazard_recession_data['expVMTlevels_c'] * miles_cost),
+                                                             expPHTlevel_dollar=(hours_cost * (hazard_recession_data['expPHTlevels_lr_e'] +
+                                                                                               hazard_recession_data['expPHTlevels_hr_e'] +
+                                                                                               hazard_recession_data['expPHTlevels_b_e'] +
+                                                                                               hazard_recession_data['expPHTlevels_c']) +
+                                                                                 hours_wait_cost * (hazard_recession_data['expPHTlevels_lr_w'] +
+                                                                                                    hazard_recession_data['expPHTlevels_hr_w'] +
+                                                                                                    hazard_recession_data['expPHTlevels_b_w'])))
+        hazard_recession_data = hazard_recession_data.assign(initTripslevel_dollar_baseyr=((0.5 * vehicle_occupancy_lr *
+                                                                                            (hazard_recession_data['initTripslevels_lr_baseyr'] *
+                                                                                             hazard_recession_data['initVMTlevels_lr_baseyr'] /
+                                                                                             (hazard_recession_data['initPHTlevels_lr_w_baseyr'] +
+                                                                                              hazard_recession_data['initPHTlevels_lr_e_baseyr'])).fillna(0)) +
+                                                                                           (0.5 * vehicle_occupancy_hr *
+                                                                                            (hazard_recession_data['initTripslevels_hr_baseyr'] *
+                                                                                             hazard_recession_data['initVMTlevels_hr_baseyr'] /
+                                                                                             (hazard_recession_data['initPHTlevels_hr_w_baseyr'] +
+                                                                                              hazard_recession_data['initPHTlevels_hr_e_baseyr'])).fillna(0)) +
+                                                                                           (0.5 * vehicle_occupancy_b *
+                                                                                            (hazard_recession_data['initTripslevels_b_baseyr'] *
+                                                                                             hazard_recession_data['initVMTlevels_b_baseyr'] /
+                                                                                             (hazard_recession_data['initPHTlevels_b_w_baseyr'] +
+                                                                                              hazard_recession_data['initPHTlevels_b_e_baseyr'])).fillna(0)) +
+                                                                                           (0.5 * vehicle_occupancy *
+                                                                                            (hazard_recession_data['initTripslevels_c_baseyr'] *
+                                                                                             hazard_recession_data['initVMTlevels_c_baseyr'] /
+                                                                                             hazard_recession_data['initPHTlevels_c_baseyr']).fillna(0)) +
+                                                                                           transit_fare * (hazard_recession_data['initTripslevels_lr_baseyr'] +
+                                                                                                           hazard_recession_data['initTripslevels_hr_baseyr'] +
+                                                                                                           hazard_recession_data['initTripslevels_b_baseyr'])),
+                                                             initVMTlevel_dollar_baseyr=(hazard_recession_data['initVMTlevels_lr_baseyr'] * miles_cost_lr +
+                                                                                         hazard_recession_data['initVMTlevels_hr_baseyr'] * miles_cost_hr +
+                                                                                         hazard_recession_data['initVMTlevels_b_baseyr'] * miles_cost_b +
+                                                                                         hazard_recession_data['initVMTlevels_c_baseyr'] * miles_cost),
+                                                             initPHTlevel_dollar_baseyr=(hours_cost * (hazard_recession_data['initPHTlevels_lr_e_baseyr'] +
+                                                                                                       hazard_recession_data['initPHTlevels_hr_e_baseyr'] +
+                                                                                                       hazard_recession_data['initPHTlevels_b_e_baseyr'] +
+                                                                                                       hazard_recession_data['initPHTlevels_c_baseyr']) +
+                                                                                         hours_wait_cost * (hazard_recession_data['initPHTlevels_lr_w_baseyr'] +
+                                                                                                            hazard_recession_data['initPHTlevels_hr_w_baseyr'] +
+                                                                                                            hazard_recession_data['initPHTlevels_b_w_baseyr'])),
+                                                             expTripslevel_dollar_baseyr=((0.5 * vehicle_occupancy_lr *
+                                                                                           (hazard_recession_data['expTripslevels_lr_baseyr'] *
+                                                                                            hazard_recession_data['expVMTlevels_lr_baseyr'] /
+                                                                                            (hazard_recession_data['expPHTlevels_lr_w_baseyr'] +
+                                                                                             hazard_recession_data['expPHTlevels_lr_e_baseyr'])).fillna(0)) +
+                                                                                          (0.5 * vehicle_occupancy_hr *
+                                                                                           (hazard_recession_data['expTripslevels_hr_baseyr'] *
+                                                                                            hazard_recession_data['expVMTlevels_hr_baseyr'] /
+                                                                                            (hazard_recession_data['expPHTlevels_hr_w_baseyr'] +
+                                                                                             hazard_recession_data['expPHTlevels_hr_e_baseyr'])).fillna(0)) +
+                                                                                          (0.5 * vehicle_occupancy_b *
+                                                                                           (hazard_recession_data['expTripslevels_b_baseyr'] *
+                                                                                            hazard_recession_data['expVMTlevels_b_baseyr'] /
+                                                                                            (hazard_recession_data['expPHTlevels_b_w_baseyr'] +
+                                                                                             hazard_recession_data['expPHTlevels_b_e_baseyr'])).fillna(0)) +
+                                                                                          (0.5 * vehicle_occupancy *
+                                                                                           (hazard_recession_data['expTripslevels_c_baseyr'] *
+                                                                                            hazard_recession_data['expVMTlevels_c_baseyr'] /
+                                                                                            hazard_recession_data['expPHTlevels_c_baseyr']).fillna(0)) +
+                                                                                          transit_fare * (hazard_recession_data['expTripslevels_lr_baseyr'] +
+                                                                                                          hazard_recession_data['expTripslevels_hr_baseyr'] +
+                                                                                                          hazard_recession_data['expTripslevels_b_baseyr'])),
+                                                             expVMTlevel_dollar_baseyr=(hazard_recession_data['expVMTlevels_lr_baseyr'] * miles_cost_lr +
+                                                                                        hazard_recession_data['expVMTlevels_hr_baseyr'] * miles_cost_hr +
+                                                                                        hazard_recession_data['expVMTlevels_b_baseyr'] * miles_cost_b +
+                                                                                        hazard_recession_data['expVMTlevels_c_baseyr'] * miles_cost),
+                                                             expPHTlevel_dollar_baseyr=(hours_cost * (hazard_recession_data['expPHTlevels_lr_e_baseyr'] +
+                                                                                                      hazard_recession_data['expPHTlevels_hr_e_baseyr'] +
+                                                                                                      hazard_recession_data['expPHTlevels_b_e_baseyr'] +
+                                                                                                      hazard_recession_data['expPHTlevels_c_baseyr']) +
+                                                                                        hours_wait_cost * (hazard_recession_data['expPHTlevels_lr_w_baseyr'] +
+                                                                                                           hazard_recession_data['expPHTlevels_hr_w_baseyr'] +
+                                                                                                           hazard_recession_data['expPHTlevels_b_w_baseyr'])))
+    else:
+        hazard_recession_data = hazard_recession_data.assign(initTripslevel_dollar=(0.5 * vehicle_occupancy *
+                                                                                    hazard_recession_data['initTripslevels'] *
+                                                                                    hazard_recession_data['initVMTlevels'] /
+                                                                                    hazard_recession_data['initPHTlevels']),
+                                                             initVMTlevel_dollar=(hazard_recession_data['initVMTlevels'] *
+                                                                                  miles_cost),
+                                                             initPHTlevel_dollar=(hazard_recession_data['initPHTlevels'] *
+                                                                                  hours_cost),
+                                                             expTripslevel_dollar=(0.5 * vehicle_occupancy *
+                                                                                   hazard_recession_data['expTripslevels'] *
+                                                                                   hazard_recession_data['expVMTlevels'] /
+                                                                                   hazard_recession_data['expPHTlevels']),
+                                                             expVMTlevel_dollar=(hazard_recession_data['expVMTlevels'] *
+                                                                                 miles_cost),
+                                                             expPHTlevel_dollar=(hazard_recession_data['expPHTlevels'] *
+                                                                                 hours_cost))
+        hazard_recession_data = hazard_recession_data.assign(initTripslevel_dollar_baseyr=(0.5 * vehicle_occupancy *
+                                                                                           hazard_recession_data['initTripslevels_baseyr'] *
+                                                                                           hazard_recession_data['initVMTlevels_baseyr'] /
+                                                                                           hazard_recession_data['initPHTlevels_baseyr']),
+                                                             initVMTlevel_dollar_baseyr=(hazard_recession_data['initVMTlevels_baseyr'] *
+                                                                                         miles_cost),
+                                                             initPHTlevel_dollar_baseyr=(hazard_recession_data['initPHTlevels_baseyr'] *
+                                                                                         hours_cost),
+                                                             expTripslevel_dollar_baseyr=(0.5 * vehicle_occupancy *
+                                                                                          hazard_recession_data['expTripslevels_baseyr'] *
+                                                                                          hazard_recession_data['expVMTlevels_baseyr'] /
+                                                                                          hazard_recession_data['expPHTlevels_baseyr']),
+                                                             expVMTlevel_dollar_baseyr=(hazard_recession_data['expVMTlevels_baseyr'] *
+                                                                                        miles_cost),
+                                                             expPHTlevel_dollar_baseyr=(hazard_recession_data['expPHTlevels_baseyr'] *
+                                                                                        hours_cost))
 
     # merge with master_table on 'ID-Resiliency-Scenario'
     merged3 = pd.merge(master_table, hazard_recession_data, how='left', on='ID-Resiliency-Scenario', indicator=True)
@@ -283,8 +689,10 @@ def main(input_folder, output_folder, cfg, logger):
     merged3.drop(labels=['_merge'], axis=1, inplace=True)
 
     logger.debug("pulling in resilience project and hazard event information")
-    # pull in columns for 'Asset', 'Estimated Project Cost', and 'Project Lifespan' from project_list
-    merged4 = pd.merge(merged3, project_list.loc[:, ['Project ID', 'Project Name', 'Asset', 'Estimated Project Cost', 'Project Lifespan', 'Estimated Maintenance Cost']],
+    # pull in columns for 'Asset', 'Estimated Project Cost', 'Project Lifespan', 'Estimated Maintenance Cost', and 'Estimated Redeployment Cost' from project_list
+    merged4 = pd.merge(merged3, project_list.loc[:, ['Project ID', 'Project Name', 'Asset', 'Estimated Project Cost',
+                                                     'Project Lifespan', 'Estimated Maintenance Cost',
+                                                     'Estimated Redeployment Cost']],
                        how='left', left_on='Resiliency Project', right_on='Project ID', indicator=True)
     logger.debug(("Number of uncertainty scenarios not matched to " +
                   "resilience project information: {}".format(sum(merged4['_merge'] == 'left_only'))))
@@ -351,22 +759,8 @@ def main(input_folder, output_folder, cfg, logger):
                     'baseline_repair_time': 'repair_time_base', 'baseline_damage': 'damage_base'},
                    axis='columns', inplace=True)
 
-    # use 'ID-Resiliency-Scenario-Baseline' to join to other baseline scenario metrics
-    merged7 = pd.merge(merged6, merged6.loc[:, ['ID-Resiliency-Scenario', 'initTripslevels', 'initVMTlevels',
-                                                'initPHTlevels', 'initTripslevels_baseyr', 'initVMTlevels_baseyr',
-                                                'initPHTlevels_baseyr', 'expTripslevels', 'expVMTlevels',
-                                                'expPHTlevels', 'expTripslevels_baseyr', 'expVMTlevels_baseyr',
-                                                'expPHTlevels_baseyr']],
-                       how='left', left_on='ID-Resiliency-Scenario-Baseline', right_on='ID-Resiliency-Scenario',
-                       suffixes=[None, '_base'], indicator=True)
-    logger.debug(("Number of uncertainty scenarios not matched to " +
-                  "corresponding baseline scenario: {}".format(sum(merged7['_merge'] == 'left_only'))))
-    if sum(merged7['_merge'] == 'left_only') == merged7.shape[0]:
-        logger.error(("TABLE JOIN ERROR: Join of uncertainty scenarios with baseline scenario information " +
-                     "failed to produce any matches. Check the corresponding table columns."))
-        raise Exception(("TABLE JOIN ERROR: Join of uncertainty scenarios with baseline scenario information " +
-                         "failed to produce any matches. Check the corresponding table columns."))
-    merged7.drop(labels=['_merge'], axis=1, inplace=True)
+    # placeholder
+    merged7 = merged6.copy()
 
     # merge with maximum recovery stage metrics for partial repair calculation
     logger.debug("pulling in metrics for maximum recovery stage as proxy for full repaired state")
@@ -392,24 +786,340 @@ def main(input_folder, output_folder, cfg, logger):
 
     # calculate metrics for damage repair period
     # NOTE: fields are missing values for baseline scenarios
-    merged7['damTripslevels'] = 0.5 * (merged7['initTripslevels'] + merged7['initTripslevels_max']) * merged7['repair_time']
-    merged7['damVMTlevels'] = 0.5 * (merged7['initVMTlevels'] + merged7['initVMTlevels_max']) * merged7['repair_time']
-    merged7['damPHTlevels'] = 0.5 * (merged7['initPHTlevels'] + merged7['initPHTlevels_max']) * merged7['repair_time']
-    merged7['damTripslevels_baseyr'] = 0.5 * (merged7['initTripslevels_baseyr'] +
-                                              merged7['initTripslevels_baseyr_max']) * merged7['repair_time']
-    merged7['damVMTlevels_baseyr'] = 0.5 * (merged7['initVMTlevels_baseyr'] +
-                                            merged7['initVMTlevels_baseyr_max']) * merged7['repair_time']
-    merged7['damPHTlevels_baseyr'] = 0.5 * (merged7['initPHTlevels_baseyr'] +
-                                            merged7['initPHTlevels_baseyr_max']) * merged7['repair_time']
-    merged7 = merged7.assign(damTripslevel_dollar=(0.5 * vehicle_occupancy * merged7['damTripslevels'] *
-                                                   merged7['damVMTlevels'] / merged7['damPHTlevels']),
-                             damVMTlevel_dollar=merged7['damVMTlevels'] * miles_cost,
-                             damPHTlevel_dollar=merged7['damPHTlevels'] * hours_cost,
-                             damTripslevel_dollar_baseyr=(0.5 * vehicle_occupancy * merged7['damTripslevels_baseyr'] *
-                                                          merged7['damVMTlevels_baseyr'] /
-                                                          merged7['damPHTlevels_baseyr']),
-                             damVMTlevel_dollar_baseyr=merged7['damVMTlevels_baseyr'] * miles_cost,
-                             damPHTlevel_dollar_baseyr=merged7['damPHTlevels_baseyr'] * hours_cost)
+    if cfg['calc_transit_metrics']:
+        merged7['damTripslevels_lr'] = 0.5 * (merged7['initTripslevels_lr'] + merged7['initTripslevels_lr_max']) * merged7['repair_time']
+        merged7['damTripslevels_hr'] = 0.5 * (merged7['initTripslevels_hr'] + merged7['initTripslevels_hr_max']) * merged7['repair_time']
+        merged7['damTripslevels_b'] = 0.5 * (merged7['initTripslevels_b'] + merged7['initTripslevels_b_max']) * merged7['repair_time']
+        merged7['damTripslevels_c'] = 0.5 * (merged7['initTripslevels_c'] + merged7['initTripslevels_c_max']) * merged7['repair_time']
+        merged7['damVMTlevels_lr'] = 0.5 * (merged7['initVMTlevels_lr'] + merged7['initVMTlevels_lr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_hr'] = 0.5 * (merged7['initVMTlevels_hr'] + merged7['initVMTlevels_hr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_b'] = 0.5 * (merged7['initVMTlevels_b'] + merged7['initVMTlevels_b_max']) * merged7['repair_time']
+        merged7['damVMTlevels_c'] = 0.5 * (merged7['initVMTlevels_c'] + merged7['initVMTlevels_c_max']) * merged7['repair_time']
+        merged7['damPHTlevels_lr_w'] = 0.5 * (merged7['initPHTlevels_lr_w'] + merged7['initPHTlevels_lr_w_max']) * merged7['repair_time']
+        merged7['damPHTlevels_hr_w'] = 0.5 * (merged7['initPHTlevels_hr_w'] + merged7['initPHTlevels_hr_w_max']) * merged7['repair_time']
+        merged7['damPHTlevels_b_w'] = 0.5 * (merged7['initPHTlevels_b_w'] + merged7['initPHTlevels_b_w_max']) * merged7['repair_time']
+        merged7['damPHTlevels_lr_e'] = 0.5 * (merged7['initPHTlevels_lr_e'] + merged7['initPHTlevels_lr_e_max']) * merged7['repair_time']
+        merged7['damPHTlevels_hr_e'] = 0.5 * (merged7['initPHTlevels_hr_e'] + merged7['initPHTlevels_hr_e_max']) * merged7['repair_time']
+        merged7['damPHTlevels_b_e'] = 0.5 * (merged7['initPHTlevels_b_e'] + merged7['initPHTlevels_b_e_max']) * merged7['repair_time']
+        merged7['damPHTlevels_c'] = 0.5 * (merged7['initPHTlevels_c'] + merged7['initPHTlevels_c_max']) * merged7['repair_time']
+        merged7['damTripslevels_lr_baseyr'] = 0.5 * (merged7['initTripslevels_lr_baseyr'] +
+                                                     merged7['initTripslevels_lr_baseyr_max']) * merged7['repair_time']
+        merged7['damTripslevels_hr_baseyr'] = 0.5 * (merged7['initTripslevels_hr_baseyr'] +
+                                                     merged7['initTripslevels_hr_baseyr_max']) * merged7['repair_time']
+        merged7['damTripslevels_b_baseyr'] = 0.5 * (merged7['initTripslevels_b_baseyr'] +
+                                                    merged7['initTripslevels_b_baseyr_max']) * merged7['repair_time']
+        merged7['damTripslevels_c_baseyr'] = 0.5 * (merged7['initTripslevels_c_baseyr'] +
+                                                    merged7['initTripslevels_c_baseyr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_lr_baseyr'] = 0.5 * (merged7['initVMTlevels_lr_baseyr'] +
+                                                   merged7['initVMTlevels_lr_baseyr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_hr_baseyr'] = 0.5 * (merged7['initVMTlevels_hr_baseyr'] +
+                                                   merged7['initVMTlevels_hr_baseyr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_b_baseyr'] = 0.5 * (merged7['initVMTlevels_b_baseyr'] +
+                                                  merged7['initVMTlevels_b_baseyr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_c_baseyr'] = 0.5 * (merged7['initVMTlevels_c_baseyr'] +
+                                                  merged7['initVMTlevels_c_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_lr_w_baseyr'] = 0.5 * (merged7['initPHTlevels_lr_w_baseyr'] +
+                                                     merged7['initPHTlevels_lr_w_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_hr_w_baseyr'] = 0.5 * (merged7['initPHTlevels_hr_w_baseyr'] +
+                                                     merged7['initPHTlevels_hr_w_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_b_w_baseyr'] = 0.5 * (merged7['initPHTlevels_b_w_baseyr'] +
+                                                    merged7['initPHTlevels_b_w_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_lr_e_baseyr'] = 0.5 * (merged7['initPHTlevels_lr_e_baseyr'] +
+                                                     merged7['initPHTlevels_lr_e_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_hr_e_baseyr'] = 0.5 * (merged7['initPHTlevels_hr_e_baseyr'] +
+                                                     merged7['initPHTlevels_hr_e_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_b_e_baseyr'] = 0.5 * (merged7['initPHTlevels_b_e_baseyr'] +
+                                                    merged7['initPHTlevels_b_e_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_c_baseyr'] = 0.5 * (merged7['initPHTlevels_c_baseyr'] +
+                                                  merged7['initPHTlevels_c_baseyr_max']) * merged7['repair_time']
+        merged7 = merged7.assign(damTripslevels=(merged7['damTripslevels_lr'] + merged7['damTripslevels_hr'] +
+                                                 merged7['damTripslevels_b'] + merged7['damTripslevels_c']),
+                                 damVMTlevels=(merged7['damVMTlevels_lr'] + merged7['damVMTlevels_hr'] +
+                                               merged7['damVMTlevels_b'] + merged7['damVMTlevels_c']),
+                                 damPHTlevels=(merged7['damPHTlevels_lr_w'] + merged7['damPHTlevels_hr_w'] +
+                                               merged7['damPHTlevels_b_w'] + merged7['damPHTlevels_lr_e'] +
+                                               merged7['damPHTlevels_hr_e'] + merged7['damPHTlevels_b_e'] +
+                                               merged7['damPHTlevels_c']),
+                                 damTripslevels_baseyr=(merged7['damTripslevels_lr_baseyr'] + merged7['damTripslevels_hr_baseyr'] +
+                                                        merged7['damTripslevels_b_baseyr'] + merged7['damTripslevels_c_baseyr']),
+                                 damVMTlevels_baseyr=(merged7['damVMTlevels_lr_baseyr'] + merged7['damVMTlevels_hr_baseyr'] +
+                                                      merged7['damVMTlevels_b_baseyr'] + merged7['damVMTlevels_c_baseyr']),
+                                 damPHTlevels_baseyr=(merged7['damPHTlevels_lr_w_baseyr'] + merged7['damPHTlevels_hr_w_baseyr'] +
+                                                      merged7['damPHTlevels_b_w_baseyr'] + merged7['damPHTlevels_lr_e_baseyr'] +
+                                                      merged7['damPHTlevels_hr_e_baseyr'] + merged7['damPHTlevels_b_e_baseyr'] +
+                                                      merged7['damPHTlevels_c_baseyr']))
+        merged7 = merged7.assign(damTripslevel_dollar=((0.5 * vehicle_occupancy_lr *
+                                                        (merged7['damTripslevels_lr'] *
+                                                         merged7['damVMTlevels_lr'] /
+                                                         (merged7['damPHTlevels_lr_w'] +
+                                                          merged7['damPHTlevels_lr_e'])).fillna(0)) +
+                                                       (0.5 * vehicle_occupancy_hr *
+                                                        (merged7['damTripslevels_hr'] *
+                                                         merged7['damVMTlevels_hr'] /
+                                                         (merged7['damPHTlevels_hr_w'] +
+                                                          merged7['damPHTlevels_hr_e'])).fillna(0)) +
+                                                       (0.5 * vehicle_occupancy_b *
+                                                        (merged7['damTripslevels_b'] *
+                                                         merged7['damVMTlevels_b'] /
+                                                         (merged7['damPHTlevels_b_w'] +
+                                                          merged7['damPHTlevels_b_e'])).fillna(0)) +
+                                                       (0.5 * vehicle_occupancy *
+                                                        (merged7['damTripslevels_c'] *
+                                                         merged7['damVMTlevels_c'] /
+                                                         merged7['damPHTlevels_c']).fillna(0)) +
+                                                       transit_fare * (merged7['damTripslevels_lr'] +
+                                                                       merged7['damTripslevels_hr'] +
+                                                                       merged7['damTripslevels_b'])),
+                                 damVMTlevel_dollar=(merged7['damVMTlevels_lr'] * miles_cost_lr +
+                                                     merged7['damVMTlevels_hr'] * miles_cost_hr +
+                                                     merged7['damVMTlevels_b'] * miles_cost_b +
+                                                     merged7['damVMTlevels_c'] * miles_cost),
+                                 damPHTlevel_dollar=(hours_cost * (merged7['damPHTlevels_lr_e'] +
+                                                                   merged7['damPHTlevels_hr_e'] +
+                                                                   merged7['damPHTlevels_b_e'] +
+                                                                   merged7['damPHTlevels_c']) +
+                                                     hours_wait_cost * (merged7['damPHTlevels_lr_w'] +
+                                                                        merged7['damPHTlevels_hr_w'] +
+                                                                        merged7['damPHTlevels_b_w'])),
+                                 damTripslevel_dollar_baseyr=((0.5 * vehicle_occupancy_lr *
+                                                               (merged7['damTripslevels_lr_baseyr'] *
+                                                                merged7['damVMTlevels_lr_baseyr'] /
+                                                                (merged7['damPHTlevels_lr_w_baseyr'] +
+                                                                 merged7['damPHTlevels_lr_e_baseyr'])).fillna(0)) +
+                                                              (0.5 * vehicle_occupancy_hr *
+                                                               (merged7['damTripslevels_hr_baseyr'] *
+                                                                merged7['damVMTlevels_hr_baseyr'] /
+                                                                (merged7['damPHTlevels_hr_w_baseyr'] +
+                                                                 merged7['damPHTlevels_hr_e_baseyr'])).fillna(0)) +
+                                                              (0.5 * vehicle_occupancy_b *
+                                                               (merged7['damTripslevels_b_baseyr'] *
+                                                                merged7['damVMTlevels_b_baseyr'] /
+                                                                (merged7['damPHTlevels_b_w_baseyr'] +
+                                                                 merged7['damPHTlevels_b_e_baseyr'])).fillna(0)) +
+                                                              (0.5 * vehicle_occupancy *
+                                                               (merged7['damTripslevels_c_baseyr'] *
+                                                                merged7['damVMTlevels_c_baseyr'] /
+                                                                merged7['damPHTlevels_c_baseyr']).fillna(0)) +
+                                                              transit_fare * (merged7['damTripslevels_lr_baseyr'] +
+                                                                              merged7['damTripslevels_hr_baseyr'] +
+                                                                              merged7['damTripslevels_b_baseyr'])),
+                                 damVMTlevel_dollar_baseyr=(merged7['damVMTlevels_lr_baseyr'] * miles_cost_lr +
+                                                            merged7['damVMTlevels_hr_baseyr'] * miles_cost_hr +
+                                                            merged7['damVMTlevels_b_baseyr'] * miles_cost_b +
+                                                            merged7['damVMTlevels_c_baseyr'] * miles_cost),
+                                 damPHTlevel_dollar_baseyr=(hours_cost * (merged7['damPHTlevels_lr_e_baseyr'] +
+                                                                          merged7['damPHTlevels_hr_e_baseyr'] +
+                                                                          merged7['damPHTlevels_b_e_baseyr'] +
+                                                                          merged7['damPHTlevels_c_baseyr']) +
+                                                            hours_wait_cost * (merged7['damPHTlevels_lr_w_baseyr'] +
+                                                                               merged7['damPHTlevels_hr_w_baseyr'] +
+                                                                               merged7['damPHTlevels_b_w_baseyr'])))
+    else:
+        merged7['damTripslevels'] = 0.5 * (merged7['initTripslevels'] + merged7['initTripslevels_max']) * merged7['repair_time']
+        merged7['damVMTlevels'] = 0.5 * (merged7['initVMTlevels'] + merged7['initVMTlevels_max']) * merged7['repair_time']
+        merged7['damPHTlevels'] = 0.5 * (merged7['initPHTlevels'] + merged7['initPHTlevels_max']) * merged7['repair_time']
+        merged7['damTripslevels_baseyr'] = 0.5 * (merged7['initTripslevels_baseyr'] +
+                                                  merged7['initTripslevels_baseyr_max']) * merged7['repair_time']
+        merged7['damVMTlevels_baseyr'] = 0.5 * (merged7['initVMTlevels_baseyr'] +
+                                                merged7['initVMTlevels_baseyr_max']) * merged7['repair_time']
+        merged7['damPHTlevels_baseyr'] = 0.5 * (merged7['initPHTlevels_baseyr'] +
+                                                merged7['initPHTlevels_baseyr_max']) * merged7['repair_time']
+        merged7 = merged7.assign(damTripslevel_dollar=(0.5 * vehicle_occupancy * merged7['damTripslevels'] *
+                                                       merged7['damVMTlevels'] / merged7['damPHTlevels']),
+                                 damVMTlevel_dollar=merged7['damVMTlevels'] * miles_cost,
+                                 damPHTlevel_dollar=merged7['damPHTlevels'] * hours_cost,
+                                 damTripslevel_dollar_baseyr=(0.5 * vehicle_occupancy * merged7['damTripslevels_baseyr'] *
+                                                              merged7['damVMTlevels_baseyr'] /
+                                                              merged7['damPHTlevels_baseyr']),
+                                 damVMTlevel_dollar_baseyr=merged7['damVMTlevels_baseyr'] * miles_cost,
+                                 damPHTlevel_dollar_baseyr=merged7['damPHTlevels_baseyr'] * hours_cost)
+
+    # use 'ID-Resiliency-Scenario-Baseline' to join to other baseline scenario metrics
+    if cfg['calc_transit_metrics']:
+        merged7 = pd.merge(merged7, merged7.loc[:, ['ID-Resiliency-Scenario', 'initTripslevels', 'initVMTlevels',
+                                                    'initPHTlevels', 'initTripslevels_baseyr', 'initVMTlevels_baseyr',
+                                                    'initPHTlevels_baseyr', 'expTripslevels', 'expVMTlevels',
+                                                    'expPHTlevels', 'expTripslevels_baseyr', 'expVMTlevels_baseyr',
+                                                    'expPHTlevels_baseyr', 'initTripslevel_dollar', 'initVMTlevel_dollar',
+                                                    'initPHTlevel_dollar', 'initTripslevel_dollar_baseyr', 'initVMTlevel_dollar_baseyr',
+                                                    'initPHTlevel_dollar_baseyr', 'expTripslevel_dollar', 'expVMTlevel_dollar',
+                                                    'expPHTlevel_dollar', 'expTripslevel_dollar_baseyr', 'expVMTlevel_dollar_baseyr',
+                                                    'expPHTlevel_dollar_baseyr', 'damTripslevel_dollar', 'damVMTlevel_dollar',
+                                                    'damPHTlevel_dollar', 'damTripslevel_dollar_baseyr', 'damVMTlevel_dollar_baseyr',
+                                                    'damPHTlevel_dollar_baseyr', 'initTripslevels_lr', 'initTripslevels_hr',
+                                                    'initTripslevels_b', 'initTripslevels_c', 'initVMTlevels_lr',
+                                                    'initVMTlevels_hr', 'initVMTlevels_b', 'initVMTlevels_c', 'initPHTlevels_lr_w',
+                                                    'initPHTlevels_hr_w', 'initPHTlevels_b_w', 'initPHTlevels_lr_e',
+                                                    'initPHTlevels_hr_e', 'initPHTlevels_b_e', 'initPHTlevels_c',
+                                                    'initTripslevels_lr_baseyr', 'initTripslevels_hr_baseyr',
+                                                    'initTripslevels_b_baseyr', 'initTripslevels_c_baseyr',
+                                                    'initVMTlevels_lr_baseyr', 'initVMTlevels_hr_baseyr',
+                                                    'initVMTlevels_b_baseyr', 'initVMTlevels_c_baseyr',
+                                                    'initPHTlevels_lr_w_baseyr', 'initPHTlevels_hr_w_baseyr',
+                                                    'initPHTlevels_b_w_baseyr', 'initPHTlevels_lr_e_baseyr',
+                                                    'initPHTlevels_hr_e_baseyr', 'initPHTlevels_b_e_baseyr',
+                                                    'initPHTlevels_c_baseyr', 'expTripslevels_lr', 'expTripslevels_hr',
+                                                    'expTripslevels_b', 'expTripslevels_c', 'expVMTlevels_lr',
+                                                    'expVMTlevels_hr', 'expVMTlevels_b', 'expVMTlevels_c', 'expPHTlevels_lr_w',
+                                                    'expPHTlevels_hr_w', 'expPHTlevels_b_w', 'expPHTlevels_lr_e',
+                                                    'expPHTlevels_hr_e', 'expPHTlevels_b_e', 'expPHTlevels_c',
+                                                    'expTripslevels_lr_baseyr', 'expTripslevels_hr_baseyr',
+                                                    'expTripslevels_b_baseyr', 'expTripslevels_c_baseyr',
+                                                    'expVMTlevels_lr_baseyr', 'expVMTlevels_hr_baseyr',
+                                                    'expVMTlevels_b_baseyr', 'expVMTlevels_c_baseyr',
+                                                    'expPHTlevels_lr_w_baseyr', 'expPHTlevels_hr_w_baseyr',
+                                                    'expPHTlevels_b_w_baseyr', 'expPHTlevels_lr_e_baseyr',
+                                                    'expPHTlevels_hr_e_baseyr', 'expPHTlevels_b_e_baseyr',
+                                                    'expPHTlevels_c_baseyr']],
+                           how='left', left_on='ID-Resiliency-Scenario-Baseline', right_on='ID-Resiliency-Scenario',
+                           suffixes=[None, '_base'], indicator=True)
+    else:
+        merged7 = pd.merge(merged7, merged7.loc[:, ['ID-Resiliency-Scenario', 'initTripslevels', 'initVMTlevels',
+                                                    'initPHTlevels', 'initTripslevels_baseyr', 'initVMTlevels_baseyr',
+                                                    'initPHTlevels_baseyr', 'expTripslevels', 'expVMTlevels',
+                                                    'expPHTlevels', 'expTripslevels_baseyr', 'expVMTlevels_baseyr',
+                                                    'expPHTlevels_baseyr']],
+                           how='left', left_on='ID-Resiliency-Scenario-Baseline', right_on='ID-Resiliency-Scenario',
+                           suffixes=[None, '_base'], indicator=True)
+    logger.debug(("Number of uncertainty scenarios not matched to " +
+                  "corresponding baseline scenario: {}".format(sum(merged7['_merge'] == 'left_only'))))
+    if sum(merged7['_merge'] == 'left_only') == merged7.shape[0]:
+        logger.error(("TABLE JOIN ERROR: Join of uncertainty scenarios with baseline scenario information " +
+                     "failed to produce any matches. Check the corresponding table columns."))
+        raise Exception(("TABLE JOIN ERROR: Join of uncertainty scenarios with baseline scenario information " +
+                         "failed to produce any matches. Check the corresponding table columns."))
+    merged7.drop(labels=['_merge'], axis=1, inplace=True)
+
+    # calculate metrics for damage repair period for baseline
+    # NOTE: fields are missing values for baseline scenarios
+    if cfg['calc_transit_metrics']:
+        merged7['damTripslevels_lr_base'] = 0.5 * (merged7['initTripslevels_lr_base'] + merged7['initTripslevels_lr_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_hr_base'] = 0.5 * (merged7['initTripslevels_hr_base'] + merged7['initTripslevels_hr_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_b_base'] = 0.5 * (merged7['initTripslevels_b_base'] + merged7['initTripslevels_b_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_c_base'] = 0.5 * (merged7['initTripslevels_c_base'] + merged7['initTripslevels_c_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_lr_base'] = 0.5 * (merged7['initVMTlevels_lr_base'] + merged7['initVMTlevels_lr_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_hr_base'] = 0.5 * (merged7['initVMTlevels_hr_base'] + merged7['initVMTlevels_hr_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_b_base'] = 0.5 * (merged7['initVMTlevels_b_base'] + merged7['initVMTlevels_b_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_c_base'] = 0.5 * (merged7['initVMTlevels_c_base'] + merged7['initVMTlevels_c_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_lr_w_base'] = 0.5 * (merged7['initPHTlevels_lr_w_base'] + merged7['initPHTlevels_lr_w_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_hr_w_base'] = 0.5 * (merged7['initPHTlevels_hr_w_base'] + merged7['initPHTlevels_hr_w_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_b_w_base'] = 0.5 * (merged7['initPHTlevels_b_w_base'] + merged7['initPHTlevels_b_w_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_lr_e_base'] = 0.5 * (merged7['initPHTlevels_lr_e_base'] + merged7['initPHTlevels_lr_e_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_hr_e_base'] = 0.5 * (merged7['initPHTlevels_hr_e_base'] + merged7['initPHTlevels_hr_e_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_b_e_base'] = 0.5 * (merged7['initPHTlevels_b_e_base'] + merged7['initPHTlevels_b_e_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_c_base'] = 0.5 * (merged7['initPHTlevels_c_base'] + merged7['initPHTlevels_c_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_lr_baseyr_base'] = 0.5 * (merged7['initTripslevels_lr_baseyr_base'] +
+                                                     merged7['initTripslevels_lr_baseyr_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_hr_baseyr_base'] = 0.5 * (merged7['initTripslevels_hr_baseyr_base'] +
+                                                     merged7['initTripslevels_hr_baseyr_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_b_baseyr_base'] = 0.5 * (merged7['initTripslevels_b_baseyr_base'] +
+                                                    merged7['initTripslevels_b_baseyr_max']) * merged7['repair_time_base']
+        merged7['damTripslevels_c_baseyr_base'] = 0.5 * (merged7['initTripslevels_c_baseyr_base'] +
+                                                    merged7['initTripslevels_c_baseyr_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_lr_baseyr_base'] = 0.5 * (merged7['initVMTlevels_lr_baseyr_base'] +
+                                                   merged7['initVMTlevels_lr_baseyr_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_hr_baseyr_base'] = 0.5 * (merged7['initVMTlevels_hr_baseyr_base'] +
+                                                   merged7['initVMTlevels_hr_baseyr_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_b_baseyr_base'] = 0.5 * (merged7['initVMTlevels_b_baseyr_base'] +
+                                                  merged7['initVMTlevels_b_baseyr_max']) * merged7['repair_time_base']
+        merged7['damVMTlevels_c_baseyr_base'] = 0.5 * (merged7['initVMTlevels_c_baseyr_base'] +
+                                                  merged7['initVMTlevels_c_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_lr_w_baseyr_base'] = 0.5 * (merged7['initPHTlevels_lr_w_baseyr_base'] +
+                                                     merged7['initPHTlevels_lr_w_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_hr_w_baseyr_base'] = 0.5 * (merged7['initPHTlevels_hr_w_baseyr_base'] +
+                                                     merged7['initPHTlevels_hr_w_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_b_w_baseyr_base'] = 0.5 * (merged7['initPHTlevels_b_w_baseyr_base'] +
+                                                    merged7['initPHTlevels_b_w_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_lr_e_baseyr_base'] = 0.5 * (merged7['initPHTlevels_lr_e_baseyr_base'] +
+                                                     merged7['initPHTlevels_lr_e_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_hr_e_baseyr_base'] = 0.5 * (merged7['initPHTlevels_hr_e_baseyr_base'] +
+                                                     merged7['initPHTlevels_hr_e_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_b_e_baseyr_base'] = 0.5 * (merged7['initPHTlevels_b_e_baseyr_base'] +
+                                                    merged7['initPHTlevels_b_e_baseyr_max']) * merged7['repair_time_base']
+        merged7['damPHTlevels_c_baseyr_base'] = 0.5 * (merged7['initPHTlevels_c_baseyr_base'] +
+                                                  merged7['initPHTlevels_c_baseyr_max']) * merged7['repair_time_base']
+        merged7 = merged7.assign(damTripslevels_base=(merged7['damTripslevels_lr_base'] + merged7['damTripslevels_hr_base'] +
+                                                      merged7['damTripslevels_b_base'] + merged7['damTripslevels_c_base']),
+                                 damVMTlevels_base=(merged7['damVMTlevels_lr_base'] + merged7['damVMTlevels_hr_base'] +
+                                                    merged7['damVMTlevels_b_base'] + merged7['damVMTlevels_c_base']),
+                                 damPHTlevels_base=(merged7['damPHTlevels_lr_w_base'] + merged7['damPHTlevels_hr_w_base'] +
+                                                    merged7['damPHTlevels_b_w_base'] + merged7['damPHTlevels_lr_e_base'] +
+                                                    merged7['damPHTlevels_hr_e_base'] + merged7['damPHTlevels_b_e_base'] +
+                                                    merged7['damPHTlevels_c_base']),
+                                 damTripslevels_baseyr_base=(merged7['damTripslevels_lr_baseyr_base'] + merged7['damTripslevels_hr_baseyr_base'] +
+                                                             merged7['damTripslevels_b_baseyr_base'] + merged7['damTripslevels_c_baseyr_base']),
+                                 damVMTlevels_baseyr_base=(merged7['damVMTlevels_lr_baseyr_base'] + merged7['damVMTlevels_hr_baseyr_base'] +
+                                                           merged7['damVMTlevels_b_baseyr_base'] + merged7['damVMTlevels_c_baseyr_base']),
+                                 damPHTlevels_baseyr_base=(merged7['damPHTlevels_lr_w_baseyr_base'] + merged7['damPHTlevels_hr_w_baseyr_base'] +
+                                                           merged7['damPHTlevels_b_w_baseyr_base'] + merged7['damPHTlevels_lr_e_baseyr_base'] +
+                                                           merged7['damPHTlevels_hr_e_baseyr_base'] + merged7['damPHTlevels_b_e_baseyr_base'] +
+                                                           merged7['damPHTlevels_c_baseyr_base']))
+        merged7 = merged7.assign(damTripslevel_dollar_base=((0.5 * vehicle_occupancy_lr *
+                                                             (merged7['damTripslevels_lr_base'] *
+                                                              merged7['damVMTlevels_lr_base'] /
+                                                              (merged7['damPHTlevels_lr_w_base'] +
+                                                               merged7['damPHTlevels_lr_e_base'])).fillna(0)) +
+                                                            (0.5 * vehicle_occupancy_hr *
+                                                             (merged7['damTripslevels_hr_base'] *
+                                                              merged7['damVMTlevels_hr_base'] /
+                                                              (merged7['damPHTlevels_hr_w_base'] +
+                                                               merged7['damPHTlevels_hr_e_base'])).fillna(0)) +
+                                                            (0.5 * vehicle_occupancy_b *
+                                                             (merged7['damTripslevels_b_base'] *
+                                                              merged7['damVMTlevels_b_base'] /
+                                                              (merged7['damPHTlevels_b_w_base'] +
+                                                               merged7['damPHTlevels_b_e_base'])).fillna(0)) +
+                                                            (0.5 * vehicle_occupancy *
+                                                             (merged7['damTripslevels_c_base'] *
+                                                              merged7['damVMTlevels_c_base'] /
+                                                              merged7['damPHTlevels_c_base']).fillna(0)) +
+                                                            transit_fare * (merged7['damTripslevels_lr_base'] +
+                                                                            merged7['damTripslevels_hr_base'] +
+                                                                            merged7['damTripslevels_b_base'])),
+                                 damVMTlevel_dollar_base=(merged7['damVMTlevels_lr_base'] * miles_cost_lr +
+                                                          merged7['damVMTlevels_hr_base'] * miles_cost_hr +
+                                                          merged7['damVMTlevels_b_base'] * miles_cost_b +
+                                                          merged7['damVMTlevels_c_base'] * miles_cost),
+                                 damPHTlevel_dollar_base=(hours_cost * (merged7['damPHTlevels_lr_e_base'] +
+                                                                        merged7['damPHTlevels_hr_e_base'] +
+                                                                        merged7['damPHTlevels_b_e_base'] +
+                                                                        merged7['damPHTlevels_c_base']) +
+                                                          hours_wait_cost * (merged7['damPHTlevels_lr_w_base'] +
+                                                                             merged7['damPHTlevels_hr_w_base'] +
+                                                                             merged7['damPHTlevels_b_w_base'])),
+                                 damTripslevel_dollar_baseyr_base=((0.5 * vehicle_occupancy_lr *
+                                                                    (merged7['damTripslevels_lr_baseyr_base'] *
+                                                                     merged7['damVMTlevels_lr_baseyr_base'] /
+                                                                     (merged7['damPHTlevels_lr_w_baseyr_base'] +
+                                                                      merged7['damPHTlevels_lr_e_baseyr_base'])).fillna(0)) +
+                                                                   (0.5 * vehicle_occupancy_hr *
+                                                                    (merged7['damTripslevels_hr_baseyr_base'] *
+                                                                     merged7['damVMTlevels_hr_baseyr_base'] /
+                                                                     (merged7['damPHTlevels_hr_w_baseyr_base'] +
+                                                                      merged7['damPHTlevels_hr_e_baseyr_base'])).fillna(0)) +
+                                                                   (0.5 * vehicle_occupancy_b *
+                                                                    (merged7['damTripslevels_b_baseyr_base'] *
+                                                                     merged7['damVMTlevels_b_baseyr_base'] /
+                                                                     (merged7['damPHTlevels_b_w_baseyr_base'] +
+                                                                      merged7['damPHTlevels_b_e_baseyr_base'])).fillna(0)) +
+                                                                   (0.5 * vehicle_occupancy *
+                                                                    (merged7['damTripslevels_c_baseyr_base'] *
+                                                                     merged7['damVMTlevels_c_baseyr_base'] /
+                                                                     merged7['damPHTlevels_c_baseyr_base']).fillna(0)) +
+                                                                   transit_fare * (merged7['damTripslevels_lr_baseyr_base'] +
+                                                                                   merged7['damTripslevels_hr_baseyr_base'] +
+                                                                                   merged7['damTripslevels_b_baseyr_base'])),
+                                 damVMTlevel_dollar_baseyr_base=(merged7['damVMTlevels_lr_baseyr_base'] * miles_cost_lr +
+                                                                 merged7['damVMTlevels_hr_baseyr_base'] * miles_cost_hr +
+                                                                 merged7['damVMTlevels_b_baseyr_base'] * miles_cost_b +
+                                                                 merged7['damVMTlevels_c_baseyr_base'] * miles_cost),
+                                 damPHTlevel_dollar_baseyr_base=(hours_cost * (merged7['damPHTlevels_lr_e_baseyr_base'] +
+                                                                               merged7['damPHTlevels_hr_e_baseyr_base'] +
+                                                                               merged7['damPHTlevels_b_e_baseyr_base'] +
+                                                                               merged7['damPHTlevels_c_baseyr_base']) +
+                                                                 hours_wait_cost * (merged7['damPHTlevels_lr_w_baseyr_base'] +
+                                                                                    merged7['damPHTlevels_hr_w_baseyr_base'] +
+                                                                                    merged7['damPHTlevels_b_w_baseyr_base'])))
 
     # calculate vsBase metrics
     # NOTE: calculation is resilience project minus baseline
@@ -419,82 +1129,128 @@ def main(input_folder, output_folder, cfg, logger):
     merged7['expTripsvsBase'] = merged7['expTripslevels'] - merged7['expTripslevels_base']
     merged7['expVMTvsBase'] = merged7['expVMTlevels'] - merged7['expVMTlevels_base']
     merged7['expPHTvsBase'] = merged7['expPHTlevels'] - merged7['expPHTlevels_base']
-    merged7['damTripsvsBase'] = 0.5 * (merged7['repair_time_base'] *
-                                       (merged7['initTripslevels_max'] - merged7['initTripslevels_base']) -
-                                       merged7['repair_time'] *
-                                       (merged7['initTripslevels_max'] - merged7['initTripslevels']))
-    merged7['damVMTvsBase'] = 0.5 * (merged7['repair_time_base'] *
-                                     (merged7['initVMTlevels_max'] - merged7['initVMTlevels_base']) -
-                                     merged7['repair_time'] *
-                                     (merged7['initVMTlevels_max'] - merged7['initVMTlevels']))
-    merged7['damPHTvsBase'] = 0.5 * (merged7['repair_time_base'] *
-                                     (merged7['initPHTlevels_max'] - merged7['initPHTlevels_base']) -
-                                     merged7['repair_time'] *
-                                     (merged7['initPHTlevels_max'] - merged7['initPHTlevels']))
+    if cfg['calc_transit_metrics']:
+        merged7['damTripsvsBase'] = merged7['damTripslevels'] - merged7['damTripslevels_base']
+        merged7['damVMTvsBase'] = merged7['damVMTlevels'] - merged7['damVMTlevels_base']
+        merged7['damPHTvsBase'] = merged7['damPHTlevels'] - merged7['damPHTlevels_base']
+    else:
+        merged7['damTripsvsBase'] = 0.5 * (merged7['repair_time_base'] *
+                                           (merged7['initTripslevels_max'] - merged7['initTripslevels_base']) -
+                                           merged7['repair_time'] *
+                                           (merged7['initTripslevels_max'] - merged7['initTripslevels']))
+        merged7['damVMTvsBase'] = 0.5 * (merged7['repair_time_base'] *
+                                         (merged7['initVMTlevels_max'] - merged7['initVMTlevels_base']) -
+                                         merged7['repair_time'] *
+                                         (merged7['initVMTlevels_max'] - merged7['initVMTlevels']))
+        merged7['damPHTvsBase'] = 0.5 * (merged7['repair_time_base'] *
+                                         (merged7['initPHTlevels_max'] - merged7['initPHTlevels_base']) -
+                                         merged7['repair_time'] *
+                                         (merged7['initPHTlevels_max'] - merged7['initPHTlevels']))
     merged7['initTripsvsBase_baseyr'] = merged7['initTripslevels_baseyr'] - merged7['initTripslevels_baseyr_base']
     merged7['initVMTvsBase_baseyr'] = merged7['initVMTlevels_baseyr'] - merged7['initVMTlevels_baseyr_base']
     merged7['initPHTvsBase_baseyr'] = merged7['initPHTlevels_baseyr'] - merged7['initPHTlevels_baseyr_base']
     merged7['expTripsvsBase_baseyr'] = merged7['expTripslevels_baseyr'] - merged7['expTripslevels_baseyr_base']
     merged7['expVMTvsBase_baseyr'] = merged7['expVMTlevels_baseyr'] - merged7['expVMTlevels_baseyr_base']
     merged7['expPHTvsBase_baseyr'] = merged7['expPHTlevels_baseyr'] - merged7['expPHTlevels_baseyr_base']
-    merged7['damTripsvsBase_baseyr'] = 0.5 * (merged7['repair_time_base'] *
-                                              (merged7['initTripslevels_baseyr_max'] - merged7['initTripslevels_baseyr_base']) -
-                                              merged7['repair_time'] *
-                                              (merged7['initTripslevels_baseyr_max'] - merged7['initTripslevels_baseyr']))
-    merged7['damVMTvsBase_baseyr'] = 0.5 * (merged7['repair_time_base'] *
-                                            (merged7['initVMTlevels_baseyr_max'] - merged7['initVMTlevels_baseyr_base']) -
-                                            merged7['repair_time'] *
-                                            (merged7['initVMTlevels_baseyr_max'] - merged7['initVMTlevels_baseyr']))
-    merged7['damPHTvsBase_baseyr'] = 0.5 * (merged7['repair_time_base'] *
-                                            (merged7['initPHTlevels_baseyr_max'] - merged7['initPHTlevels_baseyr_base']) -
-                                            merged7['repair_time'] *
-                                            (merged7['initPHTlevels_baseyr_max'] - merged7['initPHTlevels_baseyr']))
+    if cfg['calc_transit_metrics']:
+        merged7['damTripsvsBase_baseyr'] = merged7['damTripslevels_baseyr'] - merged7['damTripslevels_baseyr_base']
+        merged7['damVMTvsBase_baseyr'] = merged7['damVMTlevels_baseyr'] - merged7['damVMTlevels_baseyr_base']
+        merged7['damPHTvsBase_baseyr'] = merged7['damPHTlevels_baseyr'] - merged7['damPHTlevels_baseyr_base']
+    else:
+        merged7['damTripsvsBase_baseyr'] = 0.5 * (merged7['repair_time_base'] *
+                                                  (merged7['initTripslevels_baseyr_max'] - merged7['initTripslevels_baseyr_base']) -
+                                                  merged7['repair_time'] *
+                                                  (merged7['initTripslevels_baseyr_max'] - merged7['initTripslevels_baseyr']))
+        merged7['damVMTvsBase_baseyr'] = 0.5 * (merged7['repair_time_base'] *
+                                                (merged7['initVMTlevels_baseyr_max'] - merged7['initVMTlevels_baseyr_base']) -
+                                                merged7['repair_time'] *
+                                                (merged7['initVMTlevels_baseyr_max'] - merged7['initVMTlevels_baseyr']))
+        merged7['damPHTvsBase_baseyr'] = 0.5 * (merged7['repair_time_base'] *
+                                                (merged7['initPHTlevels_baseyr_max'] - merged7['initPHTlevels_baseyr_base']) -
+                                                merged7['repair_time'] *
+                                                (merged7['initPHTlevels_baseyr_max'] - merged7['initPHTlevels_baseyr']))
+
+    # calculate VMT metrics for car and bus for safety, noise, and emissions
+    if cfg['calc_transit_metrics']:
+        merged7['initVMTvsBase_b'] = merged7['initVMTlevels_b'] - merged7['initVMTlevels_b_base']
+        merged7['initVMTvsBase_c'] = merged7['initVMTlevels_c'] - merged7['initVMTlevels_c_base']
+        merged7['expVMTvsBase_b'] = merged7['expVMTlevels_b'] - merged7['expVMTlevels_b_base']
+        merged7['expVMTvsBase_c'] = merged7['expVMTlevels_c'] - merged7['expVMTlevels_c_base']
+        merged7['damVMTvsBase_b'] = merged7['damVMTlevels_b'] - merged7['damVMTlevels_b_base']
+        merged7['damVMTvsBase_c'] = merged7['damVMTlevels_c'] - merged7['damVMTlevels_c_base']
+        merged7['initVMTvsBase_b_baseyr'] = merged7['initVMTlevels_b_baseyr'] - merged7['initVMTlevels_b_baseyr_base']
+        merged7['initVMTvsBase_c_baseyr'] = merged7['initVMTlevels_c_baseyr'] - merged7['initVMTlevels_c_baseyr_base']
+        merged7['expVMTvsBase_b_baseyr'] = merged7['expVMTlevels_b_baseyr'] - merged7['expVMTlevels_b_baseyr_base']
+        merged7['expVMTvsBase_c_baseyr'] = merged7['expVMTlevels_c_baseyr'] - merged7['expVMTlevels_c_baseyr_base']
+        merged7['damVMTvsBase_b_baseyr'] = merged7['damVMTlevels_b_baseyr'] - merged7['damVMTlevels_b_baseyr_base']
+        merged7['damVMTvsBase_c_baseyr'] = merged7['damVMTlevels_c_baseyr'] - merged7['damVMTlevels_c_baseyr_base']
+
     # calculate dollar values for Trips/VMT/PHT
-    merged7 = merged7.assign(initTripsvsBase_dollar=(0.5 * vehicle_occupancy *
-                                                     (merged7['initTripsvsBase']) * ((merged7['initVMTlevels_base'] /
-                                                                                      merged7['initPHTlevels_base']) -
-                                                                                     (merged7['initVMTlevels'] /
-                                                                                      merged7['initPHTlevels']))),
-                             initVMTvsBase_dollar=merged7['initVMTvsBase'] * miles_cost,
-                             initPHTvsBase_dollar=merged7['initPHTvsBase'] * hours_cost,
-                             expTripsvsBase_dollar=(0.5 * vehicle_occupancy *
-                                                    (merged7['expTripsvsBase']) * ((merged7['expVMTlevels_base'] /
-                                                                                    merged7['expPHTlevels_base']) -
-                                                                                   (merged7['expVMTlevels'] /
-                                                                                    merged7['expPHTlevels']))),
-                             expVMTvsBase_dollar=merged7['expVMTvsBase'] * miles_cost,
-                             expPHTvsBase_dollar=merged7['expPHTvsBase'] * hours_cost,
-                             damTripsvsBase_dollar=(0.5 * vehicle_occupancy *
-                                                    (merged7['damTripsvsBase']) * ((merged7['initVMTlevels_base'] /
-                                                                                    merged7['initPHTlevels_base']) -
-                                                                                   (merged7['initVMTlevels'] /
-                                                                                    merged7['initPHTlevels']))),
-                             damVMTvsBase_dollar=merged7['damVMTvsBase'] * miles_cost,
-                             damPHTvsBase_dollar=merged7['damPHTvsBase'] * hours_cost)
-    merged7 = merged7.assign(initTripsvsBase_dollar_baseyr=(0.5 * vehicle_occupancy *
-                                                            (merged7['initTripsvsBase_baseyr']) *
-                                                            ((merged7['initVMTlevels_baseyr_base'] /
-                                                              merged7['initPHTlevels_baseyr_base']) -
-                                                             (merged7['initVMTlevels_baseyr'] /
-                                                              merged7['initPHTlevels_baseyr']))),
-                             initVMTvsBase_dollar_baseyr=merged7['initVMTvsBase_baseyr'] * miles_cost,
-                             initPHTvsBase_dollar_baseyr=merged7['initPHTvsBase_baseyr'] * hours_cost,
-                             expTripsvsBase_dollar_baseyr=(0.5 * vehicle_occupancy *
-                                                           (merged7['expTripsvsBase_baseyr']) *
-                                                           ((merged7['expVMTlevels_baseyr_base'] /
-                                                             merged7['expPHTlevels_baseyr_base']) -
-                                                            (merged7['expVMTlevels_baseyr'] /
-                                                             merged7['expPHTlevels_baseyr']))),
-                             expVMTvsBase_dollar_baseyr=merged7['expVMTvsBase_baseyr'] * miles_cost,
-                             expPHTvsBase_dollar_baseyr=merged7['expPHTvsBase_baseyr'] * hours_cost,
-                             damTripsvsBase_dollar_baseyr=(0.5 * vehicle_occupancy *
-                                                           (merged7['damTripsvsBase_baseyr']) *
-                                                           ((merged7['initVMTlevels_baseyr_base'] /
-                                                             merged7['initPHTlevels_baseyr_base']) -
-                                                            (merged7['initVMTlevels_baseyr'] /
-                                                             merged7['initPHTlevels_baseyr']))),
-                             damVMTvsBase_dollar_baseyr=merged7['damVMTvsBase_baseyr'] * miles_cost,
-                             damPHTvsBase_dollar_baseyr=merged7['damPHTvsBase_baseyr'] * hours_cost)
+    if cfg['calc_transit_metrics']:
+        merged7['initTripsvsBase_dollar'] = merged7['initTripslevel_dollar'] - merged7['initTripslevel_dollar_base']
+        merged7['initVMTvsBase_dollar'] = merged7['initVMTlevel_dollar'] - merged7['initVMTlevel_dollar_base']
+        merged7['initPHTvsBase_dollar'] = merged7['initPHTlevel_dollar'] - merged7['initPHTlevel_dollar_base']
+        merged7['expTripsvsBase_dollar'] = merged7['expTripslevel_dollar'] - merged7['expTripslevel_dollar_base']
+        merged7['expVMTvsBase_dollar'] = merged7['expVMTlevel_dollar'] - merged7['expVMTlevel_dollar_base']
+        merged7['expPHTvsBase_dollar'] = merged7['expPHTlevel_dollar'] - merged7['expPHTlevel_dollar_base']
+        merged7['damTripsvsBase_dollar'] = merged7['damTripslevel_dollar'] - merged7['damTripslevel_dollar_base']
+        merged7['damVMTvsBase_dollar'] = merged7['damVMTlevel_dollar'] - merged7['damVMTlevel_dollar_base']
+        merged7['damPHTvsBase_dollar'] = merged7['damPHTlevel_dollar'] - merged7['damPHTlevel_dollar_base']
+        merged7['initTripsvsBase_dollar_baseyr'] = merged7['initTripslevel_dollar_baseyr'] - merged7['initTripslevel_dollar_baseyr_base']
+        merged7['initVMTvsBase_dollar_baseyr'] = merged7['initVMTlevel_dollar_baseyr'] - merged7['initVMTlevel_dollar_baseyr_base']
+        merged7['initPHTvsBase_dollar_baseyr'] = merged7['initPHTlevel_dollar_baseyr'] - merged7['initPHTlevel_dollar_baseyr_base']
+        merged7['expTripsvsBase_dollar_baseyr'] = merged7['expTripslevel_dollar_baseyr'] - merged7['expTripslevel_dollar_baseyr_base']
+        merged7['expVMTvsBase_dollar_baseyr'] = merged7['expVMTlevel_dollar_baseyr'] - merged7['expVMTlevel_dollar_baseyr_base']
+        merged7['expPHTvsBase_dollar_baseyr'] = merged7['expPHTlevel_dollar_baseyr'] - merged7['expPHTlevel_dollar_baseyr_base']
+        merged7['damTripsvsBase_dollar_baseyr'] = merged7['damTripslevel_dollar_baseyr'] - merged7['damTripslevel_dollar_baseyr_base']
+        merged7['damVMTvsBase_dollar_baseyr'] = merged7['damVMTlevel_dollar_baseyr'] - merged7['damVMTlevel_dollar_baseyr_base']
+        merged7['damPHTvsBase_dollar_baseyr'] = merged7['damPHTlevel_dollar_baseyr'] - merged7['damPHTlevel_dollar_baseyr_base']
+    else:
+        merged7 = merged7.assign(initTripsvsBase_dollar=(0.5 * vehicle_occupancy *
+                                                         (merged7['initTripsvsBase']) * ((merged7['initVMTlevels_base'] /
+                                                                                          merged7['initPHTlevels_base']) -
+                                                                                         (merged7['initVMTlevels'] /
+                                                                                          merged7['initPHTlevels']))),
+                                 initVMTvsBase_dollar=merged7['initVMTvsBase'] * miles_cost,
+                                 initPHTvsBase_dollar=merged7['initPHTvsBase'] * hours_cost,
+                                 expTripsvsBase_dollar=(0.5 * vehicle_occupancy *
+                                                        (merged7['expTripsvsBase']) * ((merged7['expVMTlevels_base'] /
+                                                                                        merged7['expPHTlevels_base']) -
+                                                                                       (merged7['expVMTlevels'] /
+                                                                                        merged7['expPHTlevels']))),
+                                 expVMTvsBase_dollar=merged7['expVMTvsBase'] * miles_cost,
+                                 expPHTvsBase_dollar=merged7['expPHTvsBase'] * hours_cost,
+                                 damTripsvsBase_dollar=(0.5 * vehicle_occupancy *
+                                                        (merged7['damTripsvsBase']) * ((merged7['initVMTlevels_base'] /
+                                                                                        merged7['initPHTlevels_base']) -
+                                                                                       (merged7['initVMTlevels'] /
+                                                                                        merged7['initPHTlevels']))),
+                                 damVMTvsBase_dollar=merged7['damVMTvsBase'] * miles_cost,
+                                 damPHTvsBase_dollar=merged7['damPHTvsBase'] * hours_cost)
+        merged7 = merged7.assign(initTripsvsBase_dollar_baseyr=(0.5 * vehicle_occupancy *
+                                                                (merged7['initTripsvsBase_baseyr']) *
+                                                                ((merged7['initVMTlevels_baseyr_base'] /
+                                                                  merged7['initPHTlevels_baseyr_base']) -
+                                                                 (merged7['initVMTlevels_baseyr'] /
+                                                                  merged7['initPHTlevels_baseyr']))),
+                                 initVMTvsBase_dollar_baseyr=merged7['initVMTvsBase_baseyr'] * miles_cost,
+                                 initPHTvsBase_dollar_baseyr=merged7['initPHTvsBase_baseyr'] * hours_cost,
+                                 expTripsvsBase_dollar_baseyr=(0.5 * vehicle_occupancy *
+                                                               (merged7['expTripsvsBase_baseyr']) *
+                                                               ((merged7['expVMTlevels_baseyr_base'] /
+                                                                 merged7['expPHTlevels_baseyr_base']) -
+                                                                (merged7['expVMTlevels_baseyr'] /
+                                                                 merged7['expPHTlevels_baseyr']))),
+                                 expVMTvsBase_dollar_baseyr=merged7['expVMTvsBase_baseyr'] * miles_cost,
+                                 expPHTvsBase_dollar_baseyr=merged7['expPHTvsBase_baseyr'] * hours_cost,
+                                 damTripsvsBase_dollar_baseyr=(0.5 * vehicle_occupancy *
+                                                               (merged7['damTripsvsBase_baseyr']) *
+                                                               ((merged7['initVMTlevels_baseyr_base'] /
+                                                                 merged7['initPHTlevels_baseyr_base']) -
+                                                                (merged7['initVMTlevels_baseyr'] /
+                                                                 merged7['initPHTlevels_baseyr']))),
+                                 damVMTvsBase_dollar_baseyr=merged7['damVMTvsBase_baseyr'] * miles_cost,
+                                 damPHTvsBase_dollar_baseyr=merged7['damPHTvsBase_baseyr'] * hours_cost)
 
     # NOTE: for clean up, set 0 for baseline scenarios to keep NaN from propagating through calculations
     merged7.loc[merged7['Resiliency Project'] == 'no', ['expTripsvsBase_dollar', 'expVMTvsBase_dollar',
@@ -515,24 +1271,41 @@ def main(input_folder, output_folder, cfg, logger):
     merged7['AssetDamagevsBase_dollar'] = np.where(merged7['Resiliency Project'] == 'no', 0,
                                                    merged7['total_repair'] - merged7['total_repair_base'])
 
-    # calculate safety and emissions benefits
-    # each benefit is calculated using (1) a config parameter that converts VMT to a safety/emissions metric, (2) a monetization table
-    safety_costs = pd.read_csv(safety_monetization_csv, usecols=['Crash Type', 'Monetized Value'],
-                               converters={'Crash Type': str, 'Monetized Value': str})
-    safety_costs['Monetized Value'] = safety_costs['Monetized Value'].replace('[\$,]', '', regex=True).astype(float)
-    fatality_cost = safety_costs[safety_costs['Crash Type'] == 'Fatal']['Monetized Value'].iloc[0]
-    injury_cost = safety_costs[safety_costs['Crash Type'] == 'Injury']['Monetized Value'].iloc[0]
-    pdo_cost = safety_costs[safety_costs['Crash Type'] == 'PDO']['Monetized Value'].iloc[0]
+    # calculate safety, noise, and emissions benefits
+    # emissions benefits are calculated using (1) a config parameter that converts VMT to an emissions metric, (2) a monetization table
 
-    # sum of fatality + injury + PDO occurrences * cost (in units of dollars per 100 million vehicle-miles)
-    total_safety_cost = (fatality_rate * fatality_cost + injury_rate * injury_cost + pdo_rate * pdo_cost)
-    # calculate safety benefits compared to baseline for each period
-    merged7['initSafetyvsBase'] =  total_safety_cost * merged7['initVMTvsBase'] / 100000000
-    merged7['expSafetyvsBase'] =  total_safety_cost * merged7['expVMTvsBase'] / 100000000
-    merged7['damSafetyvsBase'] =  total_safety_cost * merged7['damVMTvsBase'] / 100000000
-    merged7['initSafetyvsBase_baseyr'] = total_safety_cost * merged7['initVMTvsBase_baseyr'] / 100000000
-    merged7['expSafetyvsBase_baseyr'] = total_safety_cost * merged7['expVMTvsBase_baseyr'] / 100000000
-    merged7['damSafetyvsBase_baseyr'] = total_safety_cost * merged7['damVMTvsBase_baseyr'] / 100000000
+    if cfg['calc_transit_metrics']:
+        # calculate safety benefits compared to baseline for each period
+        merged7['initSafetyvsBase'] =  safety_cost * merged7['initVMTvsBase_c'] + safety_cost_b * merged7['initVMTvsBase_b']
+        merged7['expSafetyvsBase'] =  safety_cost * merged7['expVMTvsBase_c'] + safety_cost_b * merged7['expVMTvsBase_b']
+        merged7['damSafetyvsBase'] =  safety_cost * merged7['damVMTvsBase_c'] + safety_cost_b * merged7['damVMTvsBase_b']
+        merged7['initSafetyvsBase_baseyr'] = safety_cost * merged7['initVMTvsBase_c_baseyr'] + safety_cost_b * merged7['initVMTvsBase_b_baseyr']
+        merged7['expSafetyvsBase_baseyr'] = safety_cost * merged7['expVMTvsBase_c_baseyr'] + safety_cost_b * merged7['expVMTvsBase_b_baseyr']
+        merged7['damSafetyvsBase_baseyr'] = safety_cost * merged7['damVMTvsBase_c_baseyr'] + safety_cost_b * merged7['damVMTvsBase_b_baseyr']
+
+        # calculate noise benefits compared to baseline for each period
+        merged7['initNoisevsBase'] =  noise_cost * merged7['initVMTvsBase_c'] + noise_cost_b * merged7['initVMTvsBase_b']
+        merged7['expNoisevsBase'] =  noise_cost * merged7['expVMTvsBase_c'] + noise_cost_b * merged7['expVMTvsBase_b']
+        merged7['damNoisevsBase'] =  noise_cost * merged7['damVMTvsBase_c'] + noise_cost_b * merged7['damVMTvsBase_b']
+        merged7['initNoisevsBase_baseyr'] = noise_cost * merged7['initVMTvsBase_c_baseyr'] + noise_cost_b * merged7['initVMTvsBase_b_baseyr']
+        merged7['expNoisevsBase_baseyr'] = noise_cost * merged7['expVMTvsBase_c_baseyr'] + noise_cost_b * merged7['expVMTvsBase_b_baseyr']
+        merged7['damNoisevsBase_baseyr'] = noise_cost * merged7['damVMTvsBase_c_baseyr'] + noise_cost_b * merged7['damVMTvsBase_b_baseyr']
+    else:
+        # calculate safety benefits compared to baseline for each period
+        merged7['initSafetyvsBase'] =  safety_cost * merged7['initVMTvsBase']
+        merged7['expSafetyvsBase'] =  safety_cost * merged7['expVMTvsBase']
+        merged7['damSafetyvsBase'] =  safety_cost * merged7['damVMTvsBase']
+        merged7['initSafetyvsBase_baseyr'] = safety_cost * merged7['initVMTvsBase_baseyr']
+        merged7['expSafetyvsBase_baseyr'] = safety_cost * merged7['expVMTvsBase_baseyr']
+        merged7['damSafetyvsBase_baseyr'] = safety_cost * merged7['damVMTvsBase_baseyr']
+
+        # calculate noise benefits compared to baseline for each period
+        merged7['initNoisevsBase'] =  noise_cost * merged7['initVMTvsBase']
+        merged7['expNoisevsBase'] =  noise_cost * merged7['expVMTvsBase']
+        merged7['damNoisevsBase'] =  noise_cost * merged7['damVMTvsBase']
+        merged7['initNoisevsBase_baseyr'] = noise_cost * merged7['initVMTvsBase_baseyr']
+        merged7['expNoisevsBase_baseyr'] = noise_cost * merged7['expVMTvsBase_baseyr']
+        merged7['damNoisevsBase_baseyr'] = noise_cost * merged7['damVMTvsBase_baseyr']
 
     # emissions monetization is provided by year (in units of dollars per metric ton)
     emissions_costs = pd.read_csv(emissions_monetization_csv, usecols=['Year', 'NOX', 'SOX', 'PM25', 'CO2'],
@@ -558,6 +1331,14 @@ def main(input_folder, output_folder, cfg, logger):
                                  emissions_costs.loc[table_range, ['CO2']].to_numpy().flatten(),
                                  np.repeat(emissions_costs[emissions_costs['Year'] == max_table_year]['CO2'].iloc[0], max(end_year - max_table_year, 0))))
     # emissions calculated in for loop to avoid creating too many columns
+
+    # NOTE: for clean up, set 0 for baseline scenarios to keep NaN from propagating through calculations
+    merged7.loc[merged7['Resiliency Project'] == 'no', ['expSafetyvsBase', 'expNoisevsBase', 'expVMTvsBase',
+                                                        'damSafetyvsBase', 'damNoisevsBase', 'damVMTvsBase',
+                                                        'initSafetyvsBase', 'initNoisevsBase', 'initVMTvsBase',
+                                                        'expSafetyvsBase_baseyr', 'expNoisevsBase_baseyr', 'expVMTvsBase_baseyr',
+                                                        'damSafetyvsBase_baseyr', 'damNoisevsBase_baseyr', 'damVMTvsBase_baseyr',
+                                                        'initSafetyvsBase_baseyr', 'initNoisevsBase_baseyr', 'initVMTvsBase_baseyr']] = 0
 
     logger.debug("interpolating base year and future year runs to calculate metrics across entire analysis period")
     final_table = pd.DataFrame()
@@ -838,6 +1619,10 @@ def main(input_folder, output_folder, cfg, logger):
         discount[0] = np.float_power(1 + discount_factor, start_year - dollar_year)
         discount[1:] = 1 + discount_factor
         discount = np.cumprod(discount)
+        co2_discount = np.zeros((end_year - start_year + 1,))
+        co2_discount[0] = np.float_power(1 + co2_discount_factor, start_year - dollar_year)
+        co2_discount[1:] = 1 + co2_discount_factor
+        co2_discount = np.cumprod(co2_discount)
 
         # safety calculations
         initSafetyvsBase_startyr = (row['initSafetyvsBase_baseyr'] +
@@ -863,7 +1648,32 @@ def main(input_folder, output_folder, cfg, logger):
         temp_stage['expSafety_Discounted'] = np.sum(expSafetyvsBase / discount)
         temp_stage['damSafety_Discounted'] = np.sum(damSafetyvsBase / discount)
 
+        # noise calculations
+        initNoisevsBase_startyr = (row['initNoisevsBase_baseyr'] +
+                                    start_frac * (row['initNoisevsBase'] - row['initNoisevsBase_baseyr']))
+        initNoisevsBase_endyr = (row['initNoisevsBase_baseyr'] +
+                                  end_frac * (row['initNoisevsBase'] - row['initNoisevsBase_baseyr']))
+        initNoisevsBase = np.linspace(initNoisevsBase_startyr, initNoisevsBase_endyr, end_year - start_year + 1)
+        expNoisevsBase_startyr = (row['expNoisevsBase_baseyr'] +
+                                   start_frac * (row['expNoisevsBase'] - row['expNoisevsBase_baseyr']))
+        expNoisevsBase_endyr = (row['expNoisevsBase_baseyr'] +
+                                 end_frac * (row['expNoisevsBase'] - row['expNoisevsBase_baseyr']))
+        expNoisevsBase = np.linspace(expNoisevsBase_startyr, expNoisevsBase_endyr, end_year - start_year + 1)
+        damNoisevsBase_startyr = (row['damNoisevsBase_baseyr'] +
+                                   start_frac * (row['damNoisevsBase'] - row['damNoisevsBase_baseyr']))
+        damNoisevsBase_endyr = (row['damNoisevsBase_baseyr'] +
+                                 end_frac * (row['damNoisevsBase'] - row['damNoisevsBase_baseyr']))
+        damNoisevsBase = np.linspace(damNoisevsBase_startyr, damNoisevsBase_endyr, end_year - start_year + 1)
+
+        temp_stage['initNoisevsBase'] = np.mean(initNoisevsBase)
+        temp_stage['expNoisevsBase'] = np.mean(expNoisevsBase)
+        temp_stage['damNoisevsBase'] = np.mean(damNoisevsBase)
+        temp_stage['initNoise_Discounted'] = np.sum(initNoisevsBase / discount)
+        temp_stage['expNoise_Discounted'] = np.sum(expNoisevsBase / discount)
+        temp_stage['damNoise_Discounted'] = np.sum(damNoisevsBase / discount)
+
         # emissions calculations (in metric tons)
+        # NOTE: emissions are calculated using light-duty vehicle emission factors
         initNOXvsBase_startyr = (row['initVMTvsBase_baseyr'] +
                                  start_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * nox_rate / 1000000
         initNOXvsBase_endyr = (row['initVMTvsBase_baseyr'] +
@@ -885,7 +1695,8 @@ def main(input_folder, output_folder, cfg, logger):
                                end_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * co2_rate / 1000000
         initCO2vsBase = np.linspace(initCO2vsBase_startyr, initCO2vsBase_endyr, end_year - start_year + 1)
         # emissions monetization (using dollars per metric ton)
-        initEmissionsvsBase = initNOXvsBase * nox_series + initSO2vsBase * so2_series + initPM25vsBase * pm25_series + initCO2vsBase * co2_series
+        initEmissionsvsBase_co2 = initCO2vsBase * co2_series
+        initEmissionsvsBase_other = initNOXvsBase * nox_series + initSO2vsBase * so2_series + initPM25vsBase * pm25_series
 
         expNOXvsBase_startyr = (row['expVMTvsBase_baseyr'] +
                                 start_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * nox_rate / 1000000
@@ -908,7 +1719,8 @@ def main(input_folder, output_folder, cfg, logger):
                               end_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * co2_rate / 1000000
         expCO2vsBase = np.linspace(expCO2vsBase_startyr, expCO2vsBase_endyr, end_year - start_year + 1)
         # emissions monetization (using dollars per metric ton)
-        expEmissionsvsBase = expNOXvsBase * nox_series + expSO2vsBase * so2_series + expPM25vsBase * pm25_series + expCO2vsBase * co2_series
+        expEmissionsvsBase_co2 = expCO2vsBase * co2_series
+        expEmissionsvsBase_other = expNOXvsBase * nox_series + expSO2vsBase * so2_series + expPM25vsBase * pm25_series
 
         damNOXvsBase_startyr = (row['damVMTvsBase_baseyr'] +
                                 start_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * nox_rate / 1000000
@@ -931,24 +1743,40 @@ def main(input_folder, output_folder, cfg, logger):
                               end_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * co2_rate / 1000000
         damCO2vsBase = np.linspace(damCO2vsBase_startyr, damCO2vsBase_endyr, end_year - start_year + 1)
         # emissions monetization (using dollars per metric ton)
-        damEmissionsvsBase = damNOXvsBase * nox_series + damSO2vsBase * so2_series + damPM25vsBase * pm25_series + damCO2vsBase * co2_series
+        damEmissionsvsBase_co2 = damCO2vsBase * co2_series
+        damEmissionsvsBase_other = damNOXvsBase * nox_series + damSO2vsBase * so2_series + damPM25vsBase * pm25_series
 
-        temp_stage['initEmissionsvsBase'] = np.mean(initEmissionsvsBase)
-        temp_stage['expEmissionsvsBase'] = np.mean(expEmissionsvsBase)
-        temp_stage['damEmissionsvsBase'] = np.mean(damEmissionsvsBase)
+        temp_stage['initEmissionsvsBase'] = np.mean(initEmissionsvsBase_co2 + initEmissionsvsBase_other)
+        temp_stage['expEmissionsvsBase'] = np.mean(expEmissionsvsBase_co2 + expEmissionsvsBase_other)
+        temp_stage['damEmissionsvsBase'] = np.mean(damEmissionsvsBase_co2 + expEmissionsvsBase_other)
 
-        temp_stage['initEmissions_Discounted'] = np.sum(initEmissionsvsBase / discount)
-        temp_stage['expEmissions_Discounted'] = np.sum(expEmissionsvsBase / discount)
-        temp_stage['damEmissions_Discounted'] = np.sum(damEmissionsvsBase / discount)
+        temp_stage['initEmissions_Discounted'] = np.sum(initEmissionsvsBase_co2 / co2_discount) + np.sum(initEmissionsvsBase_other / discount)
+        temp_stage['expEmissions_Discounted'] = np.sum(expEmissionsvsBase_co2 / co2_discount) + np.sum(expEmissionsvsBase_other / discount)
+        temp_stage['damEmissions_Discounted'] = np.sum(damEmissionsvsBase_co2 / co2_discount) + np.sum(damEmissionsvsBase_other / discount)
 
         # calculate (1) discounted maintenance cost, (2) discounted project cost based on lifespan, (3) residual cost benefit
-        cost_stream = np.zeros((end_year - start_year + 1,))
-        cost_stream[::row['Project Lifespan']] = row['Estimated Project Cost']
-        temp_stage['ProjectCosts_Discounted'] = np.sum(cost_stream / discount)
-        residual_stream = np.zeros((end_year - start_year + 1,))
-        remaining_years = row['Project Lifespan'] - (end_year - start_year + 1) % row['Project Lifespan']
-        residual_stream[-1] = row['Estimated Project Cost'] * (remaining_years / row['Project Lifespan'])
-        temp_stage['TotalResidual_Discounted'] = np.sum(residual_stream / discount)
+        if redeployment:
+            cost_stream = np.zeros((end_year - start_year + 1,))
+            cost_stream[::row['Project Lifespan']] = row['Estimated Redeployment Cost']
+            cost_stream[0] = row['Estimated Project Cost']
+            temp_stage['ProjectCosts_Discounted'] = np.sum(cost_stream / discount)
+            residual_stream = np.zeros((end_year - start_year + 1,))
+            remaining_years = row['Project Lifespan'] - (end_year - start_year + 1) % row['Project Lifespan']
+            if (end_year - start_year) < row['Project Lifespan']:
+                residual_stream[-1] = row['Estimated Project Cost'] * (remaining_years / row['Project Lifespan'])
+            else:
+                residual_stream[-1] = row['Estimated Redeployment Cost'] * (remaining_years / row['Project Lifespan'])
+            temp_stage['TotalResidual_Discounted'] = np.sum(residual_stream / discount)
+
+        else:
+            cost_stream = np.zeros((end_year - start_year + 1,))
+            cost_stream[::row['Project Lifespan']] = row['Estimated Project Cost']
+            temp_stage['ProjectCosts_Discounted'] = np.sum(cost_stream / discount)
+            residual_stream = np.zeros((end_year - start_year + 1,))
+            remaining_years = row['Project Lifespan'] - (end_year - start_year + 1) % row['Project Lifespan']
+            residual_stream[-1] = row['Estimated Project Cost'] * (remaining_years / row['Project Lifespan'])
+            temp_stage['TotalResidual_Discounted'] = np.sum(residual_stream / discount)
+
         maintenance_stream = np.repeat(row['Estimated Maintenance Cost'], end_year - start_year + 1)
         temp_stage['TotalMaintenanceCosts_Discounted'] = np.sum(maintenance_stream / discount)
 
@@ -957,16 +1785,27 @@ def main(input_folder, output_folder, cfg, logger):
             temp_stage['TotalResidual_Discounted'] = 0
             temp_stage['TotalMaintenanceCosts_Discounted'] = 0
 
-        temp_stage['Benefits_Discounted'] = np.sum((expTripsvsBase_dollar + expVMTvsBase_dollar + expPHTvsBase_dollar
-                                                    - row['AssetDamagevsBase_dollar'] + damTripsvsBase_dollar
-                                                    + damVMTvsBase_dollar + damPHTvsBase_dollar)
-                                                   * event_prob / discount) + temp_stage['TotalResidual_Discounted'] - temp_stage['TotalMaintenanceCosts_Discounted']
-        temp_stage['ExpBenefits_Discounted'] = np.sum((expTripsvsBase_dollar + expVMTvsBase_dollar
-                                                       + expPHTvsBase_dollar) * event_prob / discount)
+        # TODO: add safety, noise, emissions to numerator
+        temp_stage['Benefits_Discounted'] = (np.sum((expTripsvsBase_dollar + expVMTvsBase_dollar + expPHTvsBase_dollar
+                                                     + expSafetyvsBase + expNoisevsBase + expEmissionsvsBase_other
+                                                     - row['AssetDamagevsBase_dollar'] + damTripsvsBase_dollar
+                                                     + damVMTvsBase_dollar + damPHTvsBase_dollar + damSafetyvsBase
+                                                     + damNoisevsBase + damEmissionsvsBase_other)
+                                                    * event_prob / discount) +
+                                             np.sum((expEmissionsvsBase_co2 + damEmissionsvsBase_co2)
+                                                    * event_prob / co2_discount) +
+                                             temp_stage['TotalResidual_Discounted'] -
+                                             temp_stage['TotalMaintenanceCosts_Discounted'])
+        temp_stage['ExpBenefits_Discounted'] = (np.sum((expTripsvsBase_dollar + expVMTvsBase_dollar
+                                                        + expPHTvsBase_dollar + expSafetyvsBase + expNoisevsBase
+                                                        + expEmissionsvsBase_other) * event_prob / discount) +
+                                                np.sum(expEmissionsvsBase_co2 * event_prob / co2_discount))
         temp_stage['RepairCleanupCostSavings_Discounted'] = np.sum((0 - row['AssetDamagevsBase_dollar']) *
                                                                    event_prob / discount)
-        temp_stage['DamBenefits_Discounted'] = np.sum((damTripsvsBase_dollar + damVMTvsBase_dollar
-                                                       + damPHTvsBase_dollar) * event_prob / discount)
+        temp_stage['DamBenefits_Discounted'] = (np.sum((damTripsvsBase_dollar + damVMTvsBase_dollar
+                                                        + damPHTvsBase_dollar + damSafetyvsBase + damNoisevsBase
+                                                        + damEmissionsvsBase_other) * event_prob / discount) +
+                                                np.sum(damEmissionsvsBase_co2 * event_prob / co2_discount))
         temp_stage['NetBenefits_Discounted'] = temp_stage['Benefits_Discounted'] - temp_stage['ProjectCosts_Discounted']
         if temp_stage['ProjectCosts_Discounted'] == 0:
             temp_stage['BCR_Discounted'] = np.NaN
@@ -1033,6 +1872,7 @@ def main(input_folder, output_folder, cfg, logger):
                                            'initPHTlevels_base', 'expTripslevels_base', 'expVMTlevels_base',
                                            'expPHTlevels_base', 'Hazard Event'],
                                    axis=1)
+
     final_table = final_table.drop(labels=['initTripslevels_baseyr', 'initVMTlevels_baseyr', 'initPHTlevels_baseyr',
                                            'initTripslevels_baseyr_base', 'initVMTlevels_baseyr_base',
                                            'initPHTlevels_baseyr_base', 'initTripslevel_dollar_baseyr',
@@ -1106,7 +1946,8 @@ def main(input_folder, output_folder, cfg, logger):
                                     'damPHTvsBase_dollar', 'AssetDamagelevels', 'RepairCleanupCosts',
                                     'AssetDamagevsBase', 'RepairCleanupCostSavings', 'DamageDuration',
                                     'RepairCostSavings', 'initSafety_Discounted', 'expSafety_Discounted',
-                                    'damSafety_Discounted', 'initEmissions_Discounted', 'expEmissions_Discounted',
+                                    'damSafety_Discounted', 'initNoise_Discounted', 'expNoise_Discounted',
+                                    'damNoise_Discounted', 'initEmissions_Discounted', 'expEmissions_Discounted',
                                     'damEmissions_Discounted', 'TotalMaintenanceCosts_Discounted', 'TotalResidual_Discounted'])
 
     tableau_dir = prepare_tableau_assets(tableau_file, output_folder, cfg, logger)

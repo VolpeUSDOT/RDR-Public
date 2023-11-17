@@ -1,10 +1,10 @@
-Asset Type,"Category Description (facility type for highway, length for bridge, transit type for transit)",category_min,category_max,Repair Time Range Minimum (days),Repair Time Range Maximum (days),repair_time
-Highway,Principal arterial,1,3,1,70,35.5
-Highway,Minor arterial and major collector,4,5,1,120,60.5
-Highway,Minor collector and local,6,7,7,56,31.5
+Asset Type,"Category Description (facility type for highway and transit, length for bridge)",min_inclusive,max_exclusive,Repair Time Range Minimum (days),Repair Time Range Maximum (days),repair_time
+Highway,Principal arterial,1,4,1,70,35.5
+Highway,Minor arterial and major collector,4,6,1,120,60.5
+Highway,Minor collector and local,6,8,7,56,31.5
 Bridge,Length < 20 ft,0,20,120,180,150
 Bridge,Length from 20-50 ft,20,50,180,240,210
 Bridge,Length from 50-100 ft,50,100,240,360,300
 Bridge,Length > 100 ft,100,999999,360,540,450
-Transit,Dedicated Guideway - Subway,21,22,5,5,5
-Transit,On-Road - Bus,23,23,7,56,31.5
+Transit,Dedicated Guideway - Tram and Subway and Rail,100,103,40,460,250
+Transit,On-Road - Bus,103,104,7,56,31.5

@@ -10,20 +10,19 @@ REM -------------------------------------------------
 REM ==============================================
 REM ======== ENVIRONMENT VARIABLES ===============
 REM ==============================================
-set drive=%~d0
-if %drive%==C: set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
-if %drive%==C: (set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe") else (set PYTHON="python")
-set FD_CONVERT_TRIP_TABLE="C:\GitHub\RDR\helper_tools\format_demand\fd_ReviewTripTable.py"
+set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
+set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe"
+set REVIEW_TRIP_TABLE="C:\GitHub\RDR\helper_tools\format_demand\review_trip_table.py"
 
 call activate RDRenv
 
 
-REM ==============================================
-REM ======== RUN THE TRIP TABLE HELPER TOOL ==================
-REM ==============================================
+REM =======================================================
+REM ======== RUN THE REVIEW TRIP TABLE HELPER TOOL ========
+REM =======================================================
 
-REM call trip table Python helper script
-%PYTHON% %FD_CONVERT_TRIP_TABLE% 
+REM call Review Trip Table Python helper script
+%PYTHON% %REVIEW_TRIP_TABLE%
 if %ERRORLEVEL% neq 0 goto ProcessError
 
 call conda.bat deactivate
@@ -32,7 +31,7 @@ exit /b 0
 
 :ProcessError
 REM error handling: print message and clean up
-echo ERROR: Convert trip table tool run encountered an error. See above messages (and log file) to diagnose.
+echo ERROR: Review trip table helper tool run encountered an error. See above messages (and log file) to diagnose.
 
 call conda.bat deactivate
 pause

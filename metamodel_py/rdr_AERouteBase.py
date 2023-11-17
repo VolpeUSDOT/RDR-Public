@@ -134,28 +134,9 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
 
     # The blended one are here
     avg_skims = assigclass.results.skims
-
-    # Assembling a single final skim file can be done like this
-    # We will want only the time for the last iteration and the distance averaged out for all iterations
-    kwargs = {'file_name': join(fldr, 'skim_' + scenname + '.aem'),
-              'zones': graph.num_zones,
-              'matrix_names': ['time_final', 'distance_blended']}
-
-    # Create the matrix file
-    out_skims = AequilibraeMatrix()
-    out_skims.create_empty(**kwargs)
-    out_skims.index[:] = avg_skims.index[:]
-
-    # Transfer the data
-    # The names of the skims are the name of the fields
-    out_skims.matrix['time_final'][:, :] = avg_skims.matrix['free_flow_time'][:, :]
-    # It is CRITICAL to assign the matrix values using the [:,:]
-    out_skims.matrix['distance_blended'][:, :] = avg_skims.matrix['distance'][:, :]
-
-    out_skims.matrices.flush()  # Make sure that all data went to the disk
-
-    # Export to OMX as well
-    out_skims.export(join(fldr, mtx_fldr, 'rt_' + scenname + '.omx'))
+    last_skims = assigclass._aon_results.skims   # New AE092, not used in this code
+    # Export to OMX
+    avg_skims.export(join(fldr, mtx_fldr, 'rt_' + scenname + '.omx'))
 
     # Optional AE7 reporting
     convergence_report = assig.report()

@@ -39,8 +39,13 @@ def main(input_folder, output_folder, cfg, logger):
         logger.error("R EXECUTABLE ERROR: Rscript.exe could not be found")
         raise Exception("R EXECUTABLE ERROR: Rscript.exe could not be found")
 
+    if cfg['calc_transit_metrics']:
+        run_disaggregate = 'yes'
+    else:
+        run_disaggregate = 'no'
+
     R_process = subprocess.Popen(['Rscript.exe', 'rdr_Regression_Report_Compile.R', input_folder, output_folder,
-                                 cfg['run_id'], cfg['metamodel_type']],
+                                 cfg['run_id'], cfg['metamodel_type'], run_disaggregate],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     log_subprocess_output(R_process.stdout, logger)
@@ -48,6 +53,13 @@ def main(input_folder, output_folder, cfg, logger):
     if is_error:
         logger.error("METAMODEL R CODE ERROR: rdr_Regression_Report_Compile.R encountered an error")
         raise Exception("METAMODEL R CODE ERROR: rdr_Regression_Report_Compile.R encountered an error")
+
+    # read in a warning about changing the metamodel regression method, if the method has changed
+    if os.path.exists(os.path.join(output_folder, 'MethodChange.txt')):
+      f = open(os.path.join(output_folder, "MethodChange.txt"), "r")
+      method_change_warn = f.read()
+      logger.warning("METAMODEL R WARNING: " + method_change_warn)
+      f.close()
 
     # move rendered HTML file when complete to the output folder, will replace any existing file
     if not os.path.exists('rdr_Metamodel_Regression.html'):

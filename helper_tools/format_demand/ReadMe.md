@@ -1,10 +1,15 @@
-# OMX File Wrangling
-This folder includes the following programs:
+# OMX Demand File Helper Tools
 
-fd_ConvertTripTable.py  
--  Inputs:  .csv trip table and .csv node file
--  Output:  omx trip table
+This folder includes the following scripts:
 
-fd_ReviewSkim.py  
--  Inputs:  omx trip table and omx skim table
--  Output:  summary information on the skims
+convert_trip_table.py
+- Inputs: CSV node file and CSV trip table file(s)
+- Outputs: OMX trip table and debug files
+
+review_trip_table.py
+- Inputs: directory and filename for OMX trip table and matrix name
+- Outputs: summary information on the demand trip table
+
+review_skim.py
+- Inputs: directory and filenames for OMX trip table and OMX skim table
+- Outputs: summary information on the demand trip table and skims
