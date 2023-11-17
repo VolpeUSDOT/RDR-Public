@@ -7,9 +7,13 @@ import configparser
 from scipy import stats
 
 # The following code takes a GIS-based raster data set representing exposure data (such as a flood depth grid data set
-# and determines the maximum exposure value for each road segment in a given road network within a user-specified
+# and determines the maximum exposure value for each segment in a given transportation network within a user-specified
 # tolerance. This is then converted to a level of disruption (defined as link availability) which feeds into the
 # larger RDR Metamodel. There is a full set of documentation accompanying this tool.
+
+# If RDR is being run on both a transit and a road network then the tool should be run separately for each subnetwork
+# given that these networks usually come from different sources and may require different tool settings.
+# Outputs can then be combined together.
 
 
 def read_config_file_helper(config, section, key, required_or_optional):
@@ -49,10 +53,10 @@ def read_config_file(cfg_file):
         raise Exception("CONFIG FILE ERROR: input input_exposure_grid grid {} "
                         "can't be found".format(cfg_dict['input_exposure_grid']))
 
-    cfg_dict['input_road_network'] = read_config_file_helper(cfg, 'common', 'input_road_network', 'REQUIRED')
-    if not arcpy.Exists(cfg_dict['input_road_network']):
-        raise Exception("CONFIG FILE ERROR: input road network {} "
-                        "can't be found".format(cfg_dict['input_road_network']))
+    cfg_dict['input_network'] = read_config_file_helper(cfg, 'common', 'input_network', 'REQUIRED')
+    if not arcpy.Exists(cfg_dict['input_network']):
+        raise Exception("CONFIG FILE ERROR: input network {} "
+                        "can't be found".format(cfg_dict['input_network']))
 
     cfg_dict['output_dir'] = read_config_file_helper(cfg, 'common', 'output_dir', 'REQUIRED')
 
@@ -157,7 +161,7 @@ def exposure_grid_overlay(cfg):
     # Load config
     print('Loading configuration ...')
     input_exposure_grid = cfg['input_exposure_grid']
-    input_road_network = cfg['input_road_network']
+    input_network = cfg['input_network']
     output_dir = cfg['output_dir']
     run_name = cfg['run_name']
     exposure_field = cfg['exposure_field']
@@ -195,10 +199,10 @@ def exposure_grid_overlay(cfg):
     # MAIN
     # ---------------------------------------------------------------------------
 
-    # Extract raster cells that overlap the road network
+    # Extract raster cells that overlap the network
     print('Extracting exposure values that overlap network ...')
     arcpy.CheckOutExtension("Spatial")
-    output_extract_by_mask = arcpy.sa.ExtractByMask(input_exposure_grid, input_road_network)
+    output_extract_by_mask = arcpy.sa.ExtractByMask(input_exposure_grid, input_network)
     output_extract_by_mask.save(run_name + "_exposure_grid_extract")
     arcpy.CheckInExtension("Spatial")
 
@@ -207,13 +211,13 @@ def exposure_grid_overlay(cfg):
     arcpy.RasterToPoint_conversion(run_name + "_exposure_grid_extract", os.path.join(
         full_path_to_output_gdb, run_name + "_exposure_grid_points"), exposure_field)
 
-    # Setup field mapping so that maximum exposure at each road segment is captured
+    # Setup field mapping so that maximum exposure at each segment is captured
     fms = arcpy.FieldMappings()
 
     for field in fields_to_keep:
         try:
             fm1 = arcpy.FieldMap()
-            fm1.addInputField(input_road_network, field)
+            fm1.addInputField(input_network, field)
             fms.addFieldMap(fm1)
         except:
             raise Exception("Can't find field ({}) in the exposure dataset. Ensure that this field exists".format(field))
@@ -224,10 +228,10 @@ def exposure_grid_overlay(cfg):
 
     fms.addFieldMap(fm2)
 
-    # Spatial join to road network, selecting highest exposure value for each network segment
+    # Spatial join to network, selecting highest exposure value for each network segment
     print('Identifying maximum exposure value for each network segment ...')
-    arcpy.SpatialJoin_analysis(input_road_network, run_name + "_exposure_grid_points",
-                               run_name + "_road_network_with_exposure",
+    arcpy.SpatialJoin_analysis(input_network, run_name + "_exposure_grid_points",
+                               run_name + "_network_with_exposure",
                                "JOIN_ONE_TO_ONE", "KEEP_ALL",
                                fms,
                                "WITHIN_A_DISTANCE_GEODESIC", search_distance)
@@ -239,8 +243,8 @@ def exposure_grid_overlay(cfg):
                               "ROUND", "NONE", "", "GEODESIC")
 
         # Select by location in the buffer
-        arcpy.AddField_management(run_name + "_road_network_with_exposure", "evacuation_route", "Short")
-        arcpy.MakeFeatureLayer_management(run_name + "_road_network_with_exposure", "evacuation_layer")
+        arcpy.AddField_management(run_name + "_network_with_exposure", "evacuation_route", "Short")
+        arcpy.MakeFeatureLayer_management(run_name + "_network_with_exposure", "evacuation_layer")
         arcpy.SelectLayerByLocation_management("evacuation_layer", "COMPLETELY_WITHIN", "evacuation_routes_buffered")
 
         # Calculate field for emergency routes
@@ -253,29 +257,29 @@ def exposure_grid_overlay(cfg):
     # Add new field to store extent of exposure
     print('Calculating exposure levels ...')
 
-    arcpy.AddField_management(run_name + "_road_network_with_exposure", "link_availability", "Float")
-    arcpy.AddField_management(run_name + "_road_network_with_exposure", "comments", "Text")
-    arcpy.CalculateField_management(run_name + "_road_network_with_exposure", "comments", '"' + comment_text + '"',
+    arcpy.AddField_management(run_name + "_network_with_exposure", "link_availability", "Float")
+    arcpy.AddField_management(run_name + "_network_with_exposure", "comments", "Text")
+    arcpy.CalculateField_management(run_name + "_network_with_exposure", "comments", '"' + comment_text + '"',
                                     "PYTHON_9.3")
-    arcpy.MakeFeatureLayer_management(run_name + "_road_network_with_exposure", "road_network_with_exposure_lyr")
+    arcpy.MakeFeatureLayer_management(run_name + "_network_with_exposure", "network_with_exposure_lyr")
 
     # Convert NULLS to 0 first
-    arcpy.SelectLayerByAttribute_management("road_network_with_exposure_lyr", "NEW_SELECTION", "grid_code IS NULL")
-    arcpy.CalculateField_management("road_network_with_exposure_lyr", "grid_code", 0, "PYTHON_9.3")
-    arcpy.SelectLayerByAttribute_management("road_network_with_exposure_lyr", "CLEAR_SELECTION")
+    arcpy.SelectLayerByAttribute_management("network_with_exposure_lyr", "NEW_SELECTION", "grid_code IS NULL")
+    arcpy.CalculateField_management("network_with_exposure_lyr", "grid_code", 0, "PYTHON_9.3")
+    arcpy.SelectLayerByAttribute_management("network_with_exposure_lyr", "CLEAR_SELECTION")
 
     if link_availability_approach == 'binary':
         # 0 = full exposure/not traversible. 1 = no exposure/link fully available
-        arcpy.SelectLayerByAttribute_management("road_network_with_exposure_lyr", "NEW_SELECTION", "grid_code > 0")
-        arcpy.CalculateField_management("road_network_with_exposure_lyr", "link_availability", 0, "PYTHON_9.3")
-        arcpy.SelectLayerByAttribute_management("road_network_with_exposure_lyr", "SWITCH_SELECTION")
-        arcpy.CalculateField_management("road_network_with_exposure_lyr", "link_availability", 1, "PYTHON_9.3")
+        arcpy.SelectLayerByAttribute_management("network_with_exposure_lyr", "NEW_SELECTION", "grid_code > 0")
+        arcpy.CalculateField_management("network_with_exposure_lyr", "link_availability", 0, "PYTHON_9.3")
+        arcpy.SelectLayerByAttribute_management("network_with_exposure_lyr", "SWITCH_SELECTION")
+        arcpy.CalculateField_management("network_with_exposure_lyr", "link_availability", 1, "PYTHON_9.3")
 
     if link_availability_approach == 'default_flood_exposure_function':
         # Use default flood exposure function which is based on a depth-damage function defined by Pregnolato et al.
         # in which the maximum safe vehicle speed reaches 0 at a depth of water of approximately 300 millimeters.
         # A linear relationship is assumed for link availability when water depths are between 0 and 300 millimeters
-        with arcpy.da.UpdateCursor("road_network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
+        with arcpy.da.UpdateCursor("network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
             for row in ucursor:
                 # Convert exposure units to millimeters
                 if row[0] is not None:
@@ -301,7 +305,7 @@ def exposure_grid_overlay(cfg):
         # Use manual approach where a user-defined csv lists the range of values and the link availability associated
         # with each range
         # Minimum (inclusive) and maximum (exclusive) value must be defined for each range.
-        with arcpy.da.UpdateCursor("road_network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
+        with arcpy.da.UpdateCursor("network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
             for gis_row in ucursor:
                 # Read through the csv
                 # for line in csv
@@ -320,7 +324,7 @@ def exposure_grid_overlay(cfg):
                 ucursor.updateRow(gis_row)
 
     if link_availability_approach == 'beta_distribution_function':
-        with arcpy.da.UpdateCursor("road_network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
+        with arcpy.da.UpdateCursor("network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
             for row in ucursor:
                 # Convert exposure units to millimeters
                 if row[0] is not None:
@@ -350,10 +354,10 @@ def exposure_grid_overlay(cfg):
     print('Finalizing outputs ...')
 
     # Rename grid_code back to the original exposure field provided in raster dataset.
-    arcpy.AlterField_management(run_name + "_road_network_with_exposure", 'grid_code', exposure_field)
+    arcpy.AlterField_management(run_name + "_network_with_exposure", 'grid_code', exposure_field)
 
     if emergency is True:
-        arcpy.AlterField_management(run_name + "_road_network_with_exposure", 'link_availability',
+        arcpy.AlterField_management(run_name + "_network_with_exposure", 'link_availability',
                                     'link_availability_emergency')
 
     txt_output_fields = fields_to_keep + ['link_availability', 'link_availability_emergency', 'evacuation_route',
@@ -362,7 +366,7 @@ def exposure_grid_overlay(cfg):
 
     # Export to CSV file
     csv_out = os.path.join(output_dir, run_name + ".csv")
-    fields = [x.name for x in arcpy.ListFields(run_name + "_road_network_with_exposure") if x.name in txt_output_fields]
+    fields = [x.name for x in arcpy.ListFields(run_name + "_network_with_exposure") if x.name in txt_output_fields]
 
     counter = 0
 
@@ -370,7 +374,7 @@ def exposure_grid_overlay(cfg):
         with open(csv_out, "wb") as f:
             wr = csv.writer(f)
             wr.writerow(fields)
-            with arcpy.da.SearchCursor(run_name + "_road_network_with_exposure", fields) as cursor:
+            with arcpy.da.SearchCursor(run_name + "_network_with_exposure", fields) as cursor:
                 for row in cursor:
                     counter += 1
                     wr.writerow(row)
@@ -379,7 +383,7 @@ def exposure_grid_overlay(cfg):
         with open(csv_out, "w", newline='') as f:
             wr = csv.writer(f)
             wr.writerow(fields)
-            with arcpy.da.SearchCursor(run_name + "_road_network_with_exposure", fields) as cursor:
+            with arcpy.da.SearchCursor(run_name + "_network_with_exposure", fields) as cursor:
                 for row in cursor:
                     counter += 1
                     wr.writerow(row)

@@ -16,7 +16,8 @@ def test_teardown_qs_outputs():
                            'qs2_files/Example_A',
                            'qs2_files/Example_B',
                            'qs2_files/Example_C',
-                           'qs3_files']
+                           'qs3_files',
+                           'qs4_files']
     test_dir = os.path.dirname(os.path.realpath(__file__))
 
     output_dirs = []
@@ -34,3 +35,4 @@ def test_teardown_qs_outputs():
     assert not os.path.exists(output_dirs[2])
     assert not os.path.exists(output_dirs[3])
     assert not os.path.exists(output_dirs[4])
+    assert not os.path.exists(output_dirs[5])

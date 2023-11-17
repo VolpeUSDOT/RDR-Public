@@ -1,30 +1,56 @@
-Asset Type,Network Type,Facility Type,Unit,Damage Repair Cost,Total Repair Cost
-Highway,Rural Flat,Interstate,Lane-mile,1497300,1497300
-Highway,Rural Flat,Other Principal Arterial,Lane-mile,1198300,1198300
-Highway,Rural Flat,Minor Arterial,Lane-mile,1052250,1052250
-Highway,Rural Flat,Major Collector,Lane-mile,1114350,1114350
-Highway,Rural Rolling,Interstate,Lane-mile,1535250,1535250
-Highway,Rural Rolling,Other Principal Arterial,Lane-mile,1231650,1231650
-Highway,Rural Rolling,Minor Arterial,Lane-mile,1164950,1164950
-Highway,Rural Rolling,Major Collector,Lane-mile,1132750,1132750
-Highway,Rural Mountainous,Interstate,Lane-mile,3362600,3362600
-Highway,Rural Mountainous,Other Principal Arterial,Lane-mile,2772650,2772650
-Highway,Rural Mountainous,Minor Arterial,Lane-mile,2151650,2151650
-Highway,Rural Mountainous,Major Collector,Lane-mile,1772150,1772150
-Highway,Small Urban,Freeway/Expressway/Interstate,Lane-mile,2672600,2672600
-Highway,Small Urban,Other Principal Arterial,Lane-mile,2270100,2270100
-Highway,Small Urban,Minor Arterial/Collector,Lane-mile,1714650,1714650
-Highway,Small Urbanized,Freeway/Expressway/Interstate,Lane-mile,2695600,2695600
-Highway,Small Urbanized,Other Principal Arterial,Lane-mile,2297700,2297700
-Highway,Small Urbanized,Minor Arterial/Collector,Lane-mile,1734200,1734200
-Highway,Large Urbanized,Freeway/Expressway/Interstate,Lane-mile,4412550,4412550
-Highway,Large Urbanized,Other Principal Arterial,Lane-mile,3368350,3368350
-Highway,Large Urbanized,Minor Arterial/Collector,Lane-mile,2319550,2319550
-Highway,Major Urbanized,Freeway/Expressway/Interstate,Lane-mile,8826250,8826250
-Highway,Major Urbanized,Other Principal Arterial,Lane-mile,6735550,6735550
-Highway,Major Urbanized,Minor Arterial/Collector,Lane-mile,4637950,4637950
-Bridge,National Highway System,13,Square foot,309,309
-Bridge,Non-National,14,Square foot,285,285
-Transit,Dedicated Guideway - Subway,21,Lane-mile,15888945.6,15888945.6
-Transit,Dedicated Guideway - Light Rail,22,Lane-mile,15888945.6,15888945.6
-Transit,On-Road - Bus,23,Lane-mile,0,0
+Asset Type,Network Type,Facility Name,Facility Type,Unit,Damage Repair Cost,Total Repair Cost
+Highway,Rural Flat,Interstate (HERS),1,Lane-mile,1497300,1497300
+Highway,Rural Flat,Other Principal Arterial (HERS),2,Lane-mile,1198300,1198300
+Highway,Rural Flat,Other Principal Arterial (HERS),3,Lane-mile,1198300,1198300
+Highway,Rural Flat,Minor Arterial (HERS),4,Lane-mile,1052250,1052250
+Highway,Rural Flat,Major Collector (HERS),5,Lane-mile,1114350,1114350
+Highway,Rural Flat,Major Collector (HERS),6,Lane-mile,1114350,1114350
+Highway,Rural Flat,Major Collector (HERS),7,Lane-mile,1114350,1114350
+Highway,Rural Rolling,Interstate (HERS),1,Lane-mile,1535250,1535250
+Highway,Rural Rolling,Other Principal Arterial (HERS),2,Lane-mile,1231650,1231650
+Highway,Rural Rolling,Other Principal Arterial (HERS),3,Lane-mile,1231650,1231650
+Highway,Rural Rolling,Minor Arterial (HERS),4,Lane-mile,1164950,1164950
+Highway,Rural Rolling,Major Collector (HERS),5,Lane-mile,1132750,1132750
+Highway,Rural Rolling,Major Collector (HERS),6,Lane-mile,1132750,1132750
+Highway,Rural Rolling,Major Collector (HERS),7,Lane-mile,1132750,1132750
+Highway,Rural Mountainous,Interstate (HERS),1,Lane-mile,3362600,3362600
+Highway,Rural Mountainous,Other Principal Arterial (HERS),2,Lane-mile,2772650,2772650
+Highway,Rural Mountainous,Other Principal Arterial (HERS),3,Lane-mile,2772650,2772650
+Highway,Rural Mountainous,Minor Arterial (HERS),4,Lane-mile,2151650,2151650
+Highway,Rural Mountainous,Major Collector (HERS),5,Lane-mile,1772150,1772150
+Highway,Rural Mountainous,Major Collector (HERS),6,Lane-mile,1772150,1772150
+Highway,Rural Mountainous,Major Collector (HERS),7,Lane-mile,1772150,1772150
+Highway,Small Urban,Freeway/Expressway/Interstate (HERS),1,Lane-mile,2672600,2672600
+Highway,Small Urban,Other Principal Arterial (HERS),2,Lane-mile,2270100,2270100
+Highway,Small Urban,Other Principal Arterial (HERS),3,Lane-mile,2270100,2270100
+Highway,Small Urban,Minor Arterial/Collector (HERS),4,Lane-mile,1714650,1714650
+Highway,Small Urban,Minor Arterial/Collector (HERS),5,Lane-mile,1714650,1714650
+Highway,Small Urban,Minor Arterial/Collector (HERS),6,Lane-mile,1714650,1714650
+Highway,Small Urban,Minor Arterial/Collector (HERS),7,Lane-mile,1714650,1714650
+Highway,Small Urbanized,Freeway/Expressway/Interstate (HERS),1,Lane-mile,2695600,2695600
+Highway,Small Urbanized,Other Principal Arterial (HERS),2,Lane-mile,2297700,2297700
+Highway,Small Urbanized,Other Principal Arterial (HERS),3,Lane-mile,2297700,2297700
+Highway,Small Urbanized,Minor Arterial/Collector (HERS),4,Lane-mile,1734200,1734200
+Highway,Small Urbanized,Minor Arterial/Collector (HERS),5,Lane-mile,1734200,1734200
+Highway,Small Urbanized,Minor Arterial/Collector (HERS),6,Lane-mile,1734200,1734200
+Highway,Small Urbanized,Minor Arterial/Collector (HERS),7,Lane-mile,1734200,1734200
+Highway,Large Urbanized,Freeway/Expressway/Interstate (HERS),1,Lane-mile,4412550,4412550
+Highway,Large Urbanized,Other Principal Arterial (HERS),2,Lane-mile,3368350,3368350
+Highway,Large Urbanized,Other Principal Arterial (HERS),3,Lane-mile,3368350,3368350
+Highway,Large Urbanized,Minor Arterial/Collector (HERS),4,Lane-mile,2319550,2319550
+Highway,Large Urbanized,Minor Arterial/Collector (HERS),5,Lane-mile,2319550,2319550
+Highway,Large Urbanized,Minor Arterial/Collector (HERS),6,Lane-mile,2319550,2319550
+Highway,Large Urbanized,Minor Arterial/Collector (HERS),7,Lane-mile,2319550,2319550
+Highway,Major Urbanized,Freeway/Expressway/Interstate (HERS),1,Lane-mile,8826250,8826250
+Highway,Major Urbanized,Other Principal Arterial (HERS),2,Lane-mile,6735550,6735550
+Highway,Major Urbanized,Other Principal Arterial (HERS),3,Lane-mile,6735550,6735550
+Highway,Major Urbanized,Minor Arterial/Collector (HERS),4,Lane-mile,4637950,4637950
+Highway,Major Urbanized,Minor Arterial/Collector (HERS),5,Lane-mile,4637950,4637950
+Highway,Major Urbanized,Minor Arterial/Collector (HERS),6,Lane-mile,4637950,4637950
+Highway,Major Urbanized,Minor Arterial/Collector (HERS),7,Lane-mile,4637950,4637950
+Bridge,,National Highway System,11,Square foot,309,309
+Bridge,,Non-National,12,Square foot,285,285
+Transit,,Tram/Light Rail,100,Track-mile,15888945.6,15888945.6
+Transit,,Subway,101,Track-mile,67913000,67913000
+Transit,,Rail,102,Track-mile,67913000,67913000
+Transit,,Bus,103,Lane-mile,0,0

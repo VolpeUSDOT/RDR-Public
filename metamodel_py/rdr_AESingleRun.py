@@ -118,8 +118,6 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
     if not os.path.exists(base_run_assignment):
         logger.error("BASE ASSIGNMENT FILE ERROR: {} could not be found".format(base_run_assignment))
         raise Exception("BASE ASSIGNMENT FILE ERROR: {} could not be found".format(base_run_assignment))
-    shutil.copy2(base_run_skims, os.path.join(disrupt_run_folder, mtx_fldr))
-    shutil.copy2(base_run_assignment, os.path.join(disrupt_run_folder, mtx_fldr))
 
     # calculate link availability for the disrupted network
     calc_link_availability(run_params, input_folder, disrupt_run_folder, cfg, logger)
@@ -157,7 +155,7 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
         db_cur.execute(sql3)
 
     from rdr_AERouteDisruptMiniEquilibrium import run_aeq_disrupt_miniequilibrium
-    run_aeq_disrupt_miniequilibrium(run_params, disrupt_run_folder, cfg, logger)
+    run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_folder, cfg, logger)
 
     logger.info("Finished: AequilibraE single run module")
 

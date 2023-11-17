@@ -10,7 +10,6 @@ import sys
 import os
 import argparse
 import shutil
-import subprocess
 import logging
 import sqlite3
 import pandas as pd
@@ -23,8 +22,8 @@ import rdr_setup
 import rdr_supporting
 from rdr_LHS import check_model_params_coverage
 
-VERSION_NUMBER = "2023.1"
-VERSION_DATE = "04/10/2023"
+VERSION_NUMBER = "2023.2"
+VERSION_DATE = "11/15/2023"
 
 
 def main():
@@ -343,7 +342,7 @@ def main():
                         try:
                             exposures['link_id'] = pd.to_numeric(exposures['link_id'], downcast='integer')
                         except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column link_id could not be converted to int for hazard".format(row['Hazard Event'])
+                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column link_id could not be converted to int for hazard {}".format(row['Hazard Event'])
                             logger.error(error_text)
                             error_list.append(error_text)
 
@@ -351,7 +350,7 @@ def main():
                         try:
                             exposures['A'] = pd.to_numeric(exposures['A'], downcast='integer')
                         except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column A could not be converted to int for hazard".format(row['Hazard Event'])
+                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column A could not be converted to int for hazard {}".format(row['Hazard Event'])
                             logger.error(error_text)
                             error_list.append(error_text)
 
@@ -359,7 +358,7 @@ def main():
                         try:
                             exposures['B'] = pd.to_numeric(exposures['B'], downcast='integer')
                         except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column B could not be converted to int for hazard".format(row['Hazard Event'])
+                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column B could not be converted to int for hazard {}".format(row['Hazard Event'])
                             logger.error(error_text)
                             error_list.append(error_text)
 
@@ -367,7 +366,7 @@ def main():
                         try:
                             exposures[cfg['exposure_field']] = pd.to_numeric(exposures[cfg['exposure_field']], downcast='float')
                         except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column specifying exposure level could not be converted to float for hazard".format(row['Hazard Event'])
+                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column specifying exposure level could not be converted to float for hazard {}".format(row['Hazard Event'])
                             logger.error(error_text)
                             error_list.append(error_text)
     else:
@@ -774,7 +773,7 @@ def main():
     # ---------------------------------------------------------------------------------------------------
     # Resilience projects files
     # 1) Are project_info.csv and project_table.csv files present
-    # 2) Check that project_info.csv has columns Project ID, Project Name, Asset, Project Cost, Project Lifespan, Annual Maintenance Cost; Project Cost and Annual Maintenance Cost should be converted to dollar
+    # 2) Check that project_info.csv has columns Project ID, Project Name, Asset, Project Cost, Project Lifespan, Annual Maintenance Cost if exists, Redeployment Cost if exists; Project Cost, Annual Maintenance Cost, and Redeployment Cost should be converted to dollar
     # 3) Check that project_table.csv has columns link_id, Project ID, Category; link_id must be int, Exposure Reduction must be float if exists
     resil_folder = os.path.join(input_folder, 'LookupTables')
 
@@ -788,10 +787,28 @@ def main():
         else:
             # CSV STEP 2: Check file has necessary columns
             try:
-                project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
-                                                                       'Project Lifespan', 'Annual Maintenance Cost'],
-                                           converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
-                                                       'Project Lifespan': str, 'Annual Maintenance Cost': str})
+                maintenance = cfg['maintenance']
+                redeployment = cfg['redeployment']
+                if maintenance and redeployment:
+                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
+                                                                           'Project Lifespan', 'Annual Maintenance Cost', 'Redeployment Cost'],
+                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
+                                                           'Project Lifespan': str, 'Annual Maintenance Cost': str, 'Redeployment Cost': str})
+                elif maintenance:
+                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
+                                                                           'Project Lifespan', 'Annual Maintenance Cost'],
+                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
+                                                           'Project Lifespan': str, 'Annual Maintenance Cost': str})
+                elif redeployment:
+                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
+                                                                           'Project Lifespan', 'Redeployment Cost'],
+                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
+                                                           'Project Lifespan': str, 'Redeployment Cost': str})
+                else:
+                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
+                                                                           'Project Lifespan'],
+                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
+                                                           'Project Lifespan': str})
             except:
                 error_text = "RESILIENCE PROJECTS FILE ERROR: Project info input file is missing required columns"
                 logger.error(error_text)
@@ -823,12 +840,22 @@ def main():
                     error_list.append(error_text)
 
                 # Test Annual Maintenance Cost can be converted to dollar amount
-                try:
-                    project_cost = project_info['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).astype(float)
-                except:
-                    error_text = "RESILIENCE PROJECTS FILE ERROR: Column Annual Maintenance Cost could not be translated to dollar amount in project info input file"
-                    logger.error(error_text)
-                    error_list.append(error_text)
+                if maintenance:
+                    try:
+                        project_cost = project_info['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).astype(float)
+                    except:
+                        error_text = "RESILIENCE PROJECTS FILE ERROR: Column Annual Maintenance Cost could not be translated to dollar amount in project info input file"
+                        logger.error(error_text)
+                        error_list.append(error_text)
+
+                # Test Redeployment Cost can be converted to dollar amount
+                if redeployment:
+                    try:
+                        project_cost = project_info['Redeployment Cost'].replace('[\$,]', '', regex=True).astype(float)
+                    except:
+                        error_text = "RESILIENCE PROJECTS FILE ERROR: Column Redeployment Cost could not be translated to dollar amount in project info input file"
+                        logger.error(error_text)
+                        error_list.append(error_text)
 
                 # Confirm resilience projects are a subset of those listed in this input file
                 if not has_error_resil_projects:
@@ -895,6 +922,7 @@ def main():
     # LAST STEPS
     # If any check failed, raise exception
     if len(error_list)> 0:
+        logger.error(("Exiting script with {} breaking errors found! See logger.error outputs in log file for details. Consult the Run Checklist and User Guide to fix.".format(len(error_list))))
         raise Exception("Exiting script with {} breaking errors found! See logger.error outputs in log file for details. Consult the Run Checklist and User Guide to fix.".format(len(error_list)))
     else:
         logger.info("All input validation checks passed successfully! No errors found.")

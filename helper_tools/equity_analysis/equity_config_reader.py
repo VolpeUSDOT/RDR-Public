@@ -1,7 +1,7 @@
 import os
 import datetime
 import configparser
-
+from pathlib import Path
 
 def read_config_file_helper(config, section, key, required_or_optional):
 
@@ -51,6 +51,7 @@ def read_equity_config_file(cfg_file):
     # OVERLAY METHOD VALUES
     # =====================
     cfg_dict['TAZ_source'] = read_config_file_helper(cfg, 'equity_overlay', 'TAZ_source', 'REQUIRED')
+    cfg_dict['TAZ_col_name'] = read_config_file_helper(cfg, 'equity_overlay', 'TAZ_col_name', 'REQUIRED')
 
     cfg_dict['equity_source'] = read_config_file_helper(cfg, 'equity_overlay', 'equity_source', 'REQUIRED')
     cfg_dict['equity_feature'] = read_config_file_helper(cfg, 'equity_overlay', 'equity_feature', 'REQUIRED')
@@ -76,8 +77,8 @@ def read_equity_config_file(cfg_file):
     cfg_dict['recovery'] = read_config_file_helper(cfg, 'equity_analysis', 'recovery', 'REQUIRED')
 
     run_minieq = read_config_file_helper(cfg, 'equity_analysis', 'run_minieq', 'OPTIONAL')
-    # Set default to 1 if this is not specified
-    cfg_dict['run_minieq'] = 1
+    # Set default to 0 if this is not specified
+    cfg_dict['run_minieq'] = 0
     if run_minieq is not None:
         run_minieq = int(run_minieq)
         if run_minieq not in [0, 1]:
@@ -86,7 +87,18 @@ def read_equity_config_file(cfg_file):
         else:
             cfg_dict['run_minieq'] = run_minieq
 
-    cfg_dict['run_type'] = read_config_file_helper(cfg, 'equity_analysis', 'run_type', 'REQUIRED')
-    cfg_dict['largeval'] = read_config_file_helper(cfg, 'equity_analysis', 'largeval', 'REQUIRED')
+    run_type = read_config_file_helper(cfg, 'equity_analysis', 'run_type', 'REQUIRED')
+    # Set default to RT if this is not specified
+    cfg_dict['run_type'] = 'RT'
+    if run_type is not None:
+        if run_type not in ['SP', 'RT']:
+            raise Exception(
+                "CONFIG FILE ERROR: {} is an invalid value for run_type, should be SP or RT".format(str(run_type)))
+        else:
+            cfg_dict['run_type'] = run_type
+
+    cfg_dict['largeval'] = float(read_config_file_helper(cfg, 'equity_analysis', 'largeval', 'REQUIRED'))
+
+    cfg_dict['pval'] = float(read_config_file_helper(cfg, 'equity_analysis', 'pval', 'REQUIRED'))
 
     return cfg_dict
