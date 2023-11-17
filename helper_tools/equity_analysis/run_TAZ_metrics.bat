@@ -19,9 +19,9 @@ set CONFIG="C:\GitHub\RDR\helper_tools\equity_analysis\equity_metrics.config"
 call activate RDRenv
 cd C:\GitHub\RDR\helper_tools\equity_analysis
 
-REM ==============================================
-REM ======== RUN THE EQUITY METRICS HELPER TOOL ==================
-REM ==============================================
+REM =================================================
+REM ======== RUN THE TAZ METRICS HELPER TOOL ========
+REM =================================================
 
 REM call TAZ equity metrics Python helper script
 %PYTHON% %EQUITY_HELPER% %CONFIG%
@@ -33,7 +33,7 @@ exit /b 0
 
 :ProcessError
 REM error handling: print message and clean up
-echo ERROR: Equity metrics helper tool run encountered an error. See above messages (and log file) to diagnose.
+echo ERROR: TAZ equity metrics helper tool run encountered an error. See above messages (and log file) to diagnose.
 
 call conda.bat deactivate
 pause

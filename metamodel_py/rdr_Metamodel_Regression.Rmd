@@ -12,20 +12,18 @@ params:
   input_dir: 'C:/GitHub/RDR/Data/SampleRun/inputs'
   output_dir: 'C:/GitHub/RDR/Data/SampleRun/generated_files'
   run_id: 'SampleRun'
-  testing: false
   method: 'multitarget'  # options are 'base', 'interact', 'projgroupLM', 'multitarget' (default), 'mixedeffects'
+  run_disaggregate: 'no'
+  testing: false
+
 ---
-
 <!-- https://cran.r-project.org/web/packages/mlegp/vignettes/mlegp.pdf -->
-
-<!-- Add the following line manually to the rendered HTML document so that IE does not block the javascript elements: -->
-<!-- saved from url=(0014)about:internet --> 
 
 ```{r setup, include=FALSE, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(
-  message = FALSE,
-  warning = FALSE,
-  echo = FALSE
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
 )
 options(warn = -1) # Suppress warnings
 
@@ -47,6 +45,7 @@ input_dir <- params$input_dir
 output_dir <- params$output_dir
 
 run_id <- params$run_id
+run_disaggregate <- params$run_disaggregate
 
 if (!file.exists(file.path(output_dir, paste0("AequilibraE_Runs_Compiled_", run_id, ".xlsx")))) {
   stop(paste0("Error: could not find AequilibraE_Runs_Compiled_", run_id, ".xlsx file."))
@@ -89,6 +88,27 @@ d <- d %>%
     circuitous_trips_removed = as.numeric(circuitous_trips_removed)
   )
 
+if(run_disaggregate == 'yes'){
+  d <- d %>%
+    mutate(
+      lr_trips = as.numeric(lr_trips),
+      hr_trips = as.numeric(hr_trips),
+      bus_trips = as.numeric(bus_trips),
+      car_trips = as.numeric(car_trips),
+      lr_miles = as.numeric(lr_miles),
+      hr_miles = as.numeric(hr_miles),
+      bus_miles = as.numeric(bus_miles),
+      car_miles = as.numeric(car_miles),
+      lr_hours_wait = as.numeric(lr_hours_wait),
+      hr_hours_wait = as.numeric(hr_hours_wait),
+      bus_hours_wait = as.numeric(bus_hours_wait),
+      lr_hours_enroute = as.numeric(lr_hours_enroute),
+      hr_hours_enroute = as.numeric(hr_hours_enroute),
+      bus_hours_enroute = as.numeric(bus_hours_enroute),
+      car_hours = as.numeric(car_hours)
+    )
+}
+
 d$resil <- relevel(d$resil, ref = "no")
 ```
 
@@ -105,6 +125,7 @@ The RDR Metamodel has the following steps:
   + `recovery`
 - Run regressions on `trips`, `miles`, and `hours` from the AequilibraE runs.
 - Conduct these steps for both shortest path (`SP`) and routing (`RT`) options of AequilibraE runs.
+- Run regressions on transit and car metrics for routing (`RT`) option if specified.
 - Use those coefficients to generate interpolations for the other combinations which were not run in AequilibraE.
 - Provide visualizations.
 
@@ -165,10 +186,91 @@ max_avail_combos <- d_in %>%
   select(max)
 ```
 
+```{r test_Gaussian, message=FALSE, echo=FALSE, results = 'hide'}
+# If starting with multitarget as method, need to ensure both SP and RT will be able to be fit
+# If not, go back to base
+
+# Pull out the SP and RT data frames from the compiled Aeq runs
+d_sp <- d_in %>% filter(SP.RT == "SP")
+d_rt <- d_in %>% filter(SP.RT == "RT")
+
+if(params$method == 'multitarget'){
+  
+  tryGaussian <- function(predictors, responses){
+    gaussian_fit <- tryCatch(
+      # Try
+      {
+        message('Trying Gaussian process regression')
+        mlegp(predictors, responses) 
+      },
+      # Error
+      error = function(cond) {
+        message('Failed - specify a different method, such as linear regression')
+        
+      })
+    return(gaussian_fit)
+  }
+  
+  # First for shortest path
+  responses <- d_sp[, c("trips", "miles", "hours")]
+  
+  predictors <- d_sp[use_pred_vars]
+  class(predictors) <- "data.frame"
+  for (p in use_pred_vars) {
+    predictors[, p] <- as.numeric(predictors[, p])
+  }
+  
+  spfit <- tryGaussian(predictors, responses)
+  
+  # Second for routing
+  if(run_disaggregate == 'yes'){
+    responses <- d_rt[, c("trips", "miles", "hours", "lr_trips", "hr_trips",
+                          "bus_trips", "car_trips", "lr_miles", "hr_miles",
+                          "bus_miles", "car_miles", "lr_hours_wait",
+                          "hr_hours_wait", "bus_hours_wait", "lr_hours_enroute",
+                          "hr_hours_enroute", "bus_hours_enroute", "car_hours")]
+  } else {
+    responses <- d_rt[, c("trips", "miles", "hours")]
+  }
+  
+  predictors <- d_rt[use_pred_vars]
+  class(predictors) <- "data.frame"
+  for (p in use_pred_vars) {
+    predictors[, p] <- as.numeric(predictors[, p])
+  }
+  
+  rtfit <- tryGaussian(predictors, responses)
+  
+  # If both pass, they will have class gp.list
+  use_method = ifelse(class(spfit) == 'gp.list' & class(rtfit) == 'gp.list',
+                           "multitarget",
+                           "base")
+  
+  if(use_method == 'base' & params$method == 'multitarget'){
+    # If the method has changed, generate a warning. Log that warning as well.
+    warn_change_method = 'The method `multitarget` was selected, but the Gaussian mulitarget regression could not be completed for both shortest path and routing methods. This is likely a result of too few samples being selected in the LHS. The regression method `base` is being used as a fallback.'
+    warning(warn_change_method)
+    
+    # Write out a small file to trigger a log file entry
+    fileConn <- file(file.path(output_dir, "MethodChange.txt"))
+    writeLines(warn_change_method, fileConn)
+    close(fileConn)
+  }
+
+} else {
+  use_method = params$method
+}
+```
+
 There are **`r nrow(full_combos)`** combinations possible with these provided inputs for each of `r nrow(full_groups)` groups of models. Of these, **`r as.numeric(max_avail_combos)`** combinations have been run in AequilibraE; these provide the input for the metamodel.
 
+```{r, echo=FALSE, results='asis', eval= use_method == 'base' & params$method == 'multitarget'}
+# Print an additional paragraph if the method changed
+cat("**Note:** ")
+cat(warn_change_method)
+```
 
-For this analysis, the metamodel approach is ``r params$method``, so the metamodel takes the following form below. Note that the predictors are all categorical, with a separate estimated coefficient for each level of the predictor:
+For this analysis, the metamodel approach is ``r use_method``, so the metamodel takes the following form below. Note that the predictors are all categorical, with a separate estimated coefficient for each level of the predictor:
 
 ```{r eqn_builder}
 # TODO: Create a formula_builder code chunk similar to eqn_builder
@@ -187,13 +289,13 @@ Use_Names <- data.frame(
 use_pred_Names <- Use_Names[match(use_pred_vars, Use_Names$short), "Name"]
 len_pred <- 1:length(use_pred_vars)
 
-if (params$method == "base") {
+if (use_method == "base") {
   formula_text <- paste0("EstimatedTrips = \\beta_0 + ",
                          paste(paste0("\\beta_", len_pred, " ", use_pred_Names), collapse = " + "),
                          " + \\epsilon")
 }
 
-if (params$method == "interact") {
+if (use_method == "interact") {
   # Make interaction between hazard and recovery if these exist
   if (all(c("hazard", "recovery") %in% use_pred_vars)) {
     use_pred_Names <- c(use_pred_Names, "Hazard \\times Recovery")
@@ -210,7 +312,7 @@ if (params$method == "interact") {
                          " + \\epsilon")
 }
 
-if (params$method == "projgroupLM") {
+if (use_method == "projgroupLM") {
   # Make interaction between hazard and recovery if these exist
   if (all(c("hazard", "recovery") %in% use_pred_vars)) {
     use_pred_Names <- c(use_pred_Names, "Hazard \\times Recovery")
@@ -227,7 +329,7 @@ if (params$method == "projgroupLM") {
                          " + \\epsilon_j")
 }
 
-if (params$method == "multitarget") {
+if (use_method == "multitarget") {
   # Single GP
   # http://www.gaussianprocess.org/gpml/chapters/RW2.pdf
   # https://www.researchgate.net/profile/Haitao-Liu-20/publication/322077462_Remarks_on_Multi-Output_Gaussian_Process_Regression/links/5a56db8845851547b1bf2d66/Remarks-on-Multi-Output-Gaussian-Process-Regression.pdf
@@ -238,7 +340,7 @@ if (params$method == "multitarget") {
   formula_text <- "[EstTrips,EstMiles,EstHours] = \\mathcal{GP}(m(\\boldsymbol{x}),k(\\boldsymbol{x},\\boldsymbol{x}\\prime))"
 }
 
-if (params$method == "mixedeffects") {
+if (use_method == "mixedeffects") {
   # Refer to Gelman textbook for notation for error term of the random slope in resil | projgroup
   # Also reference available in Raudenbush and Bryk (2006) per https://rpubs.com/rslbliss/r_mlm_ws
   formula_text <- paste0("EstimatedTrips_{ij} = \\gamma_{00} + ", paste(paste0("\\gamma_{0", len_pred, "} ", paste0(use_pred_Names, "_{ij}")), collapse = " + "), " + $u$_{0j} + $u$_{1j} Resil_{ij} + \\epsilon_{ij}")
@@ -249,20 +351,20 @@ $$
 `r formula_text`
 $$
 
-```{r, echo=FALSE, results='asis', eval= params$method =='multitarget'}
+```{r, echo=FALSE, results='asis', eval= use_method =='multitarget'}
 cat("Where  $\\boldsymbol{x}$ is the matrix of the input variables", paste(use_pred_Names, collapse = ", "), ".")
 cat("With the mean function $m$ and covariance function $k$, see [here](http://www.gaussianprocess.org/gpml/chapters/RW2.pdf) for more details.")
 ```
 
-```{r, echo=FALSE, results='asis', eval= params$method !='multitarget'}
+```{r, echo=FALSE, results='asis', eval= use_method !='multitarget'}
 cat("The metamodel assesses the best-fit values for the $\\beta$ coefficients, as well as the overall uncertainty $\\epsilon$.")
 ```
 
-```{r, echo=FALSE, results='asis', eval= params$method =='projgroupLM'}
+```{r, echo=FALSE, results='asis', eval= use_method =='projgroupLM'}
 cat("The subscript $j$ denotes the project group; a separate metamodel is fit for each project group.")
 ```
 
-```{r, echo=FALSE, results='asis', eval= params$method =='mixedeffects'}
+```{r, echo=FALSE, results='asis', eval= use_method =='mixedeffects'}
 cat("The subscript $j$ denotes the project group, with a different slope for each resilience investment.")
 ```
 
@@ -293,31 +395,20 @@ for (i in c("lost_trips", "extra_miles", "extra_hours")) {
   )
   abline(a = 0, b = 1, lty = 2, col = "grey80")
 }
+
+# Transit and car metrics are only generated for Routing so no graphs made
 ```
 
 # Models 
 
-Applying the linear regression models to the input combinations run to date. The metamodel approach **`r params$method`** is being used.
+Applying the linear regression models to the input combinations run to date. The metamodel approach **`r use_method`** is being used.
 
 Tables show outputs with scaled response variables for easier interpretation of the coefficients.
-
 
 ## SP Model Statistical Summaries {.tabset .tabset-pills} 
 
 ```{r sp_mlGP}
-# First for shortest path
-d_sp <- d_in %>% filter(SP.RT == "SP")
-
-if (params$method == "multitarget") {
-  responses <- d_sp[, c("trips", "miles", "hours")]
-
-  predictors <- d_sp[use_pred_vars]
-  class(predictors) <- "data.frame"
-  for (p in use_pred_vars) {
-    predictors[, p] <- as.numeric(predictors[, p])
-  }
-
-  spfit <- mlegp(predictors, responses)
+if (use_method == "multitarget") {
 
   summary(spfit)
   plot(spfit)
@@ -349,54 +440,54 @@ use_add_vars <- if (length(add_vars) > 0) {
   paste(use_add_vars, "+")
 }
 
-if (params$method == "base") {
+if (use_method == "base") {
   mTrip <- lm(as.formula(paste0("trips ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_sp
   )
-} else if (params$method == "interact") {
+} else if (use_method == "interact") {
   formula_use <- as.formula(paste0("trips ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + projgroup:resil"))
   mTrip <- lm(formula_use, data = d_sp)
-} else if (params$method == "projgroupLM") {
+} else if (use_method == "projgroupLM") {
   formula_use <- as.formula(paste0("trips ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + resil | projgroup"))
   mTrip <- lmList(formula_use, data = d_sp)
-} else if (params$method == "mixedeffects") {
+} else if (use_method == "mixedeffects") {
   formula_use <- as.formula(paste0("trips ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + (1+resil|projgroup)"))
   mTrip <- lmer(formula_use, data = d_sp, control = lmerControl(calc.derivs = FALSE))
-} else if (params$method == "multitarget") {
+} else if (use_method == "multitarget") {
   mTrip <- spfit[[1]]
 } else {
   stop("Unknown metamodel approach")
 }
 
 if (params$testing) {
-  if (params$method == "base" || params$method == "interact") {
+  if (use_method == "base" || use_method == "interact") {
     coef(mTrip)
     AIC_trips_sp <- AIC(mTrip)
     sjPlot::tab_model(mTrip)
-  } else if (params$method == "projgroupLM") {
+  } else if (use_method == "projgroupLM") {
     tables <- lapply(mTrip, sjPlot::tab_model)
     tables[[1]]
     AIC_trips_sp_l <- lapply(mTrip, AIC)
     AIC_trips_sp <- sum(unlist(AIC_trips_sp_l))
-  } else if (params$method == "mixedeffects") {
+  } else if (use_method == "mixedeffects") {
     ranef(mTrip)
     AIC_trips_sp <- AIC(logLik(mTrip))
   }
 }
 
-if (params$method == "base" || params$method == "interact") {
+if (use_method == "base" || use_method == "interact") {
   if (sd(d_sp$trips) != 0) {
-    if (params$method == "base") {
+    if (use_method == "base") {
       mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_sp
       )
-    } else if (params$method == "interact") {
+    } else if (use_method == "interact") {
       mTrip_scaled <- lm(as.formula(paste0(
         "scale(trips) ~ ",
         paste(use_add_vars, collapse = " + "),
@@ -413,55 +504,55 @@ if (params$method == "base" || params$method == "interact") {
 ### `miles` model
 
 ```{r modelMiles}
-if (params$method == "base") {
+if (use_method == "base") {
   mMiles <- lm(as.formula(paste0("miles ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_sp
   )
-} else if (params$method == "interact") {
+} else if (use_method == "interact") {
   formula_use <- as.formula(paste0("miles ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + projgroup:resil"))
   mMiles <- lm(formula_use, data = d_sp)
-} else if (params$method == "projgroupLM") {
+} else if (use_method == "projgroupLM") {
   formula_use <- as.formula(paste0("miles ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + resil | projgroup"))
   mMiles <- lmList(formula_use, data = d_sp)
-} else if (params$method == "mixedeffects") {
+} else if (use_method == "mixedeffects") {
   formula_use <- as.formula(paste0("miles ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + (1+resil|projgroup)"))
   mMiles <- lmer(formula_use, data = d_sp, control = lmerControl(calc.derivs = FALSE))
-} else if (params$method == "multitarget") {
+} else if (use_method == "multitarget") {
   mMiles <- spfit[[2]]
 } else {
   stop("Unknown metamodel approach")
 }
 
 if (params$testing) {
-  if (params$method == "base" || params$method == "interact") {
+  if (use_method == "base" || use_method == "interact") {
     coef(mMiles)
     AIC_miles_sp <- AIC(mMiles)
     sjPlot::tab_model(mMiles)
-  } else if (params$method == "projgroupLM") {
+  } else if (use_method == "projgroupLM") {
     tables <- lapply(mMiles, sjPlot::tab_model)
     tables[[1]]
     AIC_miles_sp_l <- lapply(mMiles, AIC)
     AIC_miles_sp <- sum(unlist(AIC_miles_sp_l))
-  } else if (params$method == "mixedeffects") {
+  } else if (use_method == "mixedeffects") {
     ranef(mMiles)
     AIC_miles_sp <- AIC(logLik(mMiles))
   }
 }
 
-if (params$method == "base" || params$method == "interact") {
+if (use_method == "base" || use_method == "interact") {
   if (sd(d_sp$miles) != 0) {
-    if (params$method == "base") {
+    if (use_method == "base") {
       mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ",
                                             paste(use_pred_vars, collapse = " + "))),
                           data = d_sp
                           )
-    } else if (params$method == "interact") {
+    } else if (use_method == "interact") {
       mMiles_scaled <- lm(as.formula(paste0(
         "scale(miles) ~ ",
         paste(use_add_vars, collapse = " + "),
@@ -478,54 +569,54 @@ if (params$method == "base" || params$method == "interact") {
 ### `hours` model
 
 ```{r modelHours}
-if (params$method == "base") {
+if (use_method == "base") {
   mHours <- lm(as.formula(paste0("hours ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_sp
   )
-} else if (params$method == "interact") {
+} else if (use_method == "interact") {
   formula_use <- as.formula(paste0("hours ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + projgroup:resil"))
   mHours <- lm(formula_use, data = d_sp)
-} else if (params$method == "projgroupLM") {
+} else if (use_method == "projgroupLM") {
   formula_use <- as.formula(paste0("hours ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + resil | projgroup"))
   mHours <- lmList(formula_use, data = d_sp)
-} else if (params$method == "mixedeffects") {
+} else if (use_method == "mixedeffects") {
   formula_use <- as.formula(paste0("hours ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + (1+resil|projgroup)"))
   mHours <- lmer(formula_use, data = d_sp, control = lmerControl(calc.derivs = FALSE))
-} else if (params$method == "multitarget") {
+} else if (use_method == "multitarget") {
   mHours <- spfit[[3]]
 } else {
   stop("Unknown metamodel approach")
 }
 
 if (params$testing) {
-  if (params$method == "base" || params$method == "interact") {
+  if (use_method == "base" || use_method == "interact") {
     coef(mHours)
     AIC_hours_sp <- AIC(mHours)
     sjPlot::tab_model(mHours)
-  } else if (params$method == "projgroupLM") {
+  } else if (use_method == "projgroupLM") {
     tables <- lapply(mHours, sjPlot::tab_model)
     tables[[1]]
     AIC_hours_sp_l <- lapply(mHours, AIC)
     AIC_hours_sp <- sum(unlist(AIC_hours_sp_l))
-  } else if (params$method == "mixedeffects") {
+  } else if (use_method == "mixedeffects") {
     ranef(mHours)
     AIC_hours_sp <- AIC(logLik(mMiles))
   }
 }
 
-if (params$method == "base" || params$method == "interact") {
+if (use_method == "base" || use_method == "interact") {
   if (sd(d_sp$hours) != 0) {
-    if (params$method == "base") {
+    if (use_method == "base") {
       mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_sp
       )
-    } else if (params$method == "interact") {
+    } else if (use_method == "interact") {
       mHours_scaled <- lm(as.formula(paste0(
         "scale(hours) ~ ",
         paste(use_add_vars, collapse = " + "),
@@ -544,8 +635,6 @@ pred_grid <- full_combos[use_pred_vars]
 pred_grid$recovery_num <- as.numeric(as.character(pred_grid$recovery))
 ```
 
-
-
 ### SP Extrapolate to other combinations
 
 - Applies coefficients from these models to full combinations.
@@ -560,7 +649,7 @@ static_vars <- unlist(lapply(use_levels, function(x) length(x) == 1))
 static_values <- d[1, names(d) %in% names(static_vars)[static_vars == TRUE]]
 
 # First three outputs: trips, miles, hours
-if (params$method != "multitarget") {
+if (use_method != "multitarget") {
   mTrip_pred <- predict(mTrip, newdata = pred_grid)
 
   mMiles_pred <- predict(mMiles, newdata = pred_grid)
@@ -631,19 +720,7 @@ DT::datatable(preds,
 ## RT Model Statistical Summaries {.tabset .tabset-pills} 
 
 ```{r rt_mlGP}
-# Second for routing
-d_rt <- d_in %>% filter(SP.RT == "RT")
-
-if (params$method == "multitarget") {
-  responses <- d_rt[, c("trips", "miles", "hours")]
-
-  predictors <- d_rt[use_pred_vars]
-  class(predictors) <- "data.frame"
-  for (p in use_pred_vars) {
-    predictors[, p] <- as.numeric(predictors[, p])
-  }
-
-  rtfit <- mlegp(predictors, responses)
+if (use_method == "multitarget") {
 
   summary(rtfit)
   plot(rtfit)
@@ -664,54 +741,54 @@ if (params$method == "multitarget") {
 ### `trips` model
 
 ```{r modelTrip_rt}
-if (params$method == "base") {
+if (use_method == "base") {
   mTrip <- lm(as.formula(paste0("trips ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_rt
   )
-} else if (params$method == "interact") {
+} else if (use_method == "interact") {
   formula_use <- as.formula(paste0("trips ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + projgroup:resil"))
   mTrip <- lm(formula_use, data = d_rt)
-} else if (params$method == "projgroupLM") {
+} else if (use_method == "projgroupLM") {
   formula_use <- as.formula(paste0("trips ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + resil | projgroup"))
   mTrip <- lmList(formula_use, data = d_rt)
-} else if (params$method == "mixedeffects") {
+} else if (use_method == "mixedeffects") {
   formula_use <- as.formula(paste0("trips ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + (1+resil|projgroup)"))
   mTrip <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
-} else if (params$method == "multitarget") {
+} else if (use_method == "multitarget") {
   mTrip <- rtfit[[1]]
 } else {
   stop("Unknown metamodel approach")
 }
 
 if (params$testing) {
-  if (params$method == "base" || params$method == "interact") {
+  if (use_method == "base" || use_method == "interact") {
     coef(mTrip)
     AIC_trips_rt <- AIC(mTrip)
     sjPlot::tab_model(mTrip)
-  } else if (params$method == "projgroupLM") {
+  } else if (use_method == "projgroupLM") {
     tables <- lapply(mTrip, sjPlot::tab_model)
     tables[[1]]
     AIC_trips_rt_l <- lapply(mTrip, AIC)
     AIC_trips_rt <- sum(unlist(AIC_trips_rt_l))
-  } else if (params$method == "mixedeffects") {
+  } else if (use_method == "mixedeffects") {
     ranef(mTrip)
     AIC_trips_rt <- AIC(logLik(mTrip))
   }
 }
 
-if (params$method == "base" || params$method == "interact") {
+if (use_method == "base" || use_method == "interact") {
   if (sd(d_rt$trips) != 0) {
-    if (params$method == "base") {
+    if (use_method == "base") {
       mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_rt
       )
-    } else if (params$method == "interact") {
+    } else if (use_method == "interact") {
       mTrip_scaled <- lm(as.formula(paste0(
         "scale(trips) ~ ",
         paste(use_add_vars, collapse = " + "),
@@ -728,54 +805,54 @@ if (params$method == "base" || params$method == "interact") {
 ### `miles` model
 
 ```{r modelMiles_rt}
-if (params$method == "base") {
+if (use_method == "base") {
   mMiles <- lm(as.formula(paste0("miles ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_rt
   )
-} else if (params$method == "interact") {
+} else if (use_method == "interact") {
   formula_use <- as.formula(paste0("miles ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + projgroup:resil"))
   mMiles <- lm(formula_use, data = d_rt)
-} else if (params$method == "projgroupLM") {
+} else if (use_method == "projgroupLM") {
   formula_use <- as.formula(paste0("miles ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + resil | projgroup"))
   mMiles <- lmList(formula_use, data = d_rt)
-} else if (params$method == "mixedeffects") {
+} else if (use_method == "mixedeffects") {
   formula_use <- as.formula(paste0("miles ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + (1+resil|projgroup)"))
   mMiles <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
-} else if (params$method == "multitarget") {
+} else if (use_method == "multitarget") {
   mMiles <- rtfit[[2]]
 } else {
   stop("Unknown metamodel approach")
 }
 
 if (params$testing) {
-  if (params$method == "base" || params$method == "interact") {
+  if (use_method == "base" || use_method == "interact") {
     coef(mMiles)
     AIC_miles_rt <- AIC(mMiles)
     sjPlot::tab_model(mMiles)
-  } else if (params$method == "projgroupLM") {
+  } else if (use_method == "projgroupLM") {
     tables <- lapply(mMiles, sjPlot::tab_model)
     tables[[1]]
     AIC_miles_rt_l <- lapply(mMiles, AIC)
     AIC_miles_rt <- sum(unlist(AIC_miles_rt_l))
-  } else if (params$method == "mixedeffects") {
+  } else if (use_method == "mixedeffects") {
     ranef(mMiles)
     AIC_miles_rt <- AIC(logLik(mMiles))
   }
 }
 
-if (params$method == "base" || params$method == "interact") {
+if (use_method == "base" || use_method == "interact") {
   if (sd(d_rt$miles) != 0) {
-    if (params$method == "base") {
+    if (use_method == "base") {
       mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_rt
       )
-    } else if (params$method == "interact") {
+    } else if (use_method == "interact") {
       mMiles_scaled <- lm(as.formula(paste0(
         "scale(miles) ~ ",
         paste(use_add_vars, collapse = " + "),
@@ -792,54 +869,54 @@ if (params$method == "base" || params$method == "interact") {
 ### `hours` model
 
 ```{r modelHours_rt}
-if (params$method == "base") {
+if (use_method == "base") {
   mHours <- lm(as.formula(paste0("hours ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_rt
   )
-} else if (params$method == "interact") {
+} else if (use_method == "interact") {
   formula_use <- as.formula(paste0("hours ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + projgroup:resil"))
   mHours <- lm(formula_use, data = d_rt)
-} else if (params$method == "projgroupLM") {
+} else if (use_method == "projgroupLM") {
   formula_use <- as.formula(paste0("hours ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + resil | projgroup"))
   mHours <- lmList(formula_use, data = d_rt)
-} else if (params$method == "mixedeffects") {
+} else if (use_method == "mixedeffects") {
   formula_use <- as.formula(paste0("hours ~ ",
                                    paste(use_add_vars, collapse = " + "),
                                    " hazard * recovery_num + (1+resil|projgroup)"))
   mHours <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
-} else if (params$method == "multitarget") {
+} else if (use_method == "multitarget") {
   mHours <- rtfit[[3]]
 } else {
   stop("Unknown metamodel approach")
 }
 
 if (params$testing) {
-  if (params$method == "base" || params$method == "interact") {
+  if (use_method == "base" || use_method == "interact") {
     coef(mHours)
     AIC_hours_rt <- AIC(mHours)
     sjPlot::tab_model(mHours)
-  } else if (params$method == "projgroupLM") {
+  } else if (use_method == "projgroupLM") {
     tables <- lapply(mHours, sjPlot::tab_model)
     tables[[1]]
     AIC_hours_rt_l <- lapply(mHours, AIC)
     AIC_hours_rt <- sum(unlist(AIC_hours_rt_l))
-  } else if (params$method == "mixedeffects") {
+  } else if (use_method == "mixedeffects") {
     ranef(mHours)
     AIC_hours_rt <- AIC(logLik(mMiles))
   }
 }
 
-if (params$method == "base" || params$method == "interact") {
+if (use_method == "base" || use_method == "interact") {
   if (sd(d_rt$hours) != 0) {
-    if (params$method == "base") {
+    if (use_method == "base") {
       mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_rt
       )
-    } else if (params$method == "interact") {
+    } else if (use_method == "interact") {
       mHours_scaled <- lm(as.formula(paste0(
         "scale(hours) ~ ",
         paste(use_add_vars, collapse = " + "),
@@ -851,14 +928,182 @@ if (params$method == "base" || params$method == "interact") {
     sjPlot::tab_model(mHours_scaled)
   }
 }
+```
+
+### Disaggregate transit and car models
+
+```{r modelOthers_rt}
+if(run_disaggregate == 'yes'){
+  if (use_method == "base") {
+    mTrip_lr <- lm(as.formula(paste0("lr_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mTrip_hr <- lm(as.formula(paste0("hr_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mTrip_bus <- lm(as.formula(paste0("bus_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mTrip_car <- lm(as.formula(paste0("car_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mMiles_lr <- lm(as.formula(paste0("lr_miles ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mMiles_hr <- lm(as.formula(paste0("hr_miles ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mMiles_bus <- lm(as.formula(paste0("bus_miles ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mMiles_car <- lm(as.formula(paste0("car_miles ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_lr_w <- lm(as.formula(paste0("lr_hours_wait ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_hr_w <- lm(as.formula(paste0("hr_hours_wait ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_bus_w <- lm(as.formula(paste0("bus_hours_wait ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_lr_e <- lm(as.formula(paste0("lr_hours_enroute ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_hr_e <- lm(as.formula(paste0("hr_hours_enroute ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_bus_e <- lm(as.formula(paste0("bus_hours_enroute ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+    mHours_car <- lm(as.formula(paste0("car_hours ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
+  } else if (use_method == "interact") {
+    formula_use <- as.formula(paste0("lr_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mTrip_lr <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mTrip_hr <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mTrip_bus <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("car_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mTrip_car <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("lr_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mMiles_lr <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mMiles_hr <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mMiles_bus <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("car_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mMiles_car <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("lr_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_lr_w <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_hr_w <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_bus_w <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("lr_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_lr_e <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_hr_e <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_bus_e <- lm(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("car_hours ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + projgroup:resil"))
+    mHours_car <- lm(formula_use, data = d_rt)
+  } else if (use_method == "projgroupLM") {
+    formula_use <- as.formula(paste0("lr_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mTrip_lr <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mTrip_hr <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mTrip_bus <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("car_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mTrip_car <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("lr_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mMiles_lr <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mMiles_hr <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mMiles_bus <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("car_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mMiles_car <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("lr_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_lr_w <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_hr_w <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_bus_w <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("lr_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_lr_e <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("hr_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_hr_e <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("bus_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_bus_e <- lmList(formula_use, data = d_rt)
+    formula_use <- as.formula(paste0("car_hours ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + resil | projgroup"))
+    mHours_car <- lmList(formula_use, data = d_rt)
+  } else if (use_method == "mixedeffects") {
+    formula_use <- as.formula(paste0("lr_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mTrip_lr <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("hr_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mTrip_hr <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("bus_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mTrip_bus <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("car_trips ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mTrip_car <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("lr_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mMiles_lr <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("hr_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mMiles_hr <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("bus_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mMiles_bus <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("car_miles ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mMiles_car <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("lr_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_lr_w <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("hr_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_hr_w <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("bus_hours_wait ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_bus_w <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("lr_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_lr_e <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("hr_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_hr_e <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("bus_hours_enroute ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_bus_e <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+    formula_use <- as.formula(paste0("car_hours ~ ", paste(use_add_vars, collapse = " + "), " hazard * recovery_num + (1+resil|projgroup)"))
+    mHours_car <- lmer(formula_use, data = d_rt, control = lmerControl(calc.derivs = FALSE))
+  } else if (use_method == "multitarget") {
+    mTrip_lr <- rtfit[[4]]
+    mTrip_hr <- rtfit[[5]]
+    mTrip_bus <- rtfit[[6]]
+    mTrip_car <- rtfit[[7]]
+    mMiles_lr <- rtfit[[8]]
+    mMiles_hr <- rtfit[[9]]
+    mMiles_bus <- rtfit[[10]]
+    mMiles_car <- rtfit[[11]]
+    mHours_lr_w <- rtfit[[12]]
+    mHours_hr_w <- rtfit[[13]]
+    mHours_bus_w <- rtfit[[14]]
+    mHours_lr_e <- rtfit[[15]]
+    mHours_hr_e <- rtfit[[16]]
+    mHours_bus_e <- rtfit[[17]]
+    mHours_car <- rtfit[[18]]
+  } else {
+    stop("Unknown metamodel approach")
+  }
+}
+
+# if (params$testing) {
+#   if (use_method == "base" || use_method == "interact") {
+#     coef(mHours)
+#     AIC_hours_rt <- AIC(mHours)
+#     sjPlot::tab_model(mHours)
+#   } else if (use_method == "projgroupLM") {
+#     tables <- lapply(mHours, sjPlot::tab_model)
+#     tables[[1]]
+#     AIC_hours_rt_l <- lapply(mHours, AIC)
+#     AIC_hours_rt <- sum(unlist(AIC_hours_rt_l))
+#   } else if (use_method == "mixedeffects") {
+#     ranef(mHours)
+#     AIC_hours_rt <- AIC(logLik(mMiles))
+#   }
+# }
+
+# if (use_method == "base" || use_method == "interact") {
+#   if (sd(d_rt$hours) != 0) {
+#     if (use_method == "base") {
+#       mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
+#         data = d_rt
+#       )
+#     } else if (use_method == "interact") {
+#       mHours_scaled <- lm(as.formula(paste0(
+#         "scale(hours) ~ ",
+#         paste(use_add_vars, collapse = " + "),
+#         " hazard * recovery_num + projgroup:resil"
+#       )),
+#       data = d_rt
+#       )
+#     }
+#     sjPlot::tab_model(mHours_scaled)
+#   }
+# }
 
 # full_combos
 # select only variables which have more than one combination in full_combos
 pred_grid <- full_combos[use_pred_vars]
 pred_grid$recovery_num <- as.numeric(as.character(pred_grid$recovery))
 ```
-
-
 
 ### RT Extrapolate to other combinations
 
@@ -874,12 +1119,30 @@ static_vars <- unlist(lapply(use_levels, function(x) length(x) == 1))
 static_values <- d[1, names(d) %in% names(static_vars)[static_vars == TRUE]]
 
 # First three outputs: trips, miles, hours
-if (params$method != "multitarget") {
+if (use_method != "multitarget") {
   mTrip_pred <- predict(mTrip, newdata = pred_grid)
 
   mMiles_pred <- predict(mMiles, newdata = pred_grid)
 
   mHours_pred <- predict(mHours, newdata = pred_grid)
+  
+  if(run_disaggregate == 'yes'){
+    mTrip_lr_pred <- predict(mTrip_lr, newdata = pred_grid)
+    mTrip_hr_pred <- predict(mTrip_hr, newdata = pred_grid)
+    mTrip_bus_pred <- predict(mTrip_bus, newdata = pred_grid)
+    mTrip_car_pred <- predict(mTrip_car, newdata = pred_grid)
+    mMiles_lr_pred <- predict(mMiles_lr, newdata = pred_grid)
+    mMiles_hr_pred <- predict(mMiles_hr, newdata = pred_grid)
+    mMiles_bus_pred <- predict(mMiles_bus, newdata = pred_grid)
+    mMiles_car_pred <- predict(mMiles_car, newdata = pred_grid)
+    mHours_lr_w_pred <- predict(mHours_lr_w, newdata = pred_grid)
+    mHours_hr_w_pred <- predict(mHours_hr_w, newdata = pred_grid)
+    mHours_bus_w_pred <- predict(mHours_bus_w, newdata = pred_grid)
+    mHours_lr_e_pred <- predict(mHours_lr_e, newdata = pred_grid)
+    mHours_hr_e_pred <- predict(mHours_hr_e, newdata = pred_grid)
+    mHours_bus_e_pred <- predict(mHours_bus_e, newdata = pred_grid)
+    mHours_car_pred <- predict(mHours_car, newdata = pred_grid)
+  }
 } else {
   # For multitarget, convert to numeric first. Then use argument `newData` instead of `newdata`
   pred_grid_n <- pred_grid[, use_pred_vars]
@@ -891,13 +1154,54 @@ if (params$method != "multitarget") {
   mTrip_pred <- predict(mTrip, newData = pred_grid_n)
   mMiles_pred <- predict(mMiles, newData = pred_grid_n)
   mHours_pred <- predict(mHours, newData = pred_grid_n)
+  
+  if(run_disaggregate == 'yes'){
+    mTrip_lr_pred <- predict(mTrip_lr, newData = pred_grid_n)
+    mTrip_hr_pred <- predict(mTrip_hr, newData = pred_grid_n)
+    mTrip_bus_pred <- predict(mTrip_bus, newData = pred_grid_n)
+    mTrip_car_pred <- predict(mTrip_car, newData = pred_grid_n)
+    mMiles_lr_pred <- predict(mMiles_lr, newData = pred_grid_n)
+    mMiles_hr_pred <- predict(mMiles_hr, newData = pred_grid_n)
+    mMiles_bus_pred <- predict(mMiles_bus, newData = pred_grid_n)
+    mMiles_car_pred <- predict(mMiles_car, newData = pred_grid_n)
+    mHours_lr_w_pred <- predict(mHours_lr_w, newData = pred_grid_n)
+    mHours_hr_w_pred <- predict(mHours_hr_w, newData = pred_grid_n)
+    mHours_bus_w_pred <- predict(mHours_bus_w, newData = pred_grid_n)
+    mHours_lr_e_pred <- predict(mHours_lr_e, newData = pred_grid_n)
+    mHours_hr_e_pred <- predict(mHours_hr_e, newData = pred_grid_n)
+    mHours_bus_e_pred <- predict(mHours_bus_e, newData = pred_grid_n)
+    mHours_car_pred <- predict(mHours_car, newData = pred_grid_n)
+  }
 }
 
-preds <- data.frame(static_values, pred_grid,
-  trips = mTrip_pred,
-  miles = mMiles_pred,
-  hours = mHours_pred
-)
+if(run_disaggregate == 'yes'){
+  preds <- data.frame(static_values, pred_grid,
+    trips = mTrip_pred,
+    miles = mMiles_pred,
+    hours = mHours_pred,
+    lr_trips = mTrip_lr_pred,
+    hr_trips = mTrip_hr_pred,
+    bus_trips = mTrip_bus_pred,
+    car_trips = mTrip_car_pred,
+    lr_miles = mMiles_lr_pred,
+    hr_miles = mMiles_hr_pred,
+    bus_miles = mMiles_bus_pred,
+    car_miles = mMiles_car_pred,
+    lr_hours_wait = mHours_lr_w_pred,
+    hr_hours_wait = mHours_hr_w_pred,
+    bus_hours_wait = mHours_bus_w_pred,
+    lr_hours_enroute = mHours_lr_e_pred,
+    hr_hours_enroute = mHours_hr_e_pred,
+    bus_hours_enroute = mHours_bus_e_pred,
+    car_hours = mHours_car_pred
+  )
+} else {
+  preds <- data.frame(static_values, pred_grid,
+    trips = mTrip_pred,
+    miles = mMiles_pred,
+    hours = mHours_pred
+  )
+}
 preds <- preds %>% select(-recovery_num)
 
 if (!dir.exists(output_dir)) {
@@ -911,6 +1215,7 @@ write.csv(preds,
 ```
 
 ```{r datatab_rt}
+# Not including transit and car specific metrics
 DT::datatable(preds,
   caption = "Extrapolated values for RT routing solution"
 ) %>%
@@ -943,8 +1248,9 @@ DT::datatable(preds,
 
 
 ```{r output_AIC, eval= params$testing =='true'}
+# Not including transit and car specific metrics
 AIC_out <- data.frame(
-  Method = params$method,
+  Method = use_method,
   response = rep(c("Trips", "Miles", "Hours"), times = 2),
   Run_Type = rep(c("SP", "RT"), each = 3),
   AIC = c(

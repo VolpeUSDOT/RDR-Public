@@ -79,8 +79,8 @@ def test_qs1(add_sample = True):
     obs_max_hours = compiled_runs_sp.hours.max()
 
     exp_max_trips = 360600.0
-    exp_max_miles = 1789845.3
-    exp_max_hours = 43562
+    exp_max_miles = 1796751.0
+    exp_max_hours = 44061.5
 
     assert obs_max_trips == exp_max_trips
     assert obs_max_miles == exp_max_miles

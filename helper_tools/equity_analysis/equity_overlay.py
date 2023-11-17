@@ -1,15 +1,10 @@
 import arcpy
 import os
-import re
 import pandas as pd
 import datetime
-import configparser
-import logging
-import datetime
-import argparse
-import traceback
 import sys
 
+# Import code from equity_config_reader.py for read_equity_config_file method
 import equity_config_reader
 
 # Import modules from core code (two levels up) by setting path
@@ -52,6 +47,7 @@ def equity_overlay(cfg, logger):
     equity_feature = cfg['equity_feature']
     output_name = cfg['output_name']
     min_percentile_include = cfg['min_percentile_include']
+    TAZ_col_name = cfg['TAZ_col_name']
 
     # Make ArcGIS geodatabase if one doesn't exist
     gdb = 'RDR_Equity_Overlay'
@@ -84,31 +80,60 @@ def equity_overlay(cfg, logger):
         logger.info('Intersecting {} with {}'.format(TAZ_source, equity_source))
         arcpy.analysis.Intersect([TAZ_layer, equity_layer], 'TAZ_equity_intersect', "ALL", None, "INPUT")
 
-    # If a TAZ intersects with multiple Census tracts, there can be multiple values for equity_feature ('OverallDis' by default)
-    # Merge these together using maximum of the equity_feature, excluding very small areas
+    # If a TAZ intersects with multiple equity emphasis areas, there may be multiple values for equity_feature
+    # Merge these together using maximum or mean of equity_feature, excluding very small areas
     fieldnames = getFieldNames('TAZ_equity_intersect')
     fieldnames_select = fieldnames[3:len(fieldnames)]
 
     df = feature_class_to_pandas_data_frame('TAZ_equity_intersect', fieldnames_select).replace(-99999, 0)
 
-    # Minimum area of TAZ fragment to exclude from maximum equity_feature calculation: bottom 5% of areas by default
+    # Rename columns from the user-specified TAZ column name
+    df = df.rename(columns={TAZ_col_name: 'TAZ'})
+
+    # Minimum area of TAZ-equity fragment to exclude from equity_feature calculation
     min_area = df.Shape_Area.quantile(q = min_percentile_include)
     dups = df.groupby('TAZ').TAZ.count() > 1
 
     df_taz_dup = df.merge(dups, how='left', left_on='TAZ', right_index=True, suffixes=('', '_y'))
 
-    # Filter out TAZ fragments which are below minimum size threshold, but only if there are actually multiple fragments per TAZ
+    # Filter out TAZ fragments which are below minimum size threshold but only if there are multiple fragments per TAZ
     df_taz_filter = df_taz_dup.loc[(df_taz_dup['Shape_Area'] >= min_area) & (df_taz_dup['TAZ_y'] == True) | (df_taz_dup['TAZ_y'] == False)].copy()
 
-    # Get the maximum value of the equity_feature ('OverallDis' by default) for each TAZ
-    df_out = df_taz_filter.groupby('TAZ')[equity_feature].max()
+    # Check whether equity variable is continuous
+    is_continuous = df_taz_filter[equity_feature].nunique() >= 20
+
+    logger.info('Equity feature {} is {} type. Continuous variable detected: {}'.format(equity_feature, df_taz_filter[equity_feature].dtype, is_continuous))
+
+    if is_continuous:
+        # If the equity feature is continuous, take the mean value
+        df_out = df_taz_filter.groupby('TAZ')[equity_feature].mean()
+    else:
+        # If the equity feature is categorical, take the max value
+        df_out = df_taz_filter.groupby('TAZ')[equity_feature].max()
 
     # Join back to TAZ data
     fieldnames = getFieldNames('TAZ_layer')
     fieldnames_select = fieldnames[2:len(fieldnames)]
     df_taz = feature_class_to_pandas_data_frame('TAZ_layer', fieldnames_select)
 
+    df_taz = df_taz.rename(columns={TAZ_col_name: 'TAZ'})
+
     df_taz_equity = df_taz.merge(df_out, how='left', left_on='TAZ', right_index=True)
+
+    # TODO: make sure this join is working as intended. Specifically right_on TAZ and left_index retetion. Make sure it's actually pulling the right values in.
+    # Overwrite blank values that may have arisen from the merge just above, which can happen when the TAZ fragment filtering was too aggressive
+    if any(pd.isna(df_taz_equity[equity_feature])):
+        logger.info("Blank values are being overwritten in {}. Blank values can arise from a min_percentile_include parameter that is too high.".format(equity_feature))
+        if is_continuous:
+            df_blanks = df_taz_equity.loc[pd.isna(df_taz_equity[equity_feature]),]
+            df_out = df.groupby('TAZ').mean()
+            df_blanks[equity_feature] = df_blanks.merge(df_out, how='left', right_on='TAZ', suffixes=('_x', ''), left_index=True)[equity_feature]
+            df_taz_equity.loc[pd.isna(df_taz_equity[equity_feature]), equity_feature] = df_blanks[equity_feature]
+        else:
+            df_blanks = df_taz_equity.loc[pd.isna(df_taz_equity[equity_feature]),] 
+            df_out = df.groupby('TAZ').max()
+            df_blanks[equity_feature] = df_blanks.merge(df_out, how='left', right_on='TAZ', suffixes=('_x', ''), left_index=True)[equity_feature]
+            df_taz_equity.loc[pd.isna(df_taz_equity[equity_feature]), equity_feature] = df_blanks[equity_feature]
 
     logger.info('Writing equity overlay file as {} to directory {}'.format(output_name + '.csv', output_dir))
 
@@ -139,9 +164,9 @@ def main():
     # ----------------------------------------------------------------------------------------------
     logger = rdr_supporting.create_loggers(output_dir, 'equity_overlay', cfg)
 
-    logger.info("=========================================================================")
-    logger.info("============== EQUITY OVERLAY STARTING ==================================")
-    logger.info("=========================================================================")
+    logger.info("=======================================================")
+    logger.info("=============== EQUITY OVERLAY STARTING ===============")
+    logger.info("=======================================================")
 
     equity_overlay(cfg, logger)
 

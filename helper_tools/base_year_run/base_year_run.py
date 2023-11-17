@@ -14,8 +14,8 @@ import rdr_setup
 import rdr_supporting
 import rdr_CompileAE
 
-VERSION_NUMBER = "2023.1"
-VERSION_DATE = "04/10/2023"
+VERSION_NUMBER = "2023.2"
+VERSION_DATE = "11/15/2023"
 # ---------------------------------------------------------------------------------------------------
 # The following code processes an existing scenario configuration to automatically
 # generate the outputs of all of the AequilibraE base year runs into one consolidated CSV file

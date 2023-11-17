@@ -8,6 +8,7 @@ RDR uses automated testing to ensure the quality of the code base. The following
 4. `qs2B_test.py`
 5. `qs2C_test.py`
 6. `qs3_test.py`
+7. `qs4_test.py`
 
 The first validates that input folders are set up correctly, that the config file has the correct values, and that initial setup of the RDR run has been done.
 
@@ -19,6 +20,8 @@ The third - fifth are tests of Quick Start 2, which modifies outputs of Quick St
   + Example C changes how damage metrics are calculated in the economic analysis
 
 The sixth runs Quick Start 3, which likewise modifies the outputs of QS1.
+
+The seventh runs Quick Start 4, which includes a transit network and 0-car trip table.
 
 A final 'test', `quickstart_cleanup_test.py`, removes all the `generated_files` directories from each test to ensure when running locally that a clean test is performed. When developing tests locally, remove this test file temporarily from the tests directory to keep generated outputs for debugging.
 

@@ -398,24 +398,30 @@ def main(input_folder, output_folder, cfg, logger):
         if not os.path.exists(damage_table):
             logger.error("DEFAULT DAMAGE TABLE FILE ERROR: {} could not be found".format(damage_table))
             raise Exception("DEFAULT DAMAGE TABLE FILE ERROR: {} could not be found".format(damage_table))
-        damages = pd.read_csv(damage_table, usecols=['min_exposure', 'max_exposure', 'Damage (%)'],
-                              converters={'min_exposure': float, 'max_exposure': float, 'Damage (%)': float})
+        damages = pd.read_csv(damage_table, usecols=['Asset Type', 'min_exposure', 'max_exposure', 'Damage (%)'],
+                              converters={'Asset Type': str, 'min_exposure': float,
+                                          'max_exposure': float, 'Damage (%)': float})
 
         # units for default depth-damage table is feet
         # look up 'Damage (%)' for each network link based on 'min_exposure' and 'max_exposure'
         # look up for both baseline and resilience scenarios
+
         sqlcode_baseline = """
         select merged3.*, damages."Damage (%)" as baseline_damage
         from merged3
         left outer join damages
-        on merged3."baseline_value" between damages."min_exposure" and damages."max_exposure"
+        on merged3."Category" = damages."Asset Type"
+        and merged3."baseline_value" >= damages."min_exposure"
+        and merged3."baseline_value" < damages."max_exposure"
         """
         temp = pandasql.sqldf(sqlcode_baseline, locals())
         sqlcode_project = """
         select temp.*, damages."Damage (%)" as project_damage
         from temp
         left outer join damages
-        on temp."project_value" between damages."min_exposure" and damages."max_exposure"
+        on temp."Category" = damages."Asset Type"
+        and temp."project_value" >= damages."min_exposure"
+        and temp."project_value" < damages."max_exposure"
         """
         merged4 = pandasql.sqldf(sqlcode_project, locals())
 
@@ -441,7 +447,8 @@ def main(input_folder, output_folder, cfg, logger):
         from merged3
         left outer join damages
         on merged3."Category" = damages."Asset Type"
-        and merged3."baseline_value" between damages."min_exposure" and damages."max_exposure"
+        and merged3."baseline_value" >= damages."min_exposure"
+        and merged3."baseline_value" < damages."max_exposure"
         """
         temp = pandasql.sqldf(sqlcode_baseline, locals())
         sqlcode_project = """
@@ -449,7 +456,8 @@ def main(input_folder, output_folder, cfg, logger):
         from temp
         left outer join damages
         on temp."Category" = damages."Asset Type"
-        and temp."project_value" between damages."min_exposure" and damages."max_exposure"
+        and temp."project_value" >= damages."min_exposure"
+        and temp."project_value" < damages."max_exposure"
         """
         merged4 = pandasql.sqldf(sqlcode_project, locals())
 
@@ -491,30 +499,6 @@ def main(input_folder, output_folder, cfg, logger):
                                         'Damage Repair Cost': float, 'Total Repair Cost': float})
         repair_network_type = cfg['repair_network_type']
         costs = costs[(costs['Asset Type'] == 'Bridge') | (costs['Asset Type'] == 'Transit') | (costs['Network Type'] == repair_network_type)]
-
-        if 'Rural' in repair_network_type:
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['1', '2'])),
-                                            'Interstate', merged4['cost_type'])
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['3'])),
-                                            'Other Principal Arterial', merged4['cost_type'])
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['4'])),
-                                            'Minor Arterial', merged4['cost_type'])
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['5', '6', '7'])),
-                                            'Major Collector', merged4['cost_type'])
-        elif 'Urban' in repair_network_type:
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['1', '2'])),
-                                            'Freeway/Expressway/Interstate', merged4['cost_type'])
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['3'])),
-                                            'Other Principal Arterial', merged4['cost_type'])
-            merged4['cost_type'] = np.where((merged4['Category'] == 'Highway') &
-                                            (merged4['cost_type'].isin(['4', '5', '6', '7'])),
-                                            'Minor Arterial/Collector', merged4['cost_type'])
 
     elif repair_cost_approach == 'user-defined':
         # use user-defined repair cost look-up table
@@ -571,7 +555,7 @@ def main(input_folder, output_folder, cfg, logger):
     elif repair_time_approach == 'user-defined':
         # use user-defined repair time look-up table
         # repair time look-up table matches 'Asset Type' to 'Category' in project table CSV
-        # repair time look-up table sorts 'repair_category' (see below for definition) between 'category_min' and 'category_max'
+        # repair time look-up table sorts 'repair_category' (see below for definition) between 'min_inclusive' and 'max_exclusive'
         repair_time_table = cfg['repair_time_csv']
     else:
         logger.error("Invalid option selected for repair time approach.")
@@ -581,12 +565,12 @@ def main(input_folder, output_folder, cfg, logger):
         logger.error("REPAIR TIME FILE ERROR: {} could not be found".format(repair_time_table))
         raise Exception("REPAIR TIME FILE ERROR: {} could not be found".format(repair_time_table))
     times = pd.read_csv(repair_time_table,
-                        usecols=['Asset Type', 'category_min', 'category_max', 'repair_time'],
-                        converters={'Asset Type': str, 'category_min': float, 'category_max': float,
+                        usecols=['Asset Type', 'min_inclusive', 'max_exclusive', 'repair_time'],
+                        converters={'Asset Type': str, 'min_inclusive': float, 'max_exclusive': float,
                                     'repair_time': float})
     logger.debug("Size of input repair time table: {}".format(times.shape))
 
-    # look up 'repair_time' for each network link based on 'category_min' and 'category_max' and 'Asset Type'
+    # look up 'repair_time' for each network link based on 'min_inclusive' and 'max_exclusive' and 'Asset Type'
     # NOTE: currently 'repair_category' is created in code
     # 'repair_category' field equals (1) float('FACTYPE') if 'Category' = 'Highway' or 'Transit' (or other asset type),
     # (2) (only if default) sum of 'DISTANCE' (in ft) across 'Bridge' network links for each
@@ -601,19 +585,20 @@ def main(input_folder, output_folder, cfg, logger):
         logger.warning("Table join to asset_lengths in calculating repair time is not unique")
     # compare to copy of 'FACTYPE' to preserve original 'FACTYPE' field
     merged5['repair_category'] = pd.to_numeric(merged5['FACTYPE'], errors='coerce')
-    # compare to 'DISTANCE' converted from mi to ft for 'Bridge' in default repair time case
+    # compare to 'Project-Asset Distance' converted from mi to ft for 'Bridge' in default repair time case
     if repair_time_approach == 'default':
         merged5['repair_category'] = np.where(merged5['Category'] == 'Bridge',
                                               5280.0 * merged5['Project-Asset Distance'],
                                               merged5['repair_category'])
 
-    # NOTE: merge that has 'repair_category' = NaN between category_min and category_max leads to NaN generated
+    # NOTE: merge that has 'repair_category' = NaN between min_inclusive and max_exclusive leads to NaN generated
     sqlcode = """
     select merged5.*, times."repair_time"
     from merged5
     left outer join times
     on merged5."Category" = times."Asset Type"
-    and merged5."repair_category" between times."category_min" and times."category_max"
+    and merged5."repair_category" >= times."min_inclusive"
+    and merged5."repair_category" < times."max_exclusive"
     """
     merged6 = pandasql.sqldf(sqlcode, locals())
     # adjust 'repair_time' by 'Damage (%)'

@@ -41,15 +41,14 @@ def main(input_folder, output_folder, cfg, logger, base_year):
                                                  'Scenario': str})
             # check if there is a 'nocar' folder as well, if so then read NetSkim.csv and add results together cell-by-cell
             if os.path.exists(os.path.join(aeq_runs_folder, run, 'nocar')):
-                run_result_2 = pd.read_csv(os.path.join(aeq_runs_folder, run, 'nocar', 'NetSkim.csv'),
-                                           usecols=['trips', 'miles', 'hours', 'lost_trips', 'extra_miles',
-                                                    'extra_hours', 'circuitous_trips_removed'])
-                run_result.loc[:, ['trips', 'miles', 'hours', 'lost_trips',
-                                   'extra_miles', 'extra_hours',
-                                   'circuitous_trips_removed']] = run_result.loc[:, ['trips', 'miles', 'hours', 'lost_trips',
-                                                                                     'extra_miles', 'extra_hours',
-                                                                                     'circuitous_trips_removed']].add(run_result_2,
-                                                                                                                      fill_value=0)
+                usecols = ['trips', 'miles', 'hours', 'lost_trips', 'extra_miles', 'extra_hours', 'circuitous_trips_removed']
+                if cfg['calc_transit_metrics']:
+                    usecols.extend(['lr_trips', 'hr_trips', 'bus_trips', 'car_trips', 'lr_miles', 'hr_miles', 'bus_miles',
+                                    'car_miles', 'lr_hours_wait', 'hr_hours_wait', 'bus_hours_wait', 'lr_hours_enroute',
+                                    'hr_hours_enroute', 'bus_hours_enroute', 'car_hours'])
+
+                run_result_2 = pd.read_csv(os.path.join(aeq_runs_folder, run, 'nocar', 'NetSkim.csv'), usecols=usecols)
+                run_result.loc[:, usecols] = run_result.loc[:, usecols].add(run_result_2, fill_value=0)
 
             compiled_results.append(run_result)
         except:

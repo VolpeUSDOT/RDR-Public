@@ -8,5 +8,5 @@ Bridge,-999999,0,0
 Bridge,0,2,0.01
 Bridge,2,4,0.05
 Bridge,4,999999,0.2
-Tunnel,-999999,0,0.1
-Tunnel,0,999999,0.5
+Transit,-999999,0,0.1
+Transit,0,999999,0.5
