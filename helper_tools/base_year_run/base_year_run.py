@@ -14,8 +14,8 @@ import rdr_setup
 import rdr_supporting
 import rdr_CompileAE
 
-VERSION_NUMBER = "2023.2"
-VERSION_DATE = "11/15/2023"
+VERSION_NUMBER = "2024.1"
+VERSION_DATE = "5/22/2024"
 # ---------------------------------------------------------------------------------------------------
 # The following code processes an existing scenario configuration to automatically
 # generate the outputs of all of the AequilibraE base year runs into one consolidated CSV file
@@ -49,20 +49,23 @@ def main():
 
     # ---------------------------------------------------------------------------------------------------
     # SETUP
-    cfg = rdr_setup.read_config_file(args.config_file)
+    error_list, cfg = rdr_setup.read_config_file(args.config_file, 'config')
 
-    # Output of this helper tool along w/ the intermediate outputs required to create are put in the scenario input dir
+    # Output of this helper tool along w/ the intermediate outputs required to create it are put in the scenario's input dir
     input_dir = cfg['input_dir']
 
-    # Logs and some of the scenario's intermediate outputs should be put in the scenario's output directory
+    # Logs and some of the scenario's intermediate outputs are put in the scenario's output dir
     output_dir = cfg['output_dir']
 
-    # Setup logging
+    # Set up logging
     logger = rdr_supporting.create_loggers(output_dir, 'baseyear_run', cfg)
+    if len(error_list) > 0:
+        logger.error('\n'.join(error_list))
+        raise Exception('{} errors found in config and/or setup file(s). Check log file in {} for list of errors.'.format(len(error_list)), output_dir)
 
-    logger.info("Starting base year run ...")
+    logger.info("Starting base year run...")
 
-    # Setup output file name
+    # Set up output file name
     # Exact output file name depends on whether it is a shortest path or routing run (set in scenario's configuration)
     if cfg['aeq_run_type'] == 'SP':
         base_year_output_csv = os.path.join(input_dir, 'Metamodel_scenarios_SP_baseyear.csv')
@@ -71,10 +74,10 @@ def main():
 
     # Check if output file already exists
     if os.path.exists(base_year_output_csv):
-        logger.error("Base Year output file from AequilabraE : {} already exists. Please delete or move this file "
-                     "before running this tool".format(base_year_output_csv))
-        raise Exception("Base Year output file from AequilabraE : {} already exists. Please delete or move this file "
-                        "before running this tool".format(base_year_output_csv))
+        logger.error("Base year output file from AequilibraE: {} already exists. ".format(base_year_output_csv) +
+                     "Please delete or move this file before running this tool")
+        raise Exception("Base year output file from AequilibraE: {} already exists. ".format(base_year_output_csv) +
+                        "Please delete or move this file before running this tool")
 
     # ---------------------------------------------------------------------------------------------------
     # MAIN
@@ -154,7 +157,7 @@ def main():
     # Order of output doesn't matter but the column headers are required
 
     # ---------------------------------------------------------------------------------------------------
-    # COMPILING ALL THE base year disrupted single runs using rdr_CompileAE
+    # Compiling all the base year disrupted single runs using rdr_CompileAE
     rdr_CompileAE.main(input_dir, output_dir, cfg, logger, True)
 
     # Further process the above generated CSV to limit to just "Disrupt" runs associated with the run type (SP or RT)
@@ -215,7 +218,7 @@ def setup_sql_nodes(input_dir, logger):
         raise Exception("SQLITE DB ERROR: {} could not be found".format(network_db))
     else:
         df_node = pd.read_csv(node_file, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                              converters={'node_id': int, 'x_coord': float, 'y_coord': float, 'node_type': str})
+                              converters={'node_id': str, 'x_coord': float, 'y_coord': float, 'node_type': str})
 
         with sqlite3.connect(network_db) as db_con:
             # Use to_sql to import df_node as table named GMNS_node

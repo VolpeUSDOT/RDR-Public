@@ -12,27 +12,25 @@ REM ======== ENVIRONMENT VARIABLES ===============
 REM ==============================================
 set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
 set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe"
-set REVIEW_SKIM="C:\GitHub\RDR\helper_tools\format_demand\review_skim.py"
+set UI="C:\GitHub\RDR\helper_tools\rdr_ui\ui.py"
 
 call activate RDRenv
-
+cd C:\GitHub\RDR\helper_tools\rdr_ui
 
 REM =================================================
-REM ======== RUN THE REVIEW SKIM HELPER TOOL ========
+REM ================= START RDR UI ==================
 REM =================================================
 
-REM call Review Skim Python helper script
-%PYTHON% %REVIEW_SKIM%
+REM call user interface Python helper script
+%PYTHON% %UI%
 if %ERRORLEVEL% neq 0 goto ProcessError
 
 call conda.bat deactivate
-pause
 exit /b 0
 
 :ProcessError
 REM error handling: print message and clean up
-echo ERROR: Review skim helper tool run encountered an error. See above messages (and log file) to diagnose.
+echo ERROR: RDR UI encountered an error. See above messages (and log file) to diagnose.
 
 call conda.bat deactivate
-pause
 exit /b 1

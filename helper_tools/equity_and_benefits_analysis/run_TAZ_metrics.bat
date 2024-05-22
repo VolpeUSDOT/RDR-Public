@@ -12,17 +12,19 @@ REM ======== ENVIRONMENT VARIABLES ===============
 REM ==============================================
 set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
 set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe"
-set REVIEW_SKIM="C:\GitHub\RDR\helper_tools\format_demand\review_skim.py"
+set EQUITY_HELPER="C:\GitHub\RDR\helper_tools\equity_and_benefits_analysis\TAZ_metrics.py"
+
+set CONFIG="C:\GitHub\RDR\helper_tools\equity_and_benefits_analysis\equity_metrics.config"
 
 call activate RDRenv
-
+cd C:\GitHub\RDR\helper_tools\equity_and_benefits_analysis
 
 REM =================================================
-REM ======== RUN THE REVIEW SKIM HELPER TOOL ========
+REM ======== RUN THE TAZ METRICS HELPER TOOL ========
 REM =================================================
 
-REM call Review Skim Python helper script
-%PYTHON% %REVIEW_SKIM%
+REM call TAZ equity metrics Python helper script
+%PYTHON% %EQUITY_HELPER% %CONFIG%
 if %ERRORLEVEL% neq 0 goto ProcessError
 
 call conda.bat deactivate
@@ -31,7 +33,7 @@ exit /b 0
 
 :ProcessError
 REM error handling: print message and clean up
-echo ERROR: Review skim helper tool run encountered an error. See above messages (and log file) to diagnose.
+echo ERROR: TAZ equity metrics helper tool run encountered an error. See above messages (and log file) to diagnose.
 
 call conda.bat deactivate
 pause

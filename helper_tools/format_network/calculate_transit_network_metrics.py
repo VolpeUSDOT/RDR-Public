@@ -9,8 +9,8 @@ import network_config_reader
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
 import rdr_supporting
 
-VERSION_NUMBER = "2023.2"
-VERSION_DATE = "11/15/2023"
+VERSION_NUMBER = "2024.1"
+VERSION_DATE = "5/2/2024"
 # ---------------------------------------------------------------------------------------------------
 # The following code calculates travel time and toll fields for a network link CSV input file
 # based on user parameters and network node/link input CSV files
@@ -74,7 +74,7 @@ def main():
         raise Exception("NODE CSV FILE ERROR: input node_csv {} can't be found".format(node_csv))
     df_node = pd.read_csv(node_csv, skip_blank_lines=True,
                           usecols=['node_id', 'node_type'],
-                          converters={'node_id': int, 'node_type': str})
+                          converters={'node_id': str, 'node_type': str})
 
     # Path to comprehensive network link CSV file
     # Required fields are link_id, from_node_id, to_node_id, directed, length (miles), facility_type, capacity, free_speed (mph), lanes, allowed_uses
@@ -84,7 +84,7 @@ def main():
         logger.error('The network link CSV file ' + link_csv + ' does not exist')
         raise Exception("LINK CSV FILE ERROR: input link_csv {} can't be found".format(link_csv))
     df_link = pd.read_csv(link_csv, skip_blank_lines=True,
-                          converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                          converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': int,
                                       'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
                                       'lanes': int, 'allowed_uses': str})
 

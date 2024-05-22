@@ -4,7 +4,11 @@ import sys
 import datetime
 import csv
 import configparser
+import logging
 from scipy import stats
+
+# Import modules from core code (two levels up) by setting path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
 
 # The following code takes a GIS-based raster data set representing exposure data (such as a flood depth grid data set
 # and determines the maximum exposure value for each segment in a given transportation network within a user-specified
@@ -15,6 +19,82 @@ from scipy import stats
 # given that these networks usually come from different sources and may require different tool settings.
 # Outputs can then be combined together.
 
+
+# ==================================================================
+
+# Note that this function is duplicated from the create_loggers in rdr_supporting due to the
+# different environment and slightly different logging setup required.
+def create_loggers(dirLocation, task, cfg):
+    """Create the logger"""
+
+    loggingLocation = os.path.join(dirLocation, "logs")
+
+    if not os.path.exists(loggingLocation):
+        os.makedirs(loggingLocation)
+
+    # BELOW ARE THE LOGGING LEVELS. WHATEVER YOU CHOOSE IN SETLEVEL WILL BE SHOWN ALONG WITH HIGHER LEVELS.
+    # YOU CAN SET THIS FOR BOTH THE FILE LOG AND THE DOS WINDOW LOG
+    # -----------------------------------------------------------------------------------------------------
+    # CRITICAL       50
+    # ERROR          40
+    # WARNING        30
+    # RESULT         25
+    # INFO           20
+    # CONFIG         19
+    # RUNTIME        11
+    # DEBUG          10
+    # DETAILED_DEBUG  5
+
+    logging.RESULT = 25
+    logging.addLevelName(logging.RESULT, 'RESULT')
+
+    logging.CONFIG = 19
+    logging.addLevelName(logging.CONFIG, 'CONFIG')
+
+    logging.RUNTIME = 11
+    logging.addLevelName(logging.RUNTIME, 'RUNTIME')
+
+    logging.DETAILED_DEBUG = 5
+    logging.addLevelName(logging.DETAILED_DEBUG, 'DETAILED_DEBUG')
+
+    logger = logging.getLogger('log')
+    logger.setLevel(logging.DEBUG)
+
+    logger.result = lambda msg, *args: logger._log(logging.RESULT, msg, args)
+    logger.config = lambda msg, *args: logger._log(logging.CONFIG, msg, args)
+    logger.runtime = lambda msg, *args: logger._log(logging.RUNTIME, msg, args)
+    logger.detailed_debug = lambda msg, *args: logger._log(logging.DETAILED_DEBUG, msg, args)
+
+    # FILE LOG
+    # ------------------------------------------------------------------------------
+    logFileName = task + "_log_" + cfg['run_name'] + "_" + datetime.datetime.now().strftime("%Y_%m_%d_%H-%M-%S") + ".log"
+    file_log = logging.FileHandler(os.path.join(loggingLocation, logFileName), mode='a')
+    file_log.setLevel(logging.DEBUG)
+
+    file_log_format = logging.Formatter('%(asctime)s.%(msecs).03d %(levelname)-8s %(message)s',
+                                        datefmt='%m-%d %H:%M:%S')
+    file_log.setFormatter(file_log_format)
+
+    # DOS WINDOW LOG
+    # ------------------------------------------------------------------------------
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+
+    # To show more detail on screen, i.e. for GitHub workflow, use DEBUG level
+    # console.setLevel(logging.DEBUG)
+
+    console_log_format = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s', datefmt='%m-%d %H:%M:%S')
+    console.setFormatter(console_log_format)
+
+    # ADD THE HANDLERS
+    # ----------------
+    logger.addHandler(file_log)
+    logger.addHandler(console)
+
+    return logger
+
+
+# ==================================================================
 
 def read_config_file_helper(config, section, key, required_or_optional):
 
@@ -34,6 +114,8 @@ def read_config_file_helper(config, section, key, required_or_optional):
             return val
 
 
+# ==================================================================
+
 def read_config_file(cfg_file):
 
     cfg_dict = {}  # return value
@@ -49,13 +131,17 @@ def read_config_file(cfg_file):
     # ===================
 
     cfg_dict['input_exposure_grid'] = read_config_file_helper(cfg, 'common', 'input_exposure_grid', 'REQUIRED')
+    if cfg_dict['input_exposure_grid'] is None:
+        raise Exception("CONFIG FILE ERROR: Input exposure grid must be defined")
     if not arcpy.Exists(cfg_dict['input_exposure_grid']):
-        raise Exception("CONFIG FILE ERROR: input input_exposure_grid grid {} "
+        raise Exception("CONFIG FILE ERROR: Input exposure grid {} "
                         "can't be found".format(cfg_dict['input_exposure_grid']))
 
     cfg_dict['input_network'] = read_config_file_helper(cfg, 'common', 'input_network', 'REQUIRED')
+    if cfg_dict['input_network'] is None:
+        raise Exception("CONFIG FILE ERROR: Input network must be defined")
     if not arcpy.Exists(cfg_dict['input_network']):
-        raise Exception("CONFIG FILE ERROR: input network {} "
+        raise Exception("CONFIG FILE ERROR: Input network {} "
                         "can't be found".format(cfg_dict['input_network']))
 
     cfg_dict['output_dir'] = read_config_file_helper(cfg, 'common', 'output_dir', 'REQUIRED')
@@ -76,11 +162,11 @@ def read_config_file(cfg_file):
     if link_availability_approach is not None:
         link_availability_approach = link_availability_approach.lower()
         if link_availability_approach not in ['binary', 'default_flood_exposure_function', 'manual',
-                                              'beta_distribution_function']:
+                                              'facility_type_manual', 'beta_distribution_function']:
             raise Exception(
                 "CONFIG FILE ERROR: {} is an invalid value for link_availability_approach, should be 'binary', "
-                "'default_flood_exposure_function', 'beta_distribution_function', or 'manual'".format(
-                    link_availability_approach))
+                "'default_flood_exposure_function', 'manual', 'facility_type_manual', "
+                "or 'beta_distribution_function'".format(link_availability_approach))
         else:
             cfg_dict['link_availability_approach'] = link_availability_approach
 
@@ -90,13 +176,18 @@ def read_config_file(cfg_file):
         if cfg_dict['exposure_unit'].lower() not in ['feet', 'foot', 'ft', 'yards', 'yard', 'm', 'meters']:
             raise Exception(
                 "CONFIG FILE ERROR: {} is an invalid value for exposure_unit, the default flood exposure function "
-                "is currently only compatible with depths provided in 'feet', 'yards' or 'meters'".format(
+                "is currently only compatible with depths provided in 'feet', 'yards', or 'meters'".format(
                     cfg_dict['exposure_unit']))
     else:
         cfg_dict['exposure_unit'] = None
 
-    if cfg_dict['link_availability_approach'] == 'manual':
+    if cfg_dict['link_availability_approach'] == 'manual' or cfg_dict['link_availability_approach'] == 'facility_type_manual':
         cfg_dict['link_availability_csv'] = read_config_file_helper(cfg, 'common', 'link_availability_csv', 'REQUIRED')
+        if cfg_dict['link_availability_csv'] is None:
+            raise Exception("CONFIG FILE ERROR: Input link availability csv path must be defined")
+        if not arcpy.Exists(cfg_dict['link_availability_csv']):
+            raise Exception("CONFIG FILE ERROR: Input link availability csv {} "
+                            "can't be found".format(cfg_dict['link_availability_csv']))
     else:
         cfg_dict['link_availability_csv'] = None
 
@@ -153,13 +244,15 @@ def read_config_file(cfg_file):
     return cfg_dict
 
 
-def exposure_grid_overlay(cfg):
+# ==================================================================
+
+def exposure_grid_overlay(cfg, logger):
 
     # SETUP
     # ---------------------------------------------------------------------------
 
     # Load config
-    print('Loading configuration ...')
+    logger.info('Loading configuration ...')
     input_exposure_grid = cfg['input_exposure_grid']
     input_network = cfg['input_network']
     output_dir = cfg['output_dir']
@@ -189,25 +282,25 @@ def exposure_grid_overlay(cfg):
 
     if arcpy.Exists(full_path_to_output_gdb):
         arcpy.Delete_management(full_path_to_output_gdb)
-        print('Deleted existing ' + full_path_to_output_gdb)
+        logger.info('Deleted existing ' + full_path_to_output_gdb)
     arcpy.CreateFileGDB_management(output_dir, output_gdb)
 
     arcpy.env.workspace = full_path_to_output_gdb
 
-    print('{} link availability approach to be used'.format(link_availability_approach))
+    logger.info('{} link availability approach to be used'.format(link_availability_approach))
 
     # MAIN
     # ---------------------------------------------------------------------------
 
     # Extract raster cells that overlap the network
-    print('Extracting exposure values that overlap network ...')
+    logger.info('Extracting exposure values that overlap network ...')
     arcpy.CheckOutExtension("Spatial")
     output_extract_by_mask = arcpy.sa.ExtractByMask(input_exposure_grid, input_network)
     output_extract_by_mask.save(run_name + "_exposure_grid_extract")
     arcpy.CheckInExtension("Spatial")
 
     # Export raster to point
-    print('Converting raster to point ...')
+    logger.info('Converting raster to point ...')
     arcpy.RasterToPoint_conversion(run_name + "_exposure_grid_extract", os.path.join(
         full_path_to_output_gdb, run_name + "_exposure_grid_points"), exposure_field)
 
@@ -229,7 +322,7 @@ def exposure_grid_overlay(cfg):
     fms.addFieldMap(fm2)
 
     # Spatial join to network, selecting highest exposure value for each network segment
-    print('Identifying maximum exposure value for each network segment ...')
+    logger.info('Identifying maximum exposure value for each network segment ...')
     arcpy.SpatialJoin_analysis(input_network, run_name + "_exposure_grid_points",
                                run_name + "_network_with_exposure",
                                "JOIN_ONE_TO_ONE", "KEEP_ALL",
@@ -237,7 +330,7 @@ def exposure_grid_overlay(cfg):
                                "WITHIN_A_DISTANCE_GEODESIC", search_distance)
 
     if evacuation is True:
-        print('Flagging Evacuation Routes')
+        logger.info('Flagging Evacuation Routes')
 
         arcpy.Buffer_analysis(evacuation_input, "evacuation_routes_buffered", evacuation_route_search_distance, "FULL",
                               "ROUND", "NONE", "", "GEODESIC")
@@ -255,7 +348,7 @@ def exposure_grid_overlay(cfg):
                                         '0', "PYTHON_9.3")
 
     # Add new field to store extent of exposure
-    print('Calculating exposure levels ...')
+    logger.info('Calculating exposure levels ...')
 
     arcpy.AddField_management(run_name + "_network_with_exposure", "link_availability", "Float")
     arcpy.AddField_management(run_name + "_network_with_exposure", "comments", "Text")
@@ -302,13 +395,13 @@ def exposure_grid_overlay(cfg):
                 ucursor.updateRow(row)
 
     if link_availability_approach == 'manual':
-        # Use manual approach where a user-defined csv lists the range of values and the link availability associated
+        # Use manual approach where a user-defined CSV lists the range of values and the link availability associated
         # with each range
         # Minimum (inclusive) and maximum (exclusive) value must be defined for each range.
         with arcpy.da.UpdateCursor("network_with_exposure_lyr", ['grid_code', 'link_availability']) as ucursor:
             for gis_row in ucursor:
-                # Read through the csv
-                # for line in csv
+                # Read through the CSV
+                # for line in CSV
                 with open(link_availability_csv, 'r') as rf:
                     line_num = 1
                     for line in rf:
@@ -321,6 +414,30 @@ def exposure_grid_overlay(cfg):
                 # Set to fully available if the value is not in the table
                 if gis_row[1] is None:
                     gis_row[1] = 1
+                ucursor.updateRow(gis_row)
+
+    if link_availability_approach == 'facility_type_manual':
+        # Use manual approach where a user-defined CSV lists the range of values and the link availability associated
+        # with each range for every facility type
+        # Minimum (inclusive) and maximum (exclusive) value must be defined for each range.
+        with arcpy.da.UpdateCursor("network_with_exposure_lyr", ['grid_code', 'facility_type', 'link_availability']) as ucursor:
+            for gis_row in ucursor:
+                # Read through the CSV
+                # for line in CSV
+                with open(link_availability_csv, 'r') as rf:
+                    line_num = 1
+                    for line in rf:
+                        if line_num > 1:
+                            csv_row = line.rstrip('\n').split(',')
+                            if gis_row[0] is not None and gis_row[1] is not None:
+                            # The above ensures we skip segments with no exposure and no facility type
+                                if float(gis_row[1]) == float(csv_row[0]):
+                                    if float(csv_row[1]) <= float(gis_row[0]) < float(csv_row[2]):
+                                        gis_row[2] = csv_row[3]
+                        line_num += 1
+                # Set to fully available if the value is not in the table
+                if gis_row[2] is None:
+                    gis_row[2] = 1
                 ucursor.updateRow(gis_row)
 
     if link_availability_approach == 'beta_distribution_function':
@@ -351,9 +468,9 @@ def exposure_grid_overlay(cfg):
 
                 ucursor.updateRow(row)
 
-    print('Finalizing outputs ...')
+    logger.info('Finalizing outputs ...')
 
-    # Rename grid_code back to the original exposure field provided in raster dataset.
+    # Rename grid_code back to the original exposure field provided in raster dataset
     arcpy.AlterField_management(run_name + "_network_with_exposure", 'grid_code', exposure_field)
 
     if emergency is True:
@@ -389,9 +506,11 @@ def exposure_grid_overlay(cfg):
                     wr.writerow(row)
 
 
+# ==================================================================
+
 def main():
+
     start_time = datetime.datetime.now()
-    print('\nStart at ' + str(start_time))
 
     program_name = os.path.basename(__file__)
 
@@ -407,12 +526,23 @@ def main():
 
     cfg = read_config_file(full_path_to_config_file)
 
-    exposure_grid_overlay(cfg)
+    # set up logging and report run start time
+    # ----------------------------------------------------------------------------------------------
+    output_dir = cfg['output_dir']
+    logger = create_loggers(output_dir, 'exposure_overlay', cfg)
+
+    logger.info("=======================================================")
+    logger.info("=============== EXPOSURE GRID OVERLAY STARTING ===============")
+    logger.info("=======================================================")
+
+    exposure_grid_overlay(cfg, logger)
 
     end_time = datetime.datetime.now()
     total_run_time = end_time - start_time
-    print("\nEnd at {}.  Total run time {}".format(end_time, total_run_time))
+    logger.info("\nEnd at {}.  Total run time {}".format(end_time, total_run_time))
 
+
+# ==================================================================
 
 if __name__ == "__main__":
     main()
