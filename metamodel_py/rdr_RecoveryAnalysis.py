@@ -59,24 +59,16 @@ def main(input_folder, output_folder, cfg, logger):
     maintenance = cfg['maintenance']
     redeployment = cfg['redeployment']
 
-    # safety and noise parameters
+    # safety, noise, and emissions parameters
     safety_cost = cfg['safety_cost']
     noise_cost = cfg['noise_cost']
+    non_co2_cost = cfg['non_co2_cost']
+    co2_cost = cfg['co2_cost']
     if cfg['calc_transit_metrics']:
         safety_cost_b = cfg['safety_cost_bus']
         noise_cost_b = cfg['noise_cost_bus']
-
-    # emissions parameters
-    co2_rate = cfg['co2_rate']
-    nox_rate = cfg['nox_rate']
-    so2_rate = cfg['so2_rate']
-    pm25_rate = cfg['pm25_rate']
-    if cfg['calc_transit_metrics']:
-        co2_rate_b = cfg['co2_rate_bus']
-        nox_rate_b = cfg['nox_rate_bus']
-        so2_rate_b = cfg['so2_rate_bus']
-        pm25_rate_b = cfg['pm25_rate_bus']
-    emissions_monetization_csv = cfg['emissions_monetization_csv']
+        non_co2_cost_b = cfg['non_co2_cost_bus']
+        co2_cost_b = cfg['co2_cost_bus']
 
     logger.config("ReportingParameters: ROI analysis type is {}".format(roi_analysis_type))
     logger.config("ReportingParameters: period of analysis is {} to {}".format(str(start_year), str(end_year)))
@@ -101,16 +93,11 @@ def main(input_folder, output_folder, cfg, logger):
     logger.config("ReportingParameters: maintenance cost toggle set to {}, redeployment cost toggle set to {}".format(str(maintenance),
                                                                                                                       str(redeployment)))
     logger.config("ReportingParameters: safety cost = {}, noise cost = {}".format(str(safety_cost), str(noise_cost)))
-    logger.config("ReportingParameters: emissions rates for CO2 = {}, NOx = {}, SO2 = {}, PM2.5 = {}".format(str(co2_rate),
-                                                                                                             str(nox_rate),
-                                                                                                             str(so2_rate),
-                                                                                                             str(pm25_rate)))
+    logger.config("ReportingParameters: co2 cost = {}, non co2 cost = {}".format(str(co2_cost), str(non_co2_cost)))
+
     if cfg['calc_transit_metrics']:
         logger.config("ReportingParameters: bus safety cost = {}, bus noise cost = {}".format(str(safety_cost_b), str(noise_cost_b)))
-        logger.config("ReportingParameters: bus emissions rates for CO2 = {}, NOx = {}, SO2 = {}, PM2.5 = {}".format(str(co2_rate_b),
-                                                                                                                     str(nox_rate_b),
-                                                                                                                     str(so2_rate_b),
-                                                                                                                     str(pm25_rate_b)))
+        logger.config("ReportingParameters: bus co2 cost = {}, bus non co2 cost = {}".format(str(co2_cost_b), str(non_co2_cost_b)))
 
     # uncertainty scenario information, regression outputs, repair costs and times
     logger.debug("reading in output files from previous modules")
@@ -162,11 +149,15 @@ def main(input_folder, output_folder, cfg, logger):
     logger.debug("Size of repair costs and times table: {}".format(repair_data.shape))
 
     # auxiliary inputs - hazard level information, resilience project information
-    model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
-    if not os.path.exists(model_params_file):
-        logger.error("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
-        raise Exception("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
-    hazard_levels = make_hazard_levels(model_params_file, logger)
+    if cfg['cfg_type'] == 'config':
+        model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
+        if not os.path.exists(model_params_file):
+            logger.error("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
+            raise Exception("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
+        hazard_levels = make_hazard_levels(model_params_file, 'config', logger)
+    else:  # cfg_type = 'json'
+        hazard_levels = make_hazard_levels(cfg, 'json', logger)
+
     hazard_levels = hazard_levels.loc[:, ['Hazard Level', 'HazardDim1', 'HazardDim2', 'Hazard Event',
                                           'Recovery', 'Event Probability in Start Year']]
     logger.debug("Size of hazard information table: {}".format(hazard_levels.shape))
@@ -203,11 +194,11 @@ def main(input_folder, output_folder, cfg, logger):
     # create table of unique project-asset rows
     project_list = projects.drop_duplicates(ignore_index=True)
     # row in project table is created for baseline 'no' case with Estimated Project Cost = 0
-    temp_row = {'Project ID': 'no', 'Project Name': 'No Vulnerability Projects', 'Asset': 'None',
+    temp_row = {'Project ID': 'no', 'Project Name': 'No Vulnerability Projects', 'Asset': 'No Asset',
                 'Estimated Project Cost': 0.0, 'Project Lifespan': end_year - start_year + 1,
                 'Estimated Maintenance Cost': 0.0,
                 'Estimated Redeployment Cost': 0.0}
-    project_list = project_list.append(temp_row, ignore_index=True)
+    project_list = pd.concat([project_list, pd.DataFrame(temp_row, index=[0])], ignore_index=True)
 
     # calculate metrics for Tableau dashboard
 
@@ -1290,6 +1281,22 @@ def main(input_folder, output_folder, cfg, logger):
         merged7['initNoisevsBase_baseyr'] = noise_cost * merged7['initVMTvsBase_c_baseyr'] + noise_cost_b * merged7['initVMTvsBase_b_baseyr']
         merged7['expNoisevsBase_baseyr'] = noise_cost * merged7['expVMTvsBase_c_baseyr'] + noise_cost_b * merged7['expVMTvsBase_b_baseyr']
         merged7['damNoisevsBase_baseyr'] = noise_cost * merged7['damVMTvsBase_c_baseyr'] + noise_cost_b * merged7['damVMTvsBase_b_baseyr']
+
+        # calculate non co2 benefits compared to baseline for each period
+        merged7['initNonCO2vsBase'] =  non_co2_cost * merged7['initVMTvsBase_c'] + non_co2_cost_b * merged7['initVMTvsBase_b']
+        merged7['expNonCO2vsBase'] =  non_co2_cost * merged7['expVMTvsBase_c'] + non_co2_cost_b * merged7['expVMTvsBase_b']
+        merged7['damNonCO2vsBase'] =  non_co2_cost * merged7['damVMTvsBase_c'] + non_co2_cost_b * merged7['damVMTvsBase_b']
+        merged7['initNonCO2vsBase_baseyr'] = non_co2_cost * merged7['initVMTvsBase_c_baseyr'] + non_co2_cost_b * merged7['initVMTvsBase_b_baseyr']
+        merged7['expNonCO2vsBase_baseyr'] = non_co2_cost * merged7['expVMTvsBase_c_baseyr'] + non_co2_cost_b * merged7['expVMTvsBase_b_baseyr']
+        merged7['damNonCO2vsBase_baseyr'] = non_co2_cost * merged7['damVMTvsBase_c_baseyr'] + non_co2_cost_b * merged7['damVMTvsBase_b_baseyr']
+
+        # calculate co2 benefits compared to baseline for each period
+        merged7['initCO2vsBase'] =  co2_cost * merged7['initVMTvsBase_c'] + co2_cost_b * merged7['initVMTvsBase_b']
+        merged7['expCO2vsBase'] =  co2_cost * merged7['expVMTvsBase_c'] + co2_cost_b * merged7['expVMTvsBase_b']
+        merged7['damCO2vsBase'] =  co2_cost * merged7['damVMTvsBase_c'] + co2_cost_b * merged7['damVMTvsBase_b']
+        merged7['initCO2vsBase_baseyr'] = co2_cost * merged7['initVMTvsBase_c_baseyr'] + co2_cost_b * merged7['initVMTvsBase_b_baseyr']
+        merged7['expCO2vsBase_baseyr'] = co2_cost * merged7['expVMTvsBase_c_baseyr'] + co2_cost_b * merged7['expVMTvsBase_b_baseyr']
+        merged7['damCO2vsBase_baseyr'] = co2_cost * merged7['damVMTvsBase_c_baseyr'] + co2_cost_b * merged7['damVMTvsBase_b_baseyr']
     else:
         # calculate safety benefits compared to baseline for each period
         merged7['initSafetyvsBase'] =  safety_cost * merged7['initVMTvsBase']
@@ -1307,38 +1314,29 @@ def main(input_folder, output_folder, cfg, logger):
         merged7['expNoisevsBase_baseyr'] = noise_cost * merged7['expVMTvsBase_baseyr']
         merged7['damNoisevsBase_baseyr'] = noise_cost * merged7['damVMTvsBase_baseyr']
 
-    # emissions monetization is provided by year (in units of dollars per metric ton)
-    emissions_costs = pd.read_csv(emissions_monetization_csv, usecols=['Year', 'NOX', 'SOX', 'PM25', 'CO2'],
-                                  converters={'Year': int, 'NOX': str, 'SOX': str, 'PM25': str, 'CO2': str})
-    emissions_costs['NOX'] = emissions_costs['NOX'].replace('[\$,]', '', regex=True).astype(float)
-    emissions_costs['SOX'] = emissions_costs['SOX'].replace('[\$,]', '', regex=True).astype(float)
-    emissions_costs['PM25'] = emissions_costs['PM25'].replace('[\$,]', '', regex=True).astype(float)
-    emissions_costs['CO2'] = emissions_costs['CO2'].replace('[\$,]', '', regex=True).astype(float)
-    # build out period of analysis series for emissions monetization table
-    min_table_year = min(emissions_costs['Year'])
-    max_table_year = max(emissions_costs['Year'])
-    table_range = (emissions_costs['Year'] >= max(min_table_year, start_year)) & (emissions_costs['Year'] <= min(max_table_year, end_year))
-    nox_series = np.concatenate((np.repeat(emissions_costs[emissions_costs['Year'] == min_table_year]['NOX'].iloc[0], max(min_table_year - start_year, 0)),
-                                 emissions_costs.loc[table_range, ['NOX']].to_numpy().flatten(),
-                                 np.repeat(emissions_costs[emissions_costs['Year'] == max_table_year]['NOX'].iloc[0], max(end_year - max_table_year, 0))))
-    so2_series = np.concatenate((np.repeat(emissions_costs[emissions_costs['Year'] == min_table_year]['SOX'].iloc[0], max(min_table_year - start_year, 0)),
-                                 emissions_costs.loc[table_range, ['SOX']].to_numpy().flatten(),
-                                 np.repeat(emissions_costs[emissions_costs['Year'] == max_table_year]['SOX'].iloc[0], max(end_year - max_table_year, 0))))
-    pm25_series = np.concatenate((np.repeat(emissions_costs[emissions_costs['Year'] == min_table_year]['PM25'].iloc[0], max(min_table_year - start_year, 0)),
-                                  emissions_costs.loc[table_range, ['PM25']].to_numpy().flatten(),
-                                  np.repeat(emissions_costs[emissions_costs['Year'] == max_table_year]['PM25'].iloc[0], max(end_year - max_table_year, 0))))
-    co2_series = np.concatenate((np.repeat(emissions_costs[emissions_costs['Year'] == min_table_year]['CO2'].iloc[0], max(min_table_year - start_year, 0)),
-                                 emissions_costs.loc[table_range, ['CO2']].to_numpy().flatten(),
-                                 np.repeat(emissions_costs[emissions_costs['Year'] == max_table_year]['CO2'].iloc[0], max(end_year - max_table_year, 0))))
-    # emissions calculated in for loop to avoid creating too many columns
+        # calculate non co2 benefits compared to baseline for each period
+        merged7['initNonCO2vsBase'] =  non_co2_cost * merged7['initVMTvsBase']
+        merged7['expNonCO2vsBase'] =  non_co2_cost * merged7['expVMTvsBase']
+        merged7['damNonCO2vsBase'] =  non_co2_cost * merged7['damVMTvsBase']
+        merged7['initNonCO2vsBase_baseyr'] = non_co2_cost * merged7['initVMTvsBase_baseyr']
+        merged7['expNonCO2vsBase_baseyr'] = non_co2_cost * merged7['expVMTvsBase_baseyr']
+        merged7['damNonCO2vsBase_baseyr'] = non_co2_cost * merged7['damVMTvsBase_baseyr']
+
+        # calculate co2 benefits compared to baseline for each period
+        merged7['initCO2vsBase'] =  co2_cost * merged7['initVMTvsBase']
+        merged7['expCO2vsBase'] =  co2_cost * merged7['expVMTvsBase']
+        merged7['damCO2vsBase'] =  co2_cost * merged7['damVMTvsBase']
+        merged7['initCO2vsBase_baseyr'] = co2_cost * merged7['initVMTvsBase_baseyr']
+        merged7['expCO2vsBase_baseyr'] = co2_cost * merged7['expVMTvsBase_baseyr']
+        merged7['damCO2vsBase_baseyr'] = co2_cost * merged7['damVMTvsBase_baseyr']
 
     # NOTE: for clean up, set 0 for baseline scenarios to keep NaN from propagating through calculations
-    merged7.loc[merged7['Resiliency Project'] == 'no', ['expSafetyvsBase', 'expNoisevsBase', 'expVMTvsBase',
-                                                        'damSafetyvsBase', 'damNoisevsBase', 'damVMTvsBase',
-                                                        'initSafetyvsBase', 'initNoisevsBase', 'initVMTvsBase',
-                                                        'expSafetyvsBase_baseyr', 'expNoisevsBase_baseyr', 'expVMTvsBase_baseyr',
-                                                        'damSafetyvsBase_baseyr', 'damNoisevsBase_baseyr', 'damVMTvsBase_baseyr',
-                                                        'initSafetyvsBase_baseyr', 'initNoisevsBase_baseyr', 'initVMTvsBase_baseyr']] = 0
+    merged7.loc[merged7['Resiliency Project'] == 'no', ['expSafetyvsBase', 'expNoisevsBase', 'expNonCO2vsBase', 'expCO2vsBase', 'expVMTvsBase',
+                                                        'damSafetyvsBase', 'damNoisevsBase', 'damNonCO2vsBase', 'damCO2vsBase', 'damVMTvsBase',
+                                                        'initSafetyvsBase', 'initNoisevsBase', 'initNonCO2vsBase', 'initCO2vsBase', 'initVMTvsBase',
+                                                        'expSafetyvsBase_baseyr', 'expNoisevsBase_baseyr', 'expNonCO2vsBase_baseyr', 'expCO2vsBase_baseyr', 'expVMTvsBase_baseyr',
+                                                        'damSafetyvsBase_baseyr', 'damNoisevsBase_baseyr', 'damNonCO2vsBase_baseyr', 'damCO2vsBase_baseyr', 'damVMTvsBase_baseyr',
+                                                        'initSafetyvsBase_baseyr', 'initNoisevsBase_baseyr', 'initNonCO2vsBase_baseyr', 'initCO2vsBase_baseyr', 'initVMTvsBase_baseyr']] = 0
 
     logger.debug("interpolating base year and future year runs to calculate metrics across entire analysis period")
     final_table = pd.DataFrame()
@@ -1650,19 +1648,19 @@ def main(input_folder, output_folder, cfg, logger):
 
         # noise calculations
         initNoisevsBase_startyr = (row['initNoisevsBase_baseyr'] +
-                                    start_frac * (row['initNoisevsBase'] - row['initNoisevsBase_baseyr']))
+                                   start_frac * (row['initNoisevsBase'] - row['initNoisevsBase_baseyr']))
         initNoisevsBase_endyr = (row['initNoisevsBase_baseyr'] +
-                                  end_frac * (row['initNoisevsBase'] - row['initNoisevsBase_baseyr']))
+                                 end_frac * (row['initNoisevsBase'] - row['initNoisevsBase_baseyr']))
         initNoisevsBase = np.linspace(initNoisevsBase_startyr, initNoisevsBase_endyr, end_year - start_year + 1)
         expNoisevsBase_startyr = (row['expNoisevsBase_baseyr'] +
-                                   start_frac * (row['expNoisevsBase'] - row['expNoisevsBase_baseyr']))
+                                  start_frac * (row['expNoisevsBase'] - row['expNoisevsBase_baseyr']))
         expNoisevsBase_endyr = (row['expNoisevsBase_baseyr'] +
-                                 end_frac * (row['expNoisevsBase'] - row['expNoisevsBase_baseyr']))
+                                end_frac * (row['expNoisevsBase'] - row['expNoisevsBase_baseyr']))
         expNoisevsBase = np.linspace(expNoisevsBase_startyr, expNoisevsBase_endyr, end_year - start_year + 1)
         damNoisevsBase_startyr = (row['damNoisevsBase_baseyr'] +
-                                   start_frac * (row['damNoisevsBase'] - row['damNoisevsBase_baseyr']))
+                                  start_frac * (row['damNoisevsBase'] - row['damNoisevsBase_baseyr']))
         damNoisevsBase_endyr = (row['damNoisevsBase_baseyr'] +
-                                 end_frac * (row['damNoisevsBase'] - row['damNoisevsBase_baseyr']))
+                                end_frac * (row['damNoisevsBase'] - row['damNoisevsBase_baseyr']))
         damNoisevsBase = np.linspace(damNoisevsBase_startyr, damNoisevsBase_endyr, end_year - start_year + 1)
 
         temp_stage['initNoisevsBase'] = np.mean(initNoisevsBase)
@@ -1672,87 +1670,46 @@ def main(input_folder, output_folder, cfg, logger):
         temp_stage['expNoise_Discounted'] = np.sum(expNoisevsBase / discount)
         temp_stage['damNoise_Discounted'] = np.sum(damNoisevsBase / discount)
 
-        # emissions calculations (in metric tons)
-        # NOTE: emissions are calculated using light-duty vehicle emission factors
-        initNOXvsBase_startyr = (row['initVMTvsBase_baseyr'] +
-                                 start_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * nox_rate / 1000000
-        initNOXvsBase_endyr = (row['initVMTvsBase_baseyr'] +
-                               end_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * nox_rate / 1000000
-        initNOXvsBase = np.linspace(initNOXvsBase_startyr, initNOXvsBase_endyr, end_year - start_year + 1)
-        initSO2vsBase_startyr = (row['initVMTvsBase_baseyr'] +
-                                 start_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * so2_rate / 1000000
-        initSO2vsBase_endyr = (row['initVMTvsBase_baseyr'] +
-                               end_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * so2_rate / 1000000
-        initSO2vsBase = np.linspace(initSO2vsBase_startyr, initSO2vsBase_endyr, end_year - start_year + 1)
-        initPM25vsBase_startyr = (row['initVMTvsBase_baseyr'] +
-                                  start_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * pm25_rate / 1000000
-        initPM25vsBase_endyr = (row['initVMTvsBase_baseyr'] +
-                                end_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * pm25_rate / 1000000
-        initPM25vsBase = np.linspace(initPM25vsBase_startyr, initPM25vsBase_endyr, end_year - start_year + 1)
-        initCO2vsBase_startyr = (row['initVMTvsBase_baseyr'] +
-                                 start_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * co2_rate / 1000000
-        initCO2vsBase_endyr = (row['initVMTvsBase_baseyr'] +
-                               end_frac * (row['initVMTvsBase'] - row['initVMTvsBase_baseyr'])) * co2_rate / 1000000
+        # emissions calculations
+        initNonCO2vsBase_startyr = (row['initNonCO2vsBase_baseyr'] +
+                                    start_frac * (row['initNonCO2vsBase'] - row['initNonCO2vsBase_baseyr']))
+        initNonCO2vsBase_endyr = (row['initNonCO2vsBase_baseyr'] +
+                                  end_frac * (row['initNonCO2vsBase'] - row['initNonCO2vsBase_baseyr']))
+        initNonCO2vsBase = np.linspace(initNonCO2vsBase_startyr, initNonCO2vsBase_endyr, end_year - start_year + 1)
+        initCO2vsBase_startyr = (row['initCO2vsBase_baseyr'] +
+                                 start_frac * (row['initCO2vsBase'] - row['initCO2vsBase_baseyr']))
+        initCO2vsBase_endyr = (row['initCO2vsBase_baseyr'] +
+                               end_frac * (row['initCO2vsBase'] - row['initCO2vsBase_baseyr']))
         initCO2vsBase = np.linspace(initCO2vsBase_startyr, initCO2vsBase_endyr, end_year - start_year + 1)
-        # emissions monetization (using dollars per metric ton)
-        initEmissionsvsBase_co2 = initCO2vsBase * co2_series
-        initEmissionsvsBase_other = initNOXvsBase * nox_series + initSO2vsBase * so2_series + initPM25vsBase * pm25_series
 
-        expNOXvsBase_startyr = (row['expVMTvsBase_baseyr'] +
-                                start_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * nox_rate / 1000000
-        expNOXvsBase_endyr = (row['expVMTvsBase_baseyr'] +
-                              end_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * nox_rate / 1000000
-        expNOXvsBase = np.linspace(expNOXvsBase_startyr, expNOXvsBase_endyr, end_year - start_year + 1)
-        expSO2vsBase_startyr = (row['expVMTvsBase_baseyr'] +
-                                start_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * so2_rate / 1000000
-        expSO2vsBase_endyr = (row['expVMTvsBase_baseyr'] +
-                              end_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * so2_rate / 1000000
-        expSO2vsBase = np.linspace(expSO2vsBase_startyr, expSO2vsBase_endyr, end_year - start_year + 1)
-        expPM25vsBase_startyr = (row['expVMTvsBase_baseyr'] +
-                                 start_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * pm25_rate / 1000000
-        expPM25vsBase_endyr = (row['expVMTvsBase_baseyr'] +
-                               end_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * pm25_rate / 1000000
-        expPM25vsBase = np.linspace(expPM25vsBase_startyr, expPM25vsBase_endyr, end_year - start_year + 1)
-        expCO2vsBase_startyr = (row['expVMTvsBase_baseyr'] +
-                                start_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * co2_rate / 1000000
-        expCO2vsBase_endyr = (row['expVMTvsBase_baseyr'] +
-                              end_frac * (row['expVMTvsBase'] - row['expVMTvsBase_baseyr'])) * co2_rate / 1000000
+        expNonCO2vsBase_startyr = (row['expNonCO2vsBase_baseyr'] +
+                                   start_frac * (row['expNonCO2vsBase'] - row['expNonCO2vsBase_baseyr']))
+        expNonCO2vsBase_endyr = (row['expNonCO2vsBase_baseyr'] +
+                                 end_frac * (row['expNonCO2vsBase'] - row['expNonCO2vsBase_baseyr']))
+        expNonCO2vsBase = np.linspace(expNonCO2vsBase_startyr, expNonCO2vsBase_endyr, end_year - start_year + 1)
+        expCO2vsBase_startyr = (row['expCO2vsBase_baseyr'] +
+                                start_frac * (row['expCO2vsBase'] - row['expCO2vsBase_baseyr']))
+        expCO2vsBase_endyr = (row['expCO2vsBase_baseyr'] +
+                              end_frac * (row['expCO2vsBase'] - row['expCO2vsBase_baseyr']))
         expCO2vsBase = np.linspace(expCO2vsBase_startyr, expCO2vsBase_endyr, end_year - start_year + 1)
-        # emissions monetization (using dollars per metric ton)
-        expEmissionsvsBase_co2 = expCO2vsBase * co2_series
-        expEmissionsvsBase_other = expNOXvsBase * nox_series + expSO2vsBase * so2_series + expPM25vsBase * pm25_series
 
-        damNOXvsBase_startyr = (row['damVMTvsBase_baseyr'] +
-                                start_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * nox_rate / 1000000
-        damNOXvsBase_endyr = (row['damVMTvsBase_baseyr'] +
-                              end_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * nox_rate / 1000000
-        damNOXvsBase = np.linspace(damNOXvsBase_startyr, damNOXvsBase_endyr, end_year - start_year + 1)
-        damSO2vsBase_startyr = (row['damVMTvsBase_baseyr'] +
-                                start_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * so2_rate / 1000000
-        damSO2vsBase_endyr = (row['damVMTvsBase_baseyr'] +
-                              end_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * so2_rate / 1000000
-        damSO2vsBase = np.linspace(damSO2vsBase_startyr, damSO2vsBase_endyr, end_year - start_year + 1)
-        damPM25vsBase_startyr = (row['damVMTvsBase_baseyr'] +
-                                 start_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * pm25_rate / 1000000
-        damPM25vsBase_endyr = (row['damVMTvsBase_baseyr'] +
-                               end_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * pm25_rate / 1000000
-        damPM25vsBase = np.linspace(damPM25vsBase_startyr, damPM25vsBase_endyr, end_year - start_year + 1)
-        damCO2vsBase_startyr = (row['damVMTvsBase_baseyr'] +
-                                start_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * co2_rate / 1000000
-        damCO2vsBase_endyr = (row['damVMTvsBase_baseyr'] +
-                              end_frac * (row['damVMTvsBase'] - row['damVMTvsBase_baseyr'])) * co2_rate / 1000000
+        damNonCO2vsBase_startyr = (row['damNonCO2vsBase_baseyr'] +
+                                   start_frac * (row['damNonCO2vsBase'] - row['damNonCO2vsBase_baseyr']))
+        damNonCO2vsBase_endyr = (row['damNonCO2vsBase_baseyr'] +
+                                 end_frac * (row['damNonCO2vsBase'] - row['damNonCO2vsBase_baseyr']))
+        damNonCO2vsBase = np.linspace(damNonCO2vsBase_startyr, damNonCO2vsBase_endyr, end_year - start_year + 1)
+        damCO2vsBase_startyr = (row['damCO2vsBase_baseyr'] +
+                                start_frac * (row['damCO2vsBase'] - row['damCO2vsBase_baseyr']))
+        damCO2vsBase_endyr = (row['damCO2vsBase_baseyr'] +
+                              end_frac * (row['damCO2vsBase'] - row['damCO2vsBase_baseyr']))
         damCO2vsBase = np.linspace(damCO2vsBase_startyr, damCO2vsBase_endyr, end_year - start_year + 1)
-        # emissions monetization (using dollars per metric ton)
-        damEmissionsvsBase_co2 = damCO2vsBase * co2_series
-        damEmissionsvsBase_other = damNOXvsBase * nox_series + damSO2vsBase * so2_series + damPM25vsBase * pm25_series
 
-        temp_stage['initEmissionsvsBase'] = np.mean(initEmissionsvsBase_co2 + initEmissionsvsBase_other)
-        temp_stage['expEmissionsvsBase'] = np.mean(expEmissionsvsBase_co2 + expEmissionsvsBase_other)
-        temp_stage['damEmissionsvsBase'] = np.mean(damEmissionsvsBase_co2 + expEmissionsvsBase_other)
-
-        temp_stage['initEmissions_Discounted'] = np.sum(initEmissionsvsBase_co2 / co2_discount) + np.sum(initEmissionsvsBase_other / discount)
-        temp_stage['expEmissions_Discounted'] = np.sum(expEmissionsvsBase_co2 / co2_discount) + np.sum(expEmissionsvsBase_other / discount)
-        temp_stage['damEmissions_Discounted'] = np.sum(damEmissionsvsBase_co2 / co2_discount) + np.sum(damEmissionsvsBase_other / discount)
+        temp_stage['initEmissionsvsBase'] = np.mean(initNonCO2vsBase + initCO2vsBase)
+        temp_stage['expEmissionsvsBase'] = np.mean(expNonCO2vsBase + expCO2vsBase)
+        temp_stage['damEmissionsvsBase'] = np.mean(damNonCO2vsBase + damCO2vsBase)
+        temp_stage['initEmissions_Discounted'] = np.sum(initNonCO2vsBase / discount) + np.sum(initCO2vsBase / co2_discount)
+        temp_stage['expEmissions_Discounted'] = np.sum(expNonCO2vsBase / discount) + np.sum(expCO2vsBase / co2_discount)
+        temp_stage['damEmissions_Discounted'] = np.sum(damNonCO2vsBase / discount) + np.sum(damCO2vsBase / co2_discount)
 
         # calculate (1) discounted maintenance cost, (2) discounted project cost based on lifespan, (3) residual cost benefit
         if redeployment:
@@ -1785,34 +1742,33 @@ def main(input_folder, output_folder, cfg, logger):
             temp_stage['TotalResidual_Discounted'] = 0
             temp_stage['TotalMaintenanceCosts_Discounted'] = 0
 
-        # TODO: add safety, noise, emissions to numerator
         temp_stage['Benefits_Discounted'] = (np.sum((expTripsvsBase_dollar + expVMTvsBase_dollar + expPHTvsBase_dollar
-                                                     + expSafetyvsBase + expNoisevsBase + expEmissionsvsBase_other
+                                                     + expSafetyvsBase + expNoisevsBase + expNonCO2vsBase
                                                      - row['AssetDamagevsBase_dollar'] + damTripsvsBase_dollar
                                                      + damVMTvsBase_dollar + damPHTvsBase_dollar + damSafetyvsBase
-                                                     + damNoisevsBase + damEmissionsvsBase_other)
+                                                     + damNoisevsBase + damNonCO2vsBase)
                                                     * event_prob / discount) +
-                                             np.sum((expEmissionsvsBase_co2 + damEmissionsvsBase_co2)
+                                             np.sum((expCO2vsBase + damCO2vsBase)
                                                     * event_prob / co2_discount) +
                                              temp_stage['TotalResidual_Discounted'] -
                                              temp_stage['TotalMaintenanceCosts_Discounted'])
         temp_stage['ExpBenefits_Discounted'] = (np.sum((expTripsvsBase_dollar + expVMTvsBase_dollar
                                                         + expPHTvsBase_dollar + expSafetyvsBase + expNoisevsBase
-                                                        + expEmissionsvsBase_other) * event_prob / discount) +
-                                                np.sum(expEmissionsvsBase_co2 * event_prob / co2_discount))
+                                                        + expNonCO2vsBase) * event_prob / discount) +
+                                                np.sum(expCO2vsBase * event_prob / co2_discount))
         temp_stage['RepairCleanupCostSavings_Discounted'] = np.sum((0 - row['AssetDamagevsBase_dollar']) *
                                                                    event_prob / discount)
         temp_stage['DamBenefits_Discounted'] = (np.sum((damTripsvsBase_dollar + damVMTvsBase_dollar
                                                         + damPHTvsBase_dollar + damSafetyvsBase + damNoisevsBase
-                                                        + damEmissionsvsBase_other) * event_prob / discount) +
-                                                np.sum(damEmissionsvsBase_co2 * event_prob / co2_discount))
+                                                        + damNonCO2vsBase) * event_prob / discount) +
+                                                np.sum(damCO2vsBase * event_prob / co2_discount))
         temp_stage['NetBenefits_Discounted'] = temp_stage['Benefits_Discounted'] - temp_stage['ProjectCosts_Discounted']
         if temp_stage['ProjectCosts_Discounted'] == 0:
             temp_stage['BCR_Discounted'] = np.NaN
         else:
             temp_stage['BCR_Discounted'] = np.float64(temp_stage['Benefits_Discounted']) / temp_stage['ProjectCosts_Discounted']
 
-        final_table = final_table.append(temp_stage, ignore_index=True)
+        final_table = pd.concat([final_table, pd.DataFrame(dict(temp_stage), index=[0])], ignore_index=True)
 
     # column for BCA rolled up across hazard events for each uncertainty scenario (no hazard)
     # and project group + resiliency project combination
@@ -1826,6 +1782,7 @@ def main(input_folder, output_folder, cfg, logger):
     # sum BCA across hazard events, with event probability already factored into BCA calculation
     BCAnohazard = BCArecov.groupby(['Resiliency Project', 'Project Group', 'IDScenarioNoHazard'],
                                    as_index=False, sort=False).sum()
+    BCAnohazard = BCAnohazard.drop(labels=['Hazard Event'], axis=1)
     BCAnohazard.rename({'Benefits_Discounted': 'TotalNetBenefits_Discounted'}, axis='columns', inplace=True)
     final_table = pd.merge(final_table, BCAnohazard, how='left',
                            on=['Resiliency Project', 'Project Group', 'IDScenarioNoHazard'])
@@ -1870,7 +1827,7 @@ def main(input_folder, output_folder, cfg, logger):
     final_table = final_table.drop(labels=['ID-Resiliency-Scenario-Baseline', 'total_repair', 'Damage (%)',
                                            'ID-Resiliency-Scenario_base', 'initTripslevels_base', 'initVMTlevels_base',
                                            'initPHTlevels_base', 'expTripslevels_base', 'expVMTlevels_base',
-                                           'expPHTlevels_base', 'Hazard Event'],
+                                           'expPHTlevels_base'],
                                    axis=1)
 
     final_table = final_table.drop(labels=['initTripslevels_baseyr', 'initVMTlevels_baseyr', 'initPHTlevels_baseyr',
@@ -1912,43 +1869,124 @@ def main(input_folder, output_folder, cfg, logger):
 
     # if regret analysis, zero out BCA values
     if roi_analysis_type == 'Regret':
+        final_table['Benefits_Discounted'] = 0
         final_table['NetBenefits_Discounted'] = 0
+        final_table['TotalNetBenefits_Discounted'] = 0
 
     # assign 'IDResiliencyScenario' = 0, 'Project Group' = 'None' for all baseline averages
-    tableau_table = final_table.groupby(['IDScenario', 'ResiliencyProject', 'ProjectName', 'Asset',
-                                         'ResiliencyProjectAsset', 'Year', 'EconomicScenario',
-                                         'Exposurerecoverypath', 'DamageRecoveryPath'],
-                                        as_index=False, sort=False).mean()
+    tableau_table = final_table.drop(['Hazard Event'], axis=1).groupby(['IDScenario',
+                                                                        'ResiliencyProject',
+                                                                        'ProjectName', 'Asset',
+                                                                        'ResiliencyProjectAsset',
+                                                                        'Year', 'EconomicScenario',
+                                                                        'Exposurerecoverypath',
+                                                                        'DamageRecoveryPath'],
+                                                                       as_index=False, sort=False).mean()
     tableau_table.loc[tableau_table['ResiliencyProject'] == 'no', ['IDResiliencyScenario']] = 0
     tableau_table.loc[tableau_table['ResiliencyProject'] == 'no', ['Project Group']] = 'None'
 
+    # create a Parameters table for Tableau based on CSV file in config file with cfg values joined in
+    parameters_table = os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)), 'config',
+                                    'parameters_lookup.csv')
+    logger.config("Reading in parameters file: {}".format(parameters_table))
+    if not os.path.exists(parameters_table):
+        logger.error("PARAMETERS LOOKUP FILE ERROR: {} could not be found".format(parameters_table))
+        raise Exception("PARAMETERS LOOKUP FILE ERROR: {} could not be found".format(parameters_table))
+    parameters = pd.read_csv(parameters_table,
+                             usecols=['Category', 'Parameter', 'Description'],
+                             converters={'Category': str, 'Parameters': str, 'Description': str})
+    parameters['Value'] = np.NaN
+    for index, row in parameters.iterrows():
+        if row['Parameter'] not in ['socio', 'projgroup', 'elasticity', 'hazard', 'num_recov_stages', 'resil', 'event_freq_factors']:
+            parameters.loc[index, 'Value'] = cfg[row['Parameter']]
+        elif row['Parameter'] == 'socio':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in tableau_table['EconomicScenario'].unique().tolist())
+        elif row['Parameter'] == 'projgroup':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in tableau_table['Project Group'].unique().tolist())
+        elif row['Parameter'] == 'elasticity':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in tableau_table['TripElasticity'].unique().tolist())
+        elif row['Parameter'] == 'hazard':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in hazard_levels['Hazard Event'].unique().tolist())
+        elif row['Parameter'] == 'num_recov_stages':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in hazard_levels['Recovery'].unique().tolist())
+        elif row['Parameter'] == 'resil':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in tableau_table['ResiliencyProject'].unique().tolist())
+        elif row['Parameter'] == 'event_freq_factors':
+            parameters.loc[index, 'Value'] = '; '.join(str(e) for e in tableau_table['FutureEventFrequency'].unique().tolist())
+
+    # create a BCA table for Tableau summarizing benefits and costs when roi_analysis_type = 'BCA'
+    bca_table_agg = final_table.loc[:, ['ProjectName', 'IDScenarioNoHazard', 'Hazard Event',
+                                        'NetBenefits_Discounted', 'Benefits_Discounted',
+                                        'BCR_Discounted']].groupby(['ProjectName', 'IDScenarioNoHazard',
+                                                                    'Hazard Event'],
+                                                                    as_index=False, sort=False).mean()
+    bca_table_agg = bca_table_agg.drop(['Hazard Event'], axis=1).groupby(['ProjectName', 'IDScenarioNoHazard'],
+                                                                         as_index=False, sort=False).sum()
+
+    bca_table_1 = bca_table_agg.loc[:, ['ProjectName', 'IDScenarioNoHazard', 'Benefits_Discounted']]
+    # normalize by the number of uncertainty scenarios (no hazard)
+    bca_table_1['Benefits_Discounted'] = bca_table_1['Benefits_Discounted'] / len(bca_table_1['IDScenarioNoHazard'].unique())
+    bca_table_1 = pd.melt(bca_table_1, id_vars=['ProjectName', 'IDScenarioNoHazard'], value_vars=['Benefits_Discounted'])
+    # renaming IDScenarioNoHazard to IDScenario for Tableau compatibility
+    bca_table_1.rename({'IDScenarioNoHazard': 'IDScenario', 'variable': 'Attribute', 'value': 'Value'}, axis='columns', inplace=True)
+
+    bca_table_2 = tableau_table.loc[:, ['ProjectName', 'ProjectCosts_Discounted',
+                                        'TotalNetBenefits_Discounted']].groupby(['ProjectName'],
+                                                                                as_index=False,
+                                                                                sort=False).mean()
+    bca_table_2['ProjectCosts_Discounted'] = 0 - bca_table_2['ProjectCosts_Discounted']
+    bca_table_2 = pd.melt(bca_table_2, id_vars=['ProjectName'], value_vars=['ProjectCosts_Discounted',
+                                                                            'TotalNetBenefits_Discounted'])
+    bca_table_2.rename({'variable': 'Attribute', 'value': 'Value'}, axis='columns', inplace=True)
+    bca_table_2['IDScenario'] = ''
+
+    bca_table_3 = bca_table_agg.drop(['IDScenarioNoHazard'], axis=1).groupby('ProjectName', as_index=False,
+                                                                             sort=False).mean()
+    bca_table_3 = pd.melt(bca_table_3, id_vars=['ProjectName'], value_vars=['NetBenefits_Discounted',
+                                                                            'Benefits_Discounted',
+                                                                            'BCR_Discounted'])
+    bca_table_3.rename({'variable': 'Attribute', 'value': 'Value'}, axis='columns', inplace=True)
+    bca_table_3['IDScenario'] = ''
+
+    bca_table = pd.concat([bca_table_1, bca_table_2, bca_table_3], ignore_index=True)
+
+    # if regret analysis, zero out BCA values
+    if roi_analysis_type == 'Regret':
+        bca_table['Value'] = 0
+
     tableau_file = os.path.join(output_folder, 'tableau_input_file_' + str(cfg['run_id']) + '.xlsx')
     logger.result("Tableau dashboard input table written to {}".format(tableau_file))
-    tableau_table.to_excel(tableau_file, sheet_name="Sheet1", index=False,
-                           columns=['Year', 'IDResiliencyScenario', 'IDScenario', 'IDScenarioNoHazard',
-                                    'EconomicScenario', 'TripElasticity', 'FutureEventFrequency', 'HazardDim1',
-                                    'HazardDim2', 'Event Probability', 'DurationofEntireEventdays',
-                                    'Exposurerecoverypath', 'DamageRecoveryPath', 'Project Group', 'ResiliencyProject',
-                                    'ProjectName',
-                                    'Asset', 'ResiliencyProjectAsset', 'ProjectCosts_Discounted',
-                                    'TotalNetBenefits_Discounted', 'NetBenefits_Discounted', 'Benefits_Discounted',
-                                    'ExpBenefits_Discounted', 'RepairCleanupCostSavings_Discounted',
-                                    'DamBenefits_Discounted', 'BCR_Discounted', 'RegretAll', 'RegretScenario',
-                                    'RegretAsset', 'initTripslevels', 'initTripslevel_dollar', 'initTripsvsBase',
-                                    'initTripsvsBase_dollar', 'initVMTlevels', 'initVMTlevel_dollar', 'initVMTvsBase',
-                                    'initVMTvsBase_dollar', 'initPHTlevels', 'initPHTlevel_dollar', 'initPHTvsBase',
-                                    'initPHTvsBase_dollar', 'expTripslevels', 'expTripslevel_dollar', 'expTripsvsBase',
-                                    'expTripsvsBase_dollar', 'expVMTlevels', 'expVMTlevel_dollar', 'expVMTvsBase',
-                                    'expVMTvsBase_dollar', 'expPHTlevels', 'expPHTlevel_dollar', 'expPHTvsBase',
-                                    'expPHTvsBase_dollar', 'damTripslevels', 'damTripslevel_dollar', 'damTripsvsBase',
-                                    'damTripsvsBase_dollar', 'damVMTlevels', 'damVMTlevel_dollar', 'damVMTvsBase',
-                                    'damVMTvsBase_dollar', 'damPHTlevels', 'damPHTlevel_dollar', 'damPHTvsBase',
-                                    'damPHTvsBase_dollar', 'AssetDamagelevels', 'RepairCleanupCosts',
-                                    'AssetDamagevsBase', 'RepairCleanupCostSavings', 'DamageDuration',
-                                    'RepairCostSavings', 'initSafety_Discounted', 'expSafety_Discounted',
-                                    'damSafety_Discounted', 'initNoise_Discounted', 'expNoise_Discounted',
-                                    'damNoise_Discounted', 'initEmissions_Discounted', 'expEmissions_Discounted',
-                                    'damEmissions_Discounted', 'TotalMaintenanceCosts_Discounted', 'TotalResidual_Discounted'])
+    with pd.ExcelWriter(tableau_file) as writer:
+        # write scenario output metrics
+        tableau_table.to_excel(writer, sheet_name="Scenarios", index=False,
+                               columns=['Year', 'IDResiliencyScenario', 'IDScenario', 'IDScenarioNoHazard',
+                                        'EconomicScenario', 'TripElasticity', 'FutureEventFrequency', 'HazardDim1',
+                                        'HazardDim2', 'Event Probability', 'DurationofEntireEventdays',
+                                        'Exposurerecoverypath', 'DamageRecoveryPath', 'Project Group', 'ResiliencyProject',
+                                        'ProjectName',
+                                        'Asset', 'ResiliencyProjectAsset', 'ProjectCosts_Discounted',
+                                        'TotalNetBenefits_Discounted', 'NetBenefits_Discounted', 'Benefits_Discounted',
+                                        'ExpBenefits_Discounted', 'RepairCleanupCostSavings_Discounted',
+                                        'DamBenefits_Discounted', 'BCR_Discounted', 'RegretAll', 'RegretScenario',
+                                        'RegretAsset', 'initTripslevels', 'initTripslevel_dollar', 'initTripsvsBase',
+                                        'initTripsvsBase_dollar', 'initVMTlevels', 'initVMTlevel_dollar', 'initVMTvsBase',
+                                        'initVMTvsBase_dollar', 'initPHTlevels', 'initPHTlevel_dollar', 'initPHTvsBase',
+                                        'initPHTvsBase_dollar', 'expTripslevels', 'expTripslevel_dollar', 'expTripsvsBase',
+                                        'expTripsvsBase_dollar', 'expVMTlevels', 'expVMTlevel_dollar', 'expVMTvsBase',
+                                        'expVMTvsBase_dollar', 'expPHTlevels', 'expPHTlevel_dollar', 'expPHTvsBase',
+                                        'expPHTvsBase_dollar', 'damTripslevels', 'damTripslevel_dollar', 'damTripsvsBase',
+                                        'damTripsvsBase_dollar', 'damVMTlevels', 'damVMTlevel_dollar', 'damVMTvsBase',
+                                        'damVMTvsBase_dollar', 'damPHTlevels', 'damPHTlevel_dollar', 'damPHTvsBase',
+                                        'damPHTvsBase_dollar', 'AssetDamagelevels', 'RepairCleanupCosts',
+                                        'AssetDamagevsBase', 'RepairCleanupCostSavings', 'DamageDuration',
+                                        'RepairCostSavings', 'initSafety_Discounted', 'expSafety_Discounted',
+                                        'damSafety_Discounted', 'initNoise_Discounted', 'expNoise_Discounted',
+                                        'damNoise_Discounted', 'initEmissions_Discounted', 'expEmissions_Discounted',
+                                        'damEmissions_Discounted', 'TotalMaintenanceCosts_Discounted', 'TotalResidual_Discounted'])
+        # write parameter outputs
+        parameters.to_excel(writer, sheet_name="Parameters", index=False)
+        # write BCA outputs
+        bca_table.to_excel(writer, sheet_name="BCA", index=False)
 
     tableau_dir = prepare_tableau_assets(tableau_file, output_folder, cfg, logger)
     logger.result("Tableau dashboard written to directory {}".format(tableau_dir))
@@ -1964,13 +2002,16 @@ def check_roi_required_inputs(input_folder, cfg, logger):
     logger.info("Start: check_roi_required_inputs")
     is_covered = 1
 
-    model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
-    if not os.path.exists(model_params_file):
-        logger.error("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
-        raise Exception("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
-    model_params = pd.read_excel(model_params_file, sheet_name='Hazards',
-                                 usecols=['Hazard Event', 'Event Probability in Start Year'],
-                                 converters={'Hazard Event': str, 'Event Probability in Start Year': float})
+    if cfg['cfg_type'] == 'config':
+        model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
+        if not os.path.exists(model_params_file):
+            logger.error("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
+            raise Exception("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
+        model_params = pd.read_excel(model_params_file, sheet_name='Hazards',
+                                     usecols=['Hazard Event', 'Event Probability in Start Year'],
+                                     converters={'Hazard Event': str, 'Event Probability in Start Year': float})
+    else:  # cfg_type = 'json'
+        model_params = cfg['hazards']
 
     project_table = os.path.join(input_folder, 'LookupTables', 'project_info.csv')
     if not os.path.exists(project_table):

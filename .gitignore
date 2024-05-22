@@ -7,24 +7,6 @@ metamodel_py/metamodel_py.Rproj
 .vs/
 .ipynb_checkpoints
 
-# Generated files
-Data/*
-!Data/.gitkeep
-quick_starts/qs1_full_run/Data/generated_files/*
-quick_starts/qs2_analysis_run/Example_A/Data/generated_files/*
-quick_starts/qs2_analysis_run/Example_B/Data/generated_files/*
-quick_starts/qs2_analysis_run/Example_C/Data/generated_files/*
-quick_starts/qs3_add_scenarios/Data/generated_files/*
-quick_starts/qs4_transit/Data/generated_files/*
-
-# Test files
-!metamodel_py/tests/*
-metamodel_py/tests/qs1_files/Data/generated_files/*
-metamodel_py/tests/qs2_files/Example_A/Data/generated_files/*
-metamodel_py/tests/qs2_files/Example_B/Data/generated_files/*
-metamodel_py/tests/qs2_files/Example_C/Data/generated_files/*
-metamodel_py/tests/qs3_files/Data/generated_files/*
-
 # Shapefiles
 *.cpg
 *.dbf
@@ -34,3 +16,29 @@ metamodel_py/tests/qs3_files/Data/generated_files/*
 *.prj
 *.shx
 *.shp.xml
+
+# Generated files
+Data/*
+!Data/.gitkeep
+scenarios/qs1_sioux_falls/Data/generated_files/*
+scenarios/rs1_earthquake/Data/generated_files/*
+scenarios/rs2_add_scenarios/Data/generated_files/*
+scenarios/rs3_equity/Data/generated_files/*
+scenarios/rs4_transit/Data/generated_files/*
+!scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.cpg
+!scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.dbf
+!scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.prj
+!scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.shp
+!scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.shx
+scenarios/rs5_prepare_network/Data/inputs/GTFS_data/*.csv
+scenarios/rs5_prepare_network/Data/generated_files/*
+
+# Test files
+!metamodel_py/tests/*
+metamodel_py/tests/qs1_files/Data/generated_files/*
+metamodel_py/tests/qs2_files/Example_A/Data/generated_files/*
+metamodel_py/tests/qs2_files/Example_B/Data/generated_files/*
+metamodel_py/tests/qs2_files/Example_C/Data/generated_files/*
+metamodel_py/tests/rs2_files/Data/generated_files/*
+metamodel_py/tests/rs3_files/Data/generated_files/*
+metamodel_py/tests/rs4_files/Data/generated_files/*

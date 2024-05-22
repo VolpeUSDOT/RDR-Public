@@ -14,10 +14,6 @@ import re
 import shutil
 import pandas as pd
 
-# is_local = list(filter(lambda x: re.match('^C', x), os.path.abspath(__file__)))
-# if 'C' in is_local:
-#     test_file_location = 'qs1_files'
-# else:
 test_file_location = 'qs1_files'
 
 file_dir_path = os.path.join(
@@ -46,7 +42,8 @@ def test_qs1(add_sample = True):
     import rdr_supporting
 
     path_to_config = os.path.join(file_dir_path, 'QS1.config')
-    cfg = rdr_setup.read_config_file(path_to_config)
+    error_list, cfg = rdr_setup.read_config_file(path_to_config, 'config')
+    assert len(error_list) == 0
 
     print(cfg)
 
@@ -64,7 +61,7 @@ def test_qs1(add_sample = True):
     assert os.path.exists(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_QS1.xlsx'))
 
     compiled_runs = pd.read_excel(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_QS1.xlsx'),
-                                    engine="openpyxl")
+                                  engine="openpyxl")
 
     # Get the resil levels
     obs_resil_levs = compiled_runs.resil.unique()

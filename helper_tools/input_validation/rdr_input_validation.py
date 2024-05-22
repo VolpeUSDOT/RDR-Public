@@ -20,10 +20,9 @@ from itertools import product
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
 import rdr_setup
 import rdr_supporting
-from rdr_LHS import check_model_params_coverage
 
-VERSION_NUMBER = "2023.2"
-VERSION_DATE = "11/15/2023"
+VERSION_NUMBER = "2024.1"
+VERSION_DATE = "5/22/2024"
 
 
 def main():
@@ -50,7 +49,7 @@ def main():
 
     # ---------------------------------------------------------------------------------------------------
     # SETUP
-    cfg = rdr_setup.read_config_file(args.config_file)
+    error_list_cfg, cfg = rdr_setup.read_config_file(args.config_file, 'config')
 
     # Input files validated by this helper tool should be located in the scenario input directory
     input_folder = cfg['input_dir']
@@ -66,6 +65,8 @@ def main():
     # Create list of input validation errors to put in a log file for users
     # If there is an error, it does not stop checking and just spits them all out at the end
     error_list = []
+    # Add errors from read_config_file method, if any
+    error_list.extend(error_list_cfg)
 
     # ---------------------------------------------------------------------------------------------------
     # Model_Parameters.xlsx
@@ -305,7 +306,7 @@ def main():
     # Exposure analysis files
     # For each hazard listed in Model_Parameters.xlsx:
     # 1) Is there a hazard CSV file
-    # 2) Check that link_id, A, B, Value (or similar) exist; link_id, A, B must be int, Value must be float
+    # 2) Check that link_id, from_node_id, to_node_id, Value (or similar) exist; from_node_id, to_node_id must be int, Value must be float
     hazard_folder = os.path.join(input_folder, 'Hazards')
     hazard_file_list = []
     if os.path.isdir(hazard_folder):
@@ -331,34 +332,26 @@ def main():
                 else:
                     # CSV STEP 2: Check file has necessary columns
                     try:
-                        exposures = pd.read_csv(os.path.join(hazard_folder, h), usecols=['link_id', 'A', 'B', cfg['exposure_field']],
-                                                converters={'link_id': str, 'A': str, 'B': str, cfg['exposure_field']: str})
+                        exposures = pd.read_csv(os.path.join(hazard_folder, h), usecols=['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']],
+                                                converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, cfg['exposure_field']: str})
                     except:
                         error_text = "EXPOSURE ANALYSIS FILE ERROR: File for hazard {} is missing required columns".format(row['Hazard Event'])
                         logger.error(error_text)
                         error_list.append(error_text)
                     else:
-                        # Test link_id can be converted to int
+                        # Test from_node_id can be converted to int
                         try:
-                            exposures['link_id'] = pd.to_numeric(exposures['link_id'], downcast='integer')
+                            exposures['from_node_id'] = pd.to_numeric(exposures['from_node_id'], downcast='integer')
                         except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column link_id could not be converted to int for hazard {}".format(row['Hazard Event'])
+                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column from_node_id could not be converted to int for hazard {}".format(row['Hazard Event'])
                             logger.error(error_text)
                             error_list.append(error_text)
 
-                        # Test A can be converted to int
+                        # Test to_node_id can be converted to int
                         try:
-                            exposures['A'] = pd.to_numeric(exposures['A'], downcast='integer')
+                            exposures['to_node_id'] = pd.to_numeric(exposures['to_node_id'], downcast='integer')
                         except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column A could not be converted to int for hazard {}".format(row['Hazard Event'])
-                            logger.error(error_text)
-                            error_list.append(error_text)
-
-                        # Test B can be converted to int
-                        try:
-                            exposures['B'] = pd.to_numeric(exposures['B'], downcast='integer')
-                        except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column B could not be converted to int for hazard {}".format(row['Hazard Event'])
+                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column to_node_id could not be converted to int for hazard {}".format(row['Hazard Event'])
                             logger.error(error_text)
                             error_list.append(error_text)
 
@@ -382,7 +375,7 @@ def main():
     # For each socio and project group listed in Model_Parameters.xlsx:
     # 1) Is there a links CSV file
     # 2) Check that link_id, from_node_id, to_node_id, directed, length, facility_type, capacity, free_speed, lanes, allowed_uses, toll, travel_time exist;
-    #    link_id, from_node_id, to_node_id, directed, lanes must be int, length, capacity, free_speed, toll, travel_time must be float
+    #    from_node_id, to_node_id, directed, lanes must be int, length, capacity, free_speed, toll, travel_time must be float
     # 3) Check that link_id has no duplicate values
     # 4) Check that directed is always 1, allowed_uses is always c
     # 5) If 'nocar' trip table matrix exists, check that toll_nocar, travel_time_nocar exist; both must be float
@@ -473,14 +466,6 @@ def main():
                             logger.error(error_text)
                             error_list.append(error_text)
                         else:
-                            # Test link_id can be converted to int
-                            try:
-                                links['link_id'] = pd.to_numeric(links['link_id'], downcast='integer')
-                            except:
-                                error_text = "NETWORK LINK FILE ERROR: Column link_id could not be converted to int for socio {} and project group {}".format(i, j)
-                                logger.error(error_text)
-                                error_list.append(error_text)
-
                             # Test link_id is a unique identifier
                             try:
                                 assert(not links.duplicated(subset=['link_id']).any())
@@ -774,7 +759,7 @@ def main():
     # Resilience projects files
     # 1) Are project_info.csv and project_table.csv files present
     # 2) Check that project_info.csv has columns Project ID, Project Name, Asset, Project Cost, Project Lifespan, Annual Maintenance Cost if exists, Redeployment Cost if exists; Project Cost, Annual Maintenance Cost, and Redeployment Cost should be converted to dollar
-    # 3) Check that project_table.csv has columns link_id, Project ID, Category; link_id must be int, Exposure Reduction must be float if exists
+    # 3) Check that project_table.csv has columns link_id, Project ID, Category; Exposure Reduction must be float if exists
     resil_folder = os.path.join(input_folder, 'LookupTables')
 
     if os.path.isdir(resil_folder):
@@ -889,14 +874,6 @@ def main():
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
-                # Test link_id can be converted to int
-                try:
-                    project_table['link_id'] = pd.to_numeric(project_table['link_id'], downcast='integer')
-                except:
-                    error_text = "RESILIENCE PROJECTS FILE ERROR: Column link_id could not be converted to int in project table input file"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-
                 # Test Exposure Reduction can be converted to float
                 try:
                     project_table['Exposure Reduction'] = pd.to_numeric(project_table['Exposure Reduction'], downcast='float')
@@ -913,6 +890,16 @@ def main():
                         error_text = "RESILIENCE PROJECTS FILE ERROR: Category values in project table input file must be 'Highway', 'Bridge', or 'Transit' if using default repair tables"
                         logger.error(error_text)
                         error_list.append(error_text)
+
+                # Confirm resilience projects are a subset of those listed in this project table file
+                if not has_error_resil_projects:
+                    try:
+                        assert(resil <= set(project_table['Project ID'].dropna().tolist()))
+                    except:
+                        error_text = "RESILIENCE PROJECTS TABLE FILE ERROR: Missing resilience projects in project table input file"
+                        logger.error(error_text)
+                        error_list.append(error_text)
+
     else:
         error_text = "RESILIENCE PROJECTS FOLDER ERROR: LookupTables directory for resilience projects files does not exist"
         logger.error(error_text)
@@ -921,7 +908,7 @@ def main():
     # ---------------------------------------------------------------------------------------------------
     # LAST STEPS
     # If any check failed, raise exception
-    if len(error_list)> 0:
+    if len(error_list) > 0:
         logger.error(("Exiting script with {} breaking errors found! See logger.error outputs in log file for details. Consult the Run Checklist and User Guide to fix.".format(len(error_list))))
         raise Exception("Exiting script with {} breaking errors found! See logger.error outputs in log file for details. Consult the Run Checklist and User Guide to fix.".format(len(error_list)))
     else:

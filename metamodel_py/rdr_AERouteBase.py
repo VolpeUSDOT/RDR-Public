@@ -93,7 +93,7 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
     demand = AequilibraeMatrix()
     demand.load(join(fldr, mtx_fldr, socio + '_demand_summed.omx'))
     # Either 'matrix' or 'nocar'
-    demand.computational_view([run_params['matrix_name']])  # We will only assign one user class stored as 'matrix' or 'nocar' inside the OMX file
+    demand.computational_view(['matrix'])  # We will only assign one user class stored as 'matrix' or 'nocar' inside the OMX file
 
     assig = TrafficAssignment()
 

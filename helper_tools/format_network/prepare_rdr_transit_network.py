@@ -15,8 +15,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_p
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2023.2"
-VERSION_DATE = "11/15/2023"
+VERSION_NUMBER = "2024.1"
+VERSION_DATE = "5/22/2024"
 # ---------------------------------------------------------------------------------------------------
 # The following code creates transit centroid connectors by building buffer zones around transit
 # boarding nodes and identifying TAZs within the buffer and (optionally) builds a geodatabase of
@@ -76,7 +76,7 @@ def transit_overlay(cfg, logger):
         logger.error('The roadway network node CSV file ' + road_node_csv + ' does not exist')
         raise Exception("NODE CSV FILE ERROR: input road_node_csv {} can't be found".format(road_node_csv))
     centroid_nodes = pd.read_csv(road_node_csv, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                                 converters={'node_id': int, 'x_coord': str, 'y_coord': str, 'node_type': str})
+                                 converters={'node_id': str, 'x_coord': str, 'y_coord': str, 'node_type': str})
     centroid_nodes = centroid_nodes[centroid_nodes['node_type'] == 'centroid']
 
     # Path to transit network node CSV file
@@ -87,7 +87,7 @@ def transit_overlay(cfg, logger):
         logger.error('The transit network node CSV file ' + transit_node_csv + ' does not exist')
         raise Exception("NODE CSV FILE ERROR: input transit_node_csv {} can't be found".format(transit_node_csv))
     boarding_nodes = pd.read_csv(transit_node_csv, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                                 converters={'node_id': int, 'x_coord': str, 'y_coord': str, 'node_type': str})
+                                 converters={'node_id': str, 'x_coord': str, 'y_coord': str, 'node_type': str})
     boarding_nodes = boarding_nodes[~boarding_nodes['node_type'].str.endswith("service_node")]
 
     # Check the node_id fields do not overlap
@@ -140,6 +140,7 @@ def transit_overlay(cfg, logger):
     fieldnames_select = [zone_ID, 'node_id']
     # Create dataframe of centroid -> transit boarding node connectors
     df = feature_class_to_pandas_data_frame('TAZ_transit_intersect', fieldnames_select).replace(-99999, 0)
+    df = df.astype({zone_ID : 'str', 'node_id' : 'str'})
     df = pd.merge(df, centroid_nodes, how='left', left_on=zone_ID, right_on='node_id', suffixes=(None, '_y'))
     df.rename({'node_id_y': 'centroid_node_id', 'x_coord': 'from_x', 'y_coord': 'from_y'}, axis='columns', inplace=True)
     df = pd.merge(df, boarding_nodes, how='left', on='node_id')
@@ -231,7 +232,7 @@ def main():
     road_node_csv = cfg['road_node_csv']
     road_nodes = pd.read_csv(road_node_csv, skip_blank_lines=True,
                              usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                             converters={'node_id': int, 'x_coord': str, 'y_coord': str, 'node_type': str})
+                             converters={'node_id': str, 'x_coord': str, 'y_coord': str, 'node_type': str})
 
     # Path to transit network node CSV file
     # Node CSV file should contain all transit stops and service nodes (can be created by GTFS2GMNS tool)
@@ -241,7 +242,7 @@ def main():
     transit_node_csv = cfg['transit_node_csv']
     transit_nodes = pd.read_csv(transit_node_csv, skip_blank_lines=True,
                                 usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                                converters={'node_id': int, 'x_coord': str, 'y_coord': str, 'node_type': str})
+                                converters={'node_id': str, 'x_coord': str, 'y_coord': str, 'node_type': str})
     
     # Check the node_id fields do not overlap
     if len(set(road_nodes['node_id']) & set(transit_nodes['node_id'])) > 0:
@@ -255,7 +256,7 @@ def main():
     road_links = pd.read_csv(road_link_csv, skip_blank_lines=True,
                              usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
                                       'capacity', 'free_speed', 'lanes'],
-                             converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                             converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': int,
                                          'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
                                          'lanes': int})
 
@@ -277,14 +278,14 @@ def main():
         transit_links = pd.read_csv(transit_link_csv, skip_blank_lines=True,
                                     usecols=['link_id', 'from_node_id', 'to_node_id', 'dir_flag', 'length', 'facility_type',
                                              'link_type', 'capacity', 'free_speed', 'lanes', 'geometry_id'],
-                                    converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'dir_flag': int,
+                                    converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'dir_flag': int,
                                                 'length': float, 'facility_type': str, 'link_type': int, 'capacity': float,
                                                 'free_speed': float, 'lanes': int, 'geometry_id': str})
     else:
         transit_links = pd.read_csv(transit_link_csv, skip_blank_lines=True,
                                     usecols=['link_id', 'from_node_id', 'to_node_id', 'dir_flag', 'length', 'facility_type',
                                              'link_type', 'capacity', 'free_speed', 'lanes'],
-                                    converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'dir_flag': int,
+                                    converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'dir_flag': int,
                                                 'length': float, 'facility_type': str, 'link_type': int, 'capacity': float,
                                                 'free_speed': float, 'lanes': int})
         transit_links['geometry_id'] = ''
@@ -329,13 +330,8 @@ def main():
     transit_nodes['orig_node_id'] = transit_nodes['node_id']
 
     # Find duplicate node IDs between transit and road networks and renumber starting with max existing node ID
-    transit_nodes.loc[transit_nodes['node_id'].isin(road_nodes['node_id']), ['node_id']] = np.arange(sum(transit_nodes['node_id'].isin(road_nodes['node_id']))) + max([transit_nodes['node_id'].max(), road_nodes['node_id'].max()]) + 1
-    
-    # Coerce all ID values to int type
-    transit_links['from_node_id'] = transit_links['from_node_id'].astype('int')
-    transit_links['to_node_id'] = transit_links['to_node_id'].astype('int')
-    transit_nodes['node_id'] = transit_nodes['node_id'].astype('int')
-    transit_nodes['orig_node_id'] = transit_nodes['orig_node_id'].astype('int')
+    transit_nodes.loc[transit_nodes['node_id'].isin(road_nodes['node_id']), ['node_id']] = np.arange(sum(transit_nodes['node_id'].isin(road_nodes['node_id'].astype(int)))) + max([transit_nodes['node_id'].astype(int).max(), road_nodes['node_id'].astype(int).max()]) + 1
+    transit_nodes.node_id = transit_nodes.node_id.astype(str)
 
     # Update node_id in the transit_links dataframe for from nodes and to nodes
     # Merge on the original node ID and retain the new node ID by overwriting the from/to node ID columns
@@ -382,7 +378,7 @@ def main():
     transit_cc_links = pd.read_csv(os.path.join(output_dir, 'transit_cc_link.csv'), skip_blank_lines=True,
                                    usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
                                             'capacity', 'free_speed', 'lanes'],
-                                   converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                                   converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': int,
                                                'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
                                                'lanes': int})
     

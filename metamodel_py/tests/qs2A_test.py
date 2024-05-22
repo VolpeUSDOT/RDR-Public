@@ -53,7 +53,8 @@ def test_qs2(add_sample = True):
     import rdr_supporting
 
     path_to_config = os.path.join(file_dir_path, 'QS2A.config')
-    cfg = rdr_setup.read_config_file(path_to_config)
+    error_list, cfg = rdr_setup.read_config_file(path_to_config, 'config')
+    assert len(error_list) == 0
 
     print(cfg)
 
@@ -80,13 +81,13 @@ def test_qs2(add_sample = True):
 
     # Read outputs - Tableau prep file
     # Example A runs an analysis on a subset of uncertainty scenarios, as specified in the user input file,
-    # limited to one hazard event (‘haz1’), one event frequency factor (1.001), and 2 projects (‘L2-7’ and ‘L8-9_comp’)
+    # limited to one hazard event ('haz1'), one event frequency factor (1.001), and 2 projects ('L2-7' and 'L8-9_comp')
     # Read in tableau_input_file_QS2ExA.xlsx, sort by RegretAll, verify that L8-9_comp is top-ranked ResiliencyProject
 
     assert os.path.exists(os.path.join(output_folder, 'tableau_input_file_QS2ExA.xlsx'))
 
     tableau_file = pd.read_excel(os.path.join(output_folder, 'tableau_input_file_QS2ExA.xlsx'),
-                                 engine="openpyxl")
+                                 sheet_name='Scenarios', engine="openpyxl")
 
     # Should only have three ProjectNames
     proj_name_list = list(set(tableau_file.ProjectName))
@@ -100,5 +101,5 @@ def test_qs2(add_sample = True):
     tableau_file = tableau_file.reset_index().copy()
     assert tableau_file.ResiliencyProject[0] == 'L8-9_comp'
 
-    # Discounted cost for this project is approx 592,088
-    assert round(tableau_file.ProjectCosts_Discounted[0]) == 592088
+    # Discounted cost for this project is approx 697,290
+    assert round(tableau_file.ProjectCosts_Discounted[0]) == 697290

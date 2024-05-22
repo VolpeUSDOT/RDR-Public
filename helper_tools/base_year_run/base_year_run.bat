@@ -14,7 +14,7 @@ set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
 set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe"
 set BASE_YEAR_HELPER="C:\GitHub\RDR\helper_tools\base_year_run\base_year_run.py"
 
-set CONFIG="C:\GitHub\RDR\quick_starts\qs1_full_run\QS1.config"
+set CONFIG="C:\GitHub\RDR\scenarios\qs1_sioux_falls\QS1.config"
 
 call activate RDRenv
 

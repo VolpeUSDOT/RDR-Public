@@ -516,10 +516,10 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
 
         if run_params['matrix_name'] == 'matrix':
             network = pd.read_csv(network_file, usecols=['link_id', 'length', 'facility_type', 'toll', 'travel_time'],
-                                  converters={'link_id': int, 'length': float, 'facility_type': str, 'toll': float, 'travel_time': float})
+                                  converters={'link_id': str, 'length': float, 'facility_type': str, 'toll': float, 'travel_time': float})
         elif run_params['matrix_name'] == 'nocar':
             network = pd.read_csv(network_file, usecols=['link_id', 'length', 'facility_type', 'toll_nocar', 'travel_time_nocar'],
-                                  converters={'link_id': int, 'length': float, 'facility_type': str, 'toll_nocar': float, 'travel_time_nocar': float})
+                                  converters={'link_id': str, 'length': float, 'facility_type': str, 'toll_nocar': float, 'travel_time_nocar': float})
             network.rename({'toll_nocar': 'toll', 'travel_time_nocar': 'travel_time'}, axis='columns', inplace=True)
         else:
             logger.error("AEquilibraE disrupt run requires 'matrix' or 'nocar' for matrix_name variable in run_params.")
@@ -532,7 +532,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
             raise Exception("LINK FLOW FILE ERROR: {} could not be found".format(link_flow_file))
 
         link_flows = pd.read_csv(link_flow_file, usecols=['index', 'matrix_tot'],
-                                 converters={'index': int, 'matrix_tot': float})
+                                 converters={'index': str, 'matrix_tot': float})
 
         transit_calcs = pd.merge(network, link_flows, how='left', left_on='link_id', right_on='index', indicator=True)
         logger.debug(("Number of links not found in link flows " +

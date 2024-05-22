@@ -20,17 +20,20 @@ from itertools import product
 def main(input_folder, output_folder, cfg, logger):
     logger.info("Start: recovery initialization module")
 
+    # if UI run, use cfg non-config parameters instead and assume UserInputs is full set of Model_Parameters
     user_input_file = os.path.join(input_folder, 'UserInputs.xlsx')
-    if not os.path.exists(user_input_file):
-        logger.error("USER INPUTS FILE ERROR: {} could not be found".format(user_input_file))
-        raise Exception("USER INPUTS FILE ERROR: {} could not be found".format(user_input_file))
     model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
-    if not os.path.exists(model_params_file):
-        logger.error("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
-        raise Exception("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
+
+    if cfg['cfg_type'] == 'config':
+        if not os.path.exists(user_input_file):
+            logger.error("USER INPUTS FILE ERROR: {} could not be found".format(user_input_file))
+            raise Exception("USER INPUTS FILE ERROR: {} could not be found".format(user_input_file))
+        if not os.path.exists(model_params_file):
+            logger.error("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
+            raise Exception("MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file))
 
     # check input files (exposure, network) are sufficient for the scenario space
-    is_covered = check_user_inputs_coverage(user_input_file, model_params_file, input_folder, logger)
+    is_covered = check_user_inputs_coverage(user_input_file, model_params_file, input_folder, cfg, logger)
     if is_covered == 0:
         logger.error(("INSUFFICIENT INPUT DATA ERROR: missing input files for " +
                       "scenario space defined by {}".format(user_input_file)))
@@ -58,33 +61,47 @@ def main(input_folder, output_folder, cfg, logger):
     # (3) set of trip loss elasticities, (4) set of resilience projects, (5) set of event frequency factors,
     # (6) set of project groups associated with resilience projects,
     # (7) set of assets to analyze (superset of (4)), (8) user parameters around hazard duration uncertainty
-    user_inputs = pd.read_excel(user_input_file, sheet_name='UserInputs',
-                                converters={'Hazard Events': str, 'Economic Scenarios': str,
-                                            'Trip Loss Elasticities': float, 'Resiliency Projects': str,
-                                            'Event Frequency Factors': float})
-    projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
-                                       converters={'Project Groups': str, 'Resiliency Projects': str})
+    if cfg['cfg_type'] == 'config':
+        user_inputs = pd.read_excel(user_input_file, sheet_name='UserInputs',
+                                    converters={'Hazard Events': str, 'Economic Scenarios': str,
+                                                'Trip Loss Elasticities': float, 'Resiliency Projects': str,
+                                                'Event Frequency Factors': float})
+        projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
+                                           converters={'Project Groups': str, 'Resiliency Projects': str})
+        hazard_to_run = set(user_inputs['Hazard Events'].dropna().tolist())
+        economic_to_run = set(user_inputs['Economic Scenarios'].dropna().tolist())
+        elasticity_to_run = set(user_inputs['Trip Loss Elasticities'].dropna().tolist())
+        resil_proj_to_run = set(user_inputs['Resiliency Projects'].dropna().tolist())
+        resil_proj_to_run.add('no')
+        frequency_to_run = set(user_inputs['Event Frequency Factors'].dropna().tolist())
+    else:  # cfg_type = 'json'
+        projgroup_to_resil = cfg['projects']
+        hazard_to_run = set(cfg['hazards']['Hazard Event'].dropna().tolist())
+        economic_to_run = set(cfg['socios']['Economic Scenarios'].dropna().tolist())
+        elasticity_to_run = cfg['elasticities']
+        resil_proj_to_run = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
+        resil_proj_to_run.add('no')
+        frequency_to_run = cfg['event_frequencies']
+
     # ensure baseline scenario of no resilience investment is included
     projgroup_to_resil_copy = projgroup_to_resil.copy(deep=True)
     projgroup_to_resil_copy.loc[:, ['Resiliency Projects']] = 'no'
     projgroup_to_resil = pd.concat([projgroup_to_resil, projgroup_to_resil_copy], ignore_index=True)
     projgroup_to_resil = projgroup_to_resil.loc[:, ['Project Groups',
                                                     'Resiliency Projects']].drop_duplicates(ignore_index=True)
-    hazard_levels = make_hazard_levels(model_params_file, logger)
+
+    if cfg['cfg_type'] == 'config':
+        hazard_levels = make_hazard_levels(model_params_file, 'config', logger)
+    else:  # cfg_type = 'json'
+        hazard_levels = make_hazard_levels(cfg, 'json', logger)
     hazard_levels = hazard_levels.loc[:, ['Hazard Level', 'Hazard Event', 'Filename']]
 
-    hazard_to_run = set(user_inputs['Hazard Events'].dropna().tolist())
     logger.config("List of hazard events for scenario builder: \t{}".format(', '.join(str(e) for e in hazard_to_run)))
-    economic_to_run = set(user_inputs['Economic Scenarios'].dropna().tolist())
     logger.config(("List of economic scenarios for " +
                    "scenario builder: \t{}".format(', '.join(str(e) for e in economic_to_run))))
-    elasticity_to_run = set(user_inputs['Trip Loss Elasticities'].dropna().tolist())
     logger.config(("List of trip elasticities for " +
                    "scenario builder: \t{}".format(', '.join(str(e) for e in elasticity_to_run))))
-    resil_proj_to_run = set(user_inputs['Resiliency Projects'].dropna().tolist())
-    resil_proj_to_run.add('no')
     logger.config("List of resilience projects for scenario builder: \t{}".format(', '.join(str(e) for e in resil_proj_to_run)))
-    frequency_to_run = set(user_inputs['Event Frequency Factors'].dropna().tolist())
     logger.config(("List of event frequency factors for " +
                    "scenario builder: \t{}".format(', '.join(str(e) for e in frequency_to_run))))
 
@@ -155,7 +172,7 @@ def main(input_folder, output_folder, cfg, logger):
                 temp_row['Exposure Recovery Path'] = temp_row['Exposure Recovery Path'] + "," + \
                                                      ",".join([str(element) for element in recess_path.astype(int)])
 
-            hazard_scenarios = hazard_scenarios.append(temp_row, ignore_index=True)
+            hazard_scenarios = pd.concat([hazard_scenarios, pd.DataFrame(temp_row, index=[0])], ignore_index=True)
 
     # create cross product of two data frames to produce all possible uncertainty scenarios
     product2 = product1.assign(key=1).merge(hazard_scenarios.assign(key=1), on='key').drop(labels='key', axis=1)
@@ -228,7 +245,7 @@ def main(input_folder, output_folder, cfg, logger):
                 temp_stage['Stage Number'] = stage_num
                 temp_stage['Exposure Level'] = i
                 temp_stage['Stage Duration'] = 1
-                extended_scenarios = extended_scenarios.append(temp_stage, ignore_index=True)
+                extended_scenarios = pd.concat([extended_scenarios, pd.DataFrame(dict(temp_stage), index=[0])], ignore_index=True)
             else:
                 extended_scenarios.loc[extended_scenarios['ID-Resiliency-Scenario-Stage'] == curr_stage,
                                        'Stage Duration'] += 1
@@ -262,12 +279,12 @@ def main(input_folder, output_folder, cfg, logger):
     logger.config("{} resilience project mitigation approach to be used".format(resil_mitigation_approach))
     if resil_mitigation_approach == 'binary':
         projects = pd.read_csv(project_table, usecols=['Project ID', 'link_id', 'Category'],
-                               converters={'Project ID': str, 'link_id': int, 'Category': str})
+                               converters={'Project ID': str, 'link_id': str, 'Category': str})
         # NOTE: use 99999 to denote complete mitigation
         projects['Exposure Reduction'] = 99999.0
     elif resil_mitigation_approach == 'manual':
         projects = pd.read_csv(project_table, usecols=['Project ID', 'link_id', 'Category', 'Exposure Reduction'],
-                               converters={'Project ID': str, 'link_id': int, 'Category': str, 'Exposure Reduction': float})
+                               converters={'Project ID': str, 'link_id': str, 'Category': str, 'Exposure Reduction': float})
     else:
         logger.error("Invalid option selected for resilience mitigation approach.")
         raise Exception("Variable resil_mitigation_approach must be set to 'binary' or 'manual'.")
@@ -288,12 +305,12 @@ def main(input_folder, output_folder, cfg, logger):
                                                                                             row['Filename'])))
         temp_network = pd.read_csv(os.path.join(networks_folder, row['Filename']),
                                    usecols=['link_id', 'length', 'lanes', 'facility_type'],
-                                   converters={'link_id': int, 'length': float, 'lanes': int, 'facility_type': str})
+                                   converters={'link_id': str, 'length': float, 'lanes': int, 'facility_type': str})
         temp_network.rename({'length': 'DISTANCE', 'lanes': 'LANES', 'facility_type': 'FACTYPE'},
                             axis='columns', inplace=True)
         temp_network['Project Group'] = row['Project Group']
         temp_network['Economic'] = row['Economic']
-        network = network.append(temp_network, ignore_index=True)
+        network = pd.concat([network, temp_network], ignore_index=True)
     logger.debug("Size of input network table: {}".format(network.shape))
 
     depths_list = list(set(initial_stages['Exposure Level'].dropna().tolist()))
@@ -310,12 +327,12 @@ def main(input_folder, output_folder, cfg, logger):
                                                                                                     filename)))
         temp_depths = pd.read_csv(os.path.join(exposures_folder, filename),
                                   usecols=['link_id', cfg['exposure_field']],
-                                  converters={'link_id': int, cfg['exposure_field']: float})
+                                  converters={'link_id': str, cfg['exposure_field']: float})
         temp_depths.drop_duplicates(subset=['link_id'], inplace=True, ignore_index=True)
         # catch any empty values in exposure field and set to 0 exposure
         temp_depths[cfg['exposure_field']] = temp_depths[cfg['exposure_field']].fillna(0)
         temp_depths['Exposure Level'] = row['Hazard Level']
-        depths = depths.append(temp_depths, ignore_index=True)
+        depths = pd.concat([depths, temp_depths], ignore_index=True)
     logger.debug("Size of input exposure table: {}".format(depths.shape))
 
     # NOTE: 'Exposure Reduction' field merged implicitly, used for damage calculation
@@ -704,28 +721,41 @@ def main(input_folder, output_folder, cfg, logger):
 # ==============================================================================
 
 
-def check_user_inputs_coverage(user_inputs_file, model_params_file, input_folder, logger):
+def check_user_inputs_coverage(user_inputs_file, model_params_file, input_folder, cfg, logger):
     logger.info("Start: check_user_inputs_coverage")
     is_covered = 1
 
-    # if params_file is "UserInputs.xlsx" then sheet_name = 'UserInputs'
-    model_params = pd.read_excel(user_inputs_file, sheet_name='UserInputs',
-                                 usecols=['Hazard Events', 'Economic Scenarios', 'Resiliency Projects'],
-                                 converters={'Hazard Events': str, 'Economic Scenarios': str, 'Resiliency Projects': str})
-    projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
-                                       converters={'Project Groups': str, 'Resiliency Projects': str})
-    projgroup_to_resil = projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] != 'no', ['Project Groups', 'Resiliency Projects']]
-    hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
-                                  usecols=['Hazard Event', 'Filename'],
-                                  converters={'Hazard Event': str, 'Filename': str})
+    if cfg['cfg_type'] == 'config':
+        # if params_file is "UserInputs.xlsx" then sheet_name = 'UserInputs'
+        model_params = pd.read_excel(user_inputs_file, sheet_name='UserInputs',
+                                     usecols=['Hazard Events', 'Economic Scenarios', 'Resiliency Projects'],
+                                     converters={'Hazard Events': str, 'Economic Scenarios': str, 'Resiliency Projects': str})
+        projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
+                                           converters={'Project Groups': str, 'Resiliency Projects': str})
+        projgroup_to_resil = projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] != 'no', ['Project Groups', 'Resiliency Projects']]
+        hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
+                                      usecols=['Hazard Event', 'Filename'],
+                                      converters={'Hazard Event': str, 'Filename': str})
 
-    # read in columns 'Hazard Events', 'Economic Scenarios', 'Resiliency Projects'
-    # do not check resilience project coverage
-    hazard = set(model_params['Hazard Events'].dropna().tolist())
-    socio = set(model_params['Economic Scenarios'].dropna().tolist())
-    resil = set(model_params['Resiliency Projects'].dropna().tolist())
-    resil.discard('no')
-    projgroup = projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'].isin(resil), 'Project Groups'].tolist()
+        # read in columns 'Hazard Events', 'Economic Scenarios', 'Resiliency Projects'
+        # do not check resilience project coverage
+        hazard = set(model_params['Hazard Events'].dropna().tolist())
+        socio = set(model_params['Economic Scenarios'].dropna().tolist())
+        resil = set(model_params['Resiliency Projects'].dropna().tolist())
+        resil.discard('no')
+        projgroup = set(projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'].isin(resil), 'Project Groups'].tolist())
+    else:  # cfg_type = 'json'
+        projgroup_to_resil = cfg['projects']
+        projgroup_to_resil = projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] != 'no', ['Project Groups', 'Resiliency Projects']]
+        hazard_events = cfg['hazards']
+
+        # create sets for 'Hazard Events', 'Economic Scenarios', 'Resiliency Projects'
+        # do not check resilience project coverage
+        hazard = set(hazard_events['Hazard Event'].dropna().tolist())
+        socio = set(cfg['socios']['Economic Scenarios'].dropna().tolist())
+        resil = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
+        resil.discard('no')
+        projgroup = set(projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'].isin(resil), 'Project Groups'].tolist())
 
     # check exposure CSV files, network CSV files (do not check demand OMX files)
     # do not check base year or future year metamodel coverage here; check in rdr_RecoveryAnalysis.py
@@ -751,25 +781,23 @@ def check_user_inputs_coverage(user_inputs_file, model_params_file, input_folder
 # ==============================================================================
 
 
-def make_hazard_levels(model_params_file, logger):
+def make_hazard_levels(input_file, cfg_type, logger):
     logger.info("Start: make_hazard_levels")
-    # version used for rdr_RecoveryAnalysis.py
-    # hazard_levels = pd.read_excel(model_params_file, sheet_name='Hazards',
-    #                              usecols=['Hazard Level', 'HazardDim1', 'HazardDim2', 'Hazard Event',
-    #                                       'Recovery', 'Event Probability in Start Year'],
-    #                              converters={'Hazard Level': int, 'HazardDim1': int, 'HazardDim2': int,
-    #                                          'Hazard Event': str, 'Recovery': str,
-    #                                          'Event Probability in Start Year': float})
-    hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
-                                  usecols=['Hazard Event', 'Filename', 'HazardDim1', 'HazardDim2',
-                                           'Event Probability in Start Year'],
-                                  converters={'Hazard Event': str, 'Filename': str, 'HazardDim1': int, 'HazardDim2': int,
-                                              'Event Probability in Start Year': float})
-    model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters',
-                                 usecols=['Recovery Stages'],
-                                 converters={'Recovery Stages': str})
-    # recovery stages are placed in ascending order as strings not numeric
-    recovery = sorted(set(model_params['Recovery Stages'].dropna().tolist()))
+    if cfg_type == 'config':
+        hazard_events = pd.read_excel(input_file, sheet_name='Hazards',
+                                      usecols=['Hazard Event', 'Filename', 'HazardDim1', 'HazardDim2',
+                                               'Event Probability in Start Year'],
+                                      converters={'Hazard Event': str, 'Filename': str, 'HazardDim1': int, 'HazardDim2': int,
+                                                  'Event Probability in Start Year': float})
+        model_params = pd.read_excel(input_file, sheet_name='UncertaintyParameters',
+                                     usecols=['Recovery Stages'],
+                                     converters={'Recovery Stages': str})
+        # recovery stages are placed in ascending order as strings not numeric
+        recovery = sorted(set(model_params['Recovery Stages'].dropna().tolist()))
+    else:  # cfg_type = 'json'
+        hazard_events = input_file['hazards']
+        recovery = sorted(input_file['recovery_stages'])
+
     logger.config("List of recovery stages: \t{}".format(', '.join(str(e) for e in recovery)))
 
     hazard_levels = hazard_events.assign(key=1).merge(pd.DataFrame(recovery, columns=['Recovery']).assign(key=1),

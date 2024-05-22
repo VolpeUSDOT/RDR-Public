@@ -53,7 +53,8 @@ def test_qs2(add_sample = True):
     import rdr_supporting
 
     path_to_config = os.path.join(file_dir_path, 'QS2C.config')
-    cfg = rdr_setup.read_config_file(path_to_config)
+    error_list, cfg = rdr_setup.read_config_file(path_to_config, 'config')
+    assert len(error_list) == 0
 
     print(cfg)
 
@@ -80,12 +81,12 @@ def test_qs2(add_sample = True):
 
     # Check values in repair calculator file / tableau file
     # Overall regret ranking of the two resilience projects has switched
-    # for this more limited scenario space analysis; resilience project ‘L8-9_comp’ now ranks first in all scenarios
+    # for this more limited scenario space analysis; resilience project 'L8-9_comp' now ranks first in all scenarios
 
     assert os.path.exists(os.path.join(output_folder, 'tableau_input_file_QS2ExC.xlsx'))
 
     tableau_file = pd.read_excel(os.path.join(output_folder, 'tableau_input_file_QS2ExC.xlsx'),
-                                 engine="openpyxl")
+                                 sheet_name='Scenarios', engine="openpyxl")
 
     # Should have 32 rows
     assert tableau_file.shape[0] == 32
