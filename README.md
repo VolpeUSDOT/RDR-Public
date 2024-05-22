@@ -1,6 +1,6 @@
 <!-- working badge, for working branch -->
 
-[![Python_package Status](https://github.com/VolpeUSDOT/RDR-Public/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR-Public/actions)
+[![Python_package Status](https://github.com/VolpeUSDOT/RDR/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR/actions)
 
 
 # Resilience and Disaster Recovery (RDR) Tool Suite
@@ -34,7 +34,7 @@ You should see `RDRenv` show up as an available environment.
 Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub repository](https://github.com/VolpeUSDOT/RDR-Public/issues) for the Volpe Development Team to triage.
 
 ## Credits:
-* Kristin C. Lewis, PhD (Volpe) <Kristin.Lewis@dot.gov>
+* Kristin C. Lewis, PhD (Volpe) <RDR-Team@dot.gov>
 * Jonathan Badgley (Volpe)
 * Andrew Breck (Volpe)
 * Juwon Drake (Volpe)
@@ -48,7 +48,7 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 * Kevin Zhang, PhD (Volpe)
 
 ## Project Sponsors:
-The development of the RDR Tool Suite that contributed to this public version was funded by the U.S. Federal Highway Administration under Interagency Agreement (IAA) 693JJ319N300014 under the supervision of Michael Culp of the FHWA Office of Natural Environment and by the U.S. Dept. of Transportation under IAA 693JK421NT800008 under the supervision of Shawn Johnson of the Office of Research, Development and Technology (OST-R). Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the FHWA or OST-R.
+The development of the RDR Tool Suite that contributed to the original public version was funded by the U.S. Federal Highway Administration under Interagency Agreement (IAA) 693JJ319N300014 under the supervision of Michael Culp of the FHWA Office of Natural Environment and by the U.S. Dept. of Transportation under IAA 693JK421NT800008 under the supervision of Shawn Johnson of the Office of Research, Development and Technology (OST-R). Current development is sponsored through IAAs with OST-R under supervision of OST-R's Hamid Ghasemi and Shawn Johnson. 'Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the FHWA or OST-R.
 
 ## Acknowledgements:
 The RDR team thanks our beta testers and collaborators at the Hampton Roads Transportation Planning Organization, the Hampton Roads Planning District Commission, the Houston-Galveston Area Council, and the Hillsborough Transportation Planning Organization, as well as Virginia DOT and Florida DOT, for their input during development.
