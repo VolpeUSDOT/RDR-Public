@@ -3,8 +3,8 @@
 # 1. Input directory
 # 2. Output directory
 # 3. Run ID
-# 4. N sample to target
-# 5. N sample additional (0 by default or if not set in the config)
+# 4. Filepath to model parameters (XLSX or JSON)
+# 5. N sample to target
 # 6. Metamodel type
 # 7. Seed (optional)
 
@@ -22,6 +22,8 @@ suppressPackageStartupMessages(library(dplyr, lib.loc = use_lib, warn.conflicts 
 suppressPackageStartupMessages(library(tidyr, lib.loc = use_lib, warn.conflicts = FALSE))
 suppressPackageStartupMessages(library(tibble, lib.loc = use_lib, warn.conflicts = FALSE))
 suppressPackageStartupMessages(library(readxl, lib.loc = use_lib))
+suppressPackageStartupMessages(library(jsonlite, lib.loc = use_lib))
+suppressPackageStartupMessages(library(tools, lib.loc = use_lib))
 
 # See rdr_LHS.py for order of the arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -29,36 +31,55 @@ args <- commandArgs(trailingOnly = TRUE)
 input_dir <- args[1]
 output_dir <- args[2]
 run_id <- args[3]
+model_params_file <- args[4]
 
-n_sample_target <- as.numeric(args[4]) # from cfg['lhs_sample_target']
-
-# Any positive number indicates an "additional runs" sampling
-n_sample_additional <- as.numeric(args[5]) # from cfg['lhs_sample_additional_target']
+n_sample_target <- as.numeric(args[5]) # from cfg['lhs_sample_target']
 
 # Model type to use
 model_type <- args[6] # from cfg['metamodel_type']
 
-# Test for prior LHS run if "additional runs" sampling
-if (n_sample_additional > 0) {
-  if (!file.exists(file.path(
-    output_dir,
-    paste0("AequilibraE_LHS_Design_", run_id, "_", n_sample_target, ".csv")
-  ))) {
-    stop("Error: could not find prior AequilibraE LHS Design CSV file.")
-  }
+# Check for prior LHS samples with same run_id
+# Look for any file in the output directory that looks like:
+# AequilibraE_LHS_Design_{run_id}_{numberofsamples}.csv
+prior_lhs <- list.files(path=output_dir,
+                        pattern=paste0("AequilibraE_LHS_Design_", run_id, "_", "\\d+", ".csv"))
 
-  completed_lhs <- read.csv(file.path(output_dir,
-                                      paste0("AequilibraE_LHS_Design_", run_id, "_", n_sample_target, ".csv")),
-  colClasses = c(
-    "socio" = "factor", "projgroup" = "factor", "hazard" = "factor",
-    "recovery" = "factor", "resil" = "factor")) %>%
-    filter(!is.na(LHS_ID))
+# If there are any relevant results, compile them into one data frame called completed_lhs
+# First initialize empty data frame to compile information on prior LHS samples with the same run_id
+completed_lhs <- data.frame(socio=factor(),
+                            projgroup=factor(),
+                            elasticity = factor(),
+                            hazard = factor(),
+                            recovery = factor(),
+                            resil = factor(),
+                            ID = character(),
+                            LHS_ID = character())
+
+if (length(prior_lhs) > 0) {
+  # For each file in prior_lhs, read in the contents and add its rows to the 
+  # completed_lhs data frame. Keep only rows where the LHS_ID column is not NA,
+  # meaning that the row was actually included in the prior sample.
+  # Then use distinct() to eliminate redundant rows.
+  for (i in prior_lhs) {
+    df_i = read.csv(file.path(output_dir, i),
+                    colClasses = c(
+                      "socio" = "factor", "projgroup" = "factor", "hazard" = "factor",
+                      "recovery" = "factor", "resil" = "factor")) %>%
+      filter(!is.na(LHS_ID))
+    completed_lhs <- rbind(completed_lhs, df_i) %>% distinct()
+  }
 }
 
 # Set up predictors with the levels for each predictor ----
 
-# Read inputs from Model_Parameters.xlsx
-prgrps <- read_xlsx(file.path(input_dir, "Model_Parameters.xlsx"), sheet = "ProjectGroups", col_types = "text")
+# Read inputs from Model_Parameters.xlsx or UI-generated JSON file
+if (file_ext(model_params_file) == 'xlsx') {
+  prgrps <- read_xlsx(model_params_file, sheet = "ProjectGroups", col_types = "text")
+} else {
+  cfg_json <- fromJSON(model_params_file)
+  prgrps <- cfg_json$rep
+  prgrps <- prgrps %>% rename("Resiliency Projects" = name, "Project Groups" = group)
+}
 
 names(prgrps) <- make.names(names(prgrps))
 # Add 'no' resil case for each project group
@@ -83,15 +104,40 @@ full_combos$elasticity <- as.factor(full_combos$elasticity)
 # we aren't including previous runs which are actually out of the scenario space.
 # This will remove any combos which are not in the current full_combos set.
 
-if (n_sample_additional > 0) {
+if (length(prior_lhs) > 0) {
   completed_lhs <- completed_lhs[completed_lhs$ID %in% (
     with(full_combos, paste(socio, projgroup, resil, elasticity, hazard, recovery, sep = "_"))), ]
 }
 
+# Check that the runs specified in completed_lhs actually exist
+# If they do NOT, remove them from completed_lhs data frame
+stillthere <- logical(length(completed_lhs))
+for (e in 1:nrow(completed_lhs)) {
+  ifelse(dir.exists(file.path(output_dir, "aeq_runs", "disrupt", run_id,
+                              paste0(completed_lhs[e, 'socio'],
+                                     completed_lhs[e, 'projgroup'],
+                                     "_",
+                                     completed_lhs[e, 'resil'],
+                                     "_",
+                                     as.character(completed_lhs[e, 'elasticity'] * -10),
+                                     "_",
+                                     completed_lhs[e, 'hazard'],
+                                     "_",
+                                     completed_lhs[e, 'recovery']))),
+         stillthere[e] <- TRUE,
+         stillthere[e] <- FALSE
+  )
+}
+completed_lhs <- completed_lhs[stillthere,]
+
+# Now that we've finished using elasticity as a numeric to get the file path in the above check,
+# convert elasticity into a factor for the remainder of the script.
+completed_lhs$elasticity <- as.factor(completed_lhs$elasticity)
+  
 # Check as a first pass that full set of samples will cover each dimension of scenario space at a minimum
 # NOTE: This is not entirely rigorous since completed_lhs may no longer have n_sample_target runs
 socio <- unique(full_combos$socio)
-if (n_sample_target + n_sample_additional < length(socio)) {
+if (n_sample_target < length(socio)) {
   stop("Error: LHS sample target parameters will not cover all possible socio levels.")
 }
 
@@ -99,22 +145,22 @@ if (n_sample_target + n_sample_additional < length(socio)) {
 # Also avoids issue if there are different #s of projects within each project group
 prgrps <- prgrps %>% filter(Project.Groups %in% unique(full_combos$projgroup))
 projgroup_resil <- unique(prgrps$projgroup_resil)
-if (n_sample_target + n_sample_additional < length(projgroup_resil)) {
+if (n_sample_target < length(projgroup_resil)) {
   stop("Error: LHS sample target parameters will not cover all possible projgroup-resil levels.")
 }
 
 elasticity <- unique(full_combos$elasticity)
-if (n_sample_target + n_sample_additional < length(elasticity)) {
+if (n_sample_target < length(elasticity)) {
   stop("Error: LHS sample target parameters will not cover all possible elasticity levels.")
 }
 
 hazard <- unique(full_combos$hazard)
-if (n_sample_target + n_sample_additional < length(hazard)) {
+if (n_sample_target < length(hazard)) {
   stop("Error: LHS sample target parameters will not cover all possible hazard levels.")
 }
 
 recovery <- unique(full_combos$recovery)
-if (n_sample_target + n_sample_additional < length(recovery)) {
+if (n_sample_target < length(recovery)) {
   stop("Error: LHS sample target parameters will not cover all possible recovery levels.")
 }
 
@@ -143,10 +189,10 @@ preds <- c(
 # An easier solution: take 50% more of the target initially, then only keep non-duplicates
 # A limited while loop is applied to catch any missing sample levels
 
-# Increase the max tries by the number of additional sample targets
-
+# Increase the max tries by the number of new sample targets
 try_count <- 1
-max_tries <- ifelse(n_sample_additional > 0, 15 * n_sample_additional, 15)
+n_sample_new <- n_sample_target - nrow(completed_lhs)
+max_tries <- ifelse(n_sample_new > 0, 15 * n_sample_new, 15)
 
 # Start with pass flag as F, then will convert to T when all original levels are represented in LHS sample
 pass <- FALSE
@@ -164,7 +210,7 @@ while (try_count <= max_tries && pass == FALSE) {
   if (length(args) > 6) {
     set.seed(seed = args[7])
   }
-  r1 <- as.data.frame(randomLHS(n = floor(max(n_sample_target, n_sample_additional) * sample_growth), k = length(preds)))
+  r1 <- as.data.frame(randomLHS(n = floor(n_sample_target * sample_growth), k = length(preds)))
 
   for (i in 1:ncol(r1)) {
     # Identify the predictor for assignment
@@ -203,39 +249,38 @@ while (try_count <= max_tries && pass == FALSE) {
     filter(!duplicated(LHS_ID))
 
   # If previous AequilibraE runs have been completed, remove them from the candidate pool as well
-  if (n_sample_additional > 0) {
+  if (length(prior_lhs) > 0) {
     r_named <- r_named %>%
       filter(!LHS_ID %in% completed_lhs$LHS_ID)
   }
 
-  # Check to see if we have enough remaining samples to continue
-  if (n_sample_additional > 0) {
-    if (nrow(r_named) < n_sample_additional) {
+  # If the number of possible new samples plus the number of prior samples is less than
+  # the user's total number of desired samples, increment the try count and go directly back to 
+  # the beginning of while loop to get more samples with a larger n.
+  if (nrow(r_named) + nrow(completed_lhs) < n_sample_target) {
       try_count <- try_count + 1
       next
-    }
   }
 
-  if (n_sample_additional == 0) {
-    if (nrow(r_named) < n_sample_target) {
-      try_count <- try_count + 1
-      next
-    }
-  }
-
-  # Set seed before sample_n again
+  # Set seed before randomly selecting rows again
   if (length(args) > 6) {
     set.seed(seed = args[7])
   }
-  r_named <- r_named %>%
-    sample_n(size = ifelse(n_sample_additional > 0,
-      n_sample_additional,
-      n_sample_target
-    ), replace = FALSE)
 
-  # If we are doing additional runs, at this point concatenate completed runs with new runs
-  if (n_sample_additional > 0) {
-    r_named <- rbind(r_named, completed_lhs %>% select(-ID))
+  if(nrow(completed_lhs) >= n_sample_target) {
+    # If there are more than enough completed runs then we can just randomly select from
+    # the completed runs instead of doing new runs.
+    r_named <- completed_lhs %>%
+      slice_sample(n = n_sample_target, replace = FALSE)
+  } else {
+    # Otherwise, randomly select the number of new samples, which when added to the existing runs,
+    # will fulfill the user's desired sample size.
+    r_named <- r_named %>%
+      slice_sample(n = n_sample_target - nrow(completed_lhs), replace = FALSE)
+    # If there are prior completed runs, concatenate completed runs with new runs
+    if (length(prior_lhs) > 0) {
+      r_named <- rbind(r_named, completed_lhs %>% select(-ID))
+    }
   }
 
   # Check coverage of sample
@@ -298,27 +343,17 @@ full_combos <- suppressMessages(full_combos %>%
   mutate(ID = paste(socio, projgroup, resil, elasticity, hazard, recovery, sep = "_")) %>%
   left_join(r_named))
 
-if (n_sample_additional == 0) {
-  if (nrow(full_combos %>% filter(!is.na(LHS_ID))) < n_sample_target) {
-    stop("Error: LHS module did not find enough lhs_sample_target core runs, please run module again.")
-  }
-}
-
-if (n_sample_additional > 0) {
-  if (nrow(full_combos %>% filter(!is.na(LHS_ID))) < nrow(completed_lhs) + n_sample_additional) {
-    stop("Error: LHS module did not find enough lhs_sample_additional_target core runs, please run module again.")
-  }
+if (nrow(full_combos %>% filter(!is.na(LHS_ID))) < n_sample_target) {
+  stop("Error: LHS module did not find enough lhs_sample_target core runs, please run module again.")
 }
 
 # Write output ----
-
-# NOTE: for "additional run" sampling, the number of samples may be LESS than n_sample_target + n_sample_additional if scenario space changed
 write.csv(full_combos,
   file = file.path(
     output_dir,
     paste0(
       "AequilibraE_LHS_Design_", run_id, "_",
-      n_sample_target + n_sample_additional, ".csv"
+      n_sample_target, ".csv"
     )
   ),
   row.names = FALSE

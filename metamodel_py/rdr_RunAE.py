@@ -19,10 +19,7 @@ import rdr_AESingleRun
 def main(input_folder, output_folder, cfg, logger):
     logger.info("Start: AequilibraE run module")
 
-    if cfg['do_additional_runs'] == 'True':
-        target = cfg['lhs_sample_target'] + cfg['lhs_sample_additional_target']
-    else:
-        target = cfg['lhs_sample_target']
+    target = cfg['lhs_sample_target']
 
     # read in table output by Latin hypercube module
     lhs_file = os.path.join(output_folder, 'AequilibraE_LHS_Design_' + str(cfg['run_id']) + '_' +
@@ -47,7 +44,7 @@ def main(input_folder, output_folder, cfg, logger):
         raise Exception("SQLITE DB ERROR: {} could not be found".format(network_db))
     else:
         df_node = pd.read_csv(node_file, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                              converters={'node_id': int, 'x_coord': float, 'y_coord': float, 'node_type': str})
+                              converters={'node_id': str, 'x_coord': float, 'y_coord': float, 'node_type': str})
 
         with sqlite3.connect(network_db) as db_con:
             # use to_sql to import df_node as table named GMNS_node

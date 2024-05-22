@@ -17,8 +17,8 @@ import traceback
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2023.2"
-VERSION_DATE = "11/15/2023"
+VERSION_NUMBER = "2024.1"
+VERSION_DATE = "5/22/2024"
 
 # ===================================================================================================
 # set up config file and logger
@@ -82,7 +82,7 @@ def main():
 
     parser = argparse.ArgumentParser(description=program_description, usage=help_text)
 
-    parser.add_argument("config_file", help="The full path to the XML Scenario", type=str)
+    parser.add_argument("config_file", help="The full path to the scenario config file or UI-generated JSON file", type=str)
 
     parser.add_argument("task", choices=("lhs", "aeq_run", "aeq_compile", "rr",
                                          "recov_init", "recov_calc", "o", "test"), type=str)
@@ -99,7 +99,17 @@ def main():
         print('ERROR: config file {} can''t be found!'.format(args.config_file))
         sys.exit()
 
-    cfg = rdr_setup.read_config_file(args.config_file)
+    # If file extension is .config, then use original read config approach
+    # If file extension is .save, then use JSON read config approach
+    # Else (if neither), raise error
+    config_fn, config_ext = os.path.splitext(args.config_file)
+    if config_ext == '.config':
+        error_list, cfg = rdr_setup.read_config_file(args.config_file, 'config')
+    elif config_ext == '.save':
+        error_list, cfg = rdr_setup.read_config_file(args.config_file, 'json')
+    else:
+        print('ERROR: config file {} is not an accepted format!'.format(args.config_file))
+        sys.exit()
 
     # set up file directories
     # ----------------------------------------------------------------------------------------------
@@ -109,8 +119,13 @@ def main():
     print("Output folder: {}".format(output_folder))
     print("Run ID: {}".format(cfg['run_id']))
 
-    # set up logging and report run start time
+    # set up logging, report input/config errors, and report run start time
     # ----------------------------------------------------------------------------------------------
+    if len(error_list) > 0:
+        setup_logger = rdr_supporting.create_loggers(output_folder, 'setup_and_config_validation', cfg)
+        setup_logger.error('\n'.join(error_list))
+        raise Exception('{} errors found in config and/or setup file(s). Check setup_and_config_validation log file in {} for list of errors.'.format(len(error_list)), output_folder)
+
     logger = rdr_supporting.create_loggers(output_folder, args.task, cfg)
 
     logger.info("=========================================================================")
@@ -135,7 +150,7 @@ def main():
             # Each run is defined by a unique set of run parameters
             from rdr_LHS import main
             logger.info("Calling the Latin hypercube sampling method")
-            main(input_folder, output_folder, cfg, logger)
+            main(input_folder, output_folder, args.config_file, cfg, logger)
 
         elif args.task in ['aeq_run']:
             # Calculate shortest path and routing results for each run specified by 'lhs' task

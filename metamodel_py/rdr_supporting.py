@@ -59,7 +59,9 @@ def get_total_runtime_string(start_time):
 
 
 # ==================================================================
-
+# Note that this function is duplicated in rdr exposure grid overlay helper tool due to the
+# different environment and slightly different logging setup required.
+# Any updates here may also need to be applied to the helper tool version of the function.
 
 # Taken from FTOT project, ftot_supporting.py
 # <!--Create the logger -->
