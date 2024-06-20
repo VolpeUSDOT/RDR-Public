@@ -33,6 +33,11 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 
 ## Video Series:
 
+#### RDR Overview
+{% include youtube.html id="uMu84BcEOJ8" %}
+<br>
+<br>
+
 #### Installing RDR
 {% include youtube.html id="DVLlfUF2EP8" %}
 <br>
