@@ -6,15 +6,15 @@ The RDR Tool Suite enables transportation agencies to assess transportation resi
 ## Installation and Usage:
 The RDR Tool Suite is a Python based tool.
 
-The RDR Exposure Analysis Tool is an ESRI ArcGIS Pro based tool.
+The RDR Exposure Analysis Tool and some helper tools also depend on ESRI ArcGIS Pro.
 
-Detailed installation and usage instructions are explained in the [RDR User Guide documentation](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf). A [video tutorial](#installing-rdr) on how to install RDR is also available.
-* Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool).
-* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/archive/refs/tags/v2023.2.zip) Alternatively, the GitHub code repository is available here: [https://github.com/VolpeUSDOT/RDR-Public](https://github.com/VolpeUSDOT/RDR-Public). Unzip the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-Master_.)
-* The documentation and quick start scenario files are included with the code release.
+Detailed installation and usage instructions are explained in the [RDR Quick Start Guide documentation](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_GettingStarted_final.pdf). A [video tutorial](#installing-rdr) on how to install RDR is also available.
+* Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool or dependent helper tools).
+* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/releases/tag/v2024.1) Alternatively, the GitHub code repository is available [here](https://github.com/VolpeUSDOT/RDR-Public). Unzip the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-Master_.)
+* The documentation and example scenario files are included with the code release.
 
 ### Using this code
-The RDR Tool Suite runs in a custom Python environment built on conda and Python 3.7. The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). There are R components as well, which will install automatically to the R package library within the user's RDR conda environment when first running the Tool Suite. To set up the RDR conda environment, follow these steps based on [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file).
+The RDR Tool Suite runs in a custom Python environment built on conda and Python 3.11. The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). There are R components as well, which will install automatically to the R package library within the user's RDR conda environment when first running the Tool Suite. To set up the RDR conda environment, follow these steps based on [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file).
 
 Open Anaconda Prompt. From the Anaconda Prompt terminal, navigate to the location where you cloned the RDR repository and run the following:
 
@@ -26,7 +26,7 @@ conda info --envs
 You should see `RDRenv` show up as an available environment.
 
 ### Next steps
-At this point, you can verify that RDR is fully functional by running one of the pre-built quick start scenarios. For detailed instructions, consult the [RDR Quick Start Tutorial](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_QuickStartTutorial_final.pdf). You can also follow along with the [video tutorial](#running-quick-start-1) for running the first Quick Start scenario. Alternatively, consult the [RDR User Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf) and [RDR Run Checklist](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_Checklist_final.pdf) for guidance on developing your own scenarios.
+At this point, you can verify that RDR is fully functional by running the pre-built quick start scenario. For detailed instructions, consult the [RDR Quick Start Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_GettingStarted_final.pdf). You can also follow along with the [video tutorial](#running-quick-start-1) for running the Quick Start scenario. Alternatively, consult the [RDR User Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf) and [RDR Run Checklist](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_Checklist_final.pdf) for guidance on developing your own scenarios.
 
 ## Contributing:
 Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub repository](https://github.com/VolpeUSDOT/RDR-Public/issues) for the Volpe Development Team to triage.
@@ -63,7 +63,7 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 * Kevin Zhang, PhD (Volpe)
 
 ## Project Sponsors:
-The development of the RDR Tool Suite that contributed to this public version was funded by the U.S. Federal Highway Administration under Interagency Agreement (IAA) 693JJ319N300014 under the supervision of Michael Culp of the FHWA Office of Natural Environment and by the U.S. Dept. of Transportation under IAA 693JK421NT800008 under the supervision of Shawn Johnson of the Office of Research, Development and Technology (OST-R). Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the FHWA or OST-R.
+The development of the RDR Tool Suite that contributed to the original public version was funded by the U.S. Federal Highway Administration under Interagency Agreement (IAA) 693JJ319N300014 under the supervision of Michael Culp of the FHWA Office of Natural Environment and by the U.S. Dept. of Transportation under IAA 693JK421NT800008 under the supervision of Shawn Johnson of the Office of Research, Development and Technology (OST-R). Current development is sponsored through IAAs with OST-R under supervision of OST-R's Hamid Ghasemi and Shawn Johnson. Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the FHWA or OST-R.
 
 ## Acknowledgements:
 The RDR team thanks our beta testers and collaborators at the Hampton Roads Transportation Planning Organization, the Hampton Roads Planning District Commission, the Houston-Galveston Area Council, and the Hillsborough Transportation Planning Organization, as well as Virginia DOT and Florida DOT, for their input during development.
