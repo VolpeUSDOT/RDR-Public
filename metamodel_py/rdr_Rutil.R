@@ -4,6 +4,7 @@ loadpacks <- c(
   "dplyr",
   "DT",
   "knitr",
+  "jsonlite",
   "lhs",
   "lme4",
   "mlegp",
@@ -12,7 +13,8 @@ loadpacks <- c(
   "rmarkdown",
   "sjPlot",
   "tibble",
-  "tidyr"
+  "tidyr",
+  "tools"
 )
 
 use_lib <- ifelse(any(grepl("RDRenv", .libPaths())),

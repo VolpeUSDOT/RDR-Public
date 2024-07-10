@@ -1,0 +1,7 @@
+﻿stop_id,stop_code,stop_name,stop_desc,platform_code,platform_name,stop_lat,stop_lon,zone_id,stop_address,stop_url,level_id,location_type,parent_station,wheelchair_boarding,municipality,on_street,at_street,vehicle_type
+22,22,Zone 2 bus stop,,,,40.01704,-70.03343,LocalBus,,,,0,,1,Zone2,EW Street,,3
+23,23,Zone 2 subway stop,,,,40.01558,-70.03261,Subway,,,,0,,1,Zone2,EW Street,,3
+24,24,Crossroads bus NS,,,,40.01663,-70.0235,LocalBus,,,,0,,1,CR,NS Street,EW Street,3
+25,25,Zone 3 bus stop,,,,40.00831,-70.0235,LocalBus,,,,0,,1,Zone3,NS Street,,3
+26,26,Crossroads bus EW,,,,40.01704,-70.02267,LocalBus,,,,0,,1,CR,EW Street,NS Street,3
+27,27,Crossroads subway,,,,40.01558,-70.02234,Subway,,,,0,,1,CR,EW street,,3

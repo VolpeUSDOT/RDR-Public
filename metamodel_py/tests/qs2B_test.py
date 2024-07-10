@@ -53,7 +53,8 @@ def test_qs2(add_sample = True):
     import rdr_supporting
 
     path_to_config = os.path.join(file_dir_path, 'QS2B.config')
-    cfg = rdr_setup.read_config_file(path_to_config)
+    error_list, cfg = rdr_setup.read_config_file(path_to_config, 'config')
+    assert len(error_list) == 0
 
     print(cfg)
 
@@ -87,7 +88,7 @@ def test_qs2(add_sample = True):
     assert os.path.exists(os.path.join(output_folder, 'tableau_input_file_QS2ExB.xlsx'))
 
     tableau_file = pd.read_excel(os.path.join(output_folder, 'tableau_input_file_QS2ExB.xlsx'),
-                                 engine="openpyxl")
+                                 sheet_name='Scenarios', engine="openpyxl")
 
     # Should have 64 rows
     assert tableau_file.shape[0] == 64

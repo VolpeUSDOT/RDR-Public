@@ -1,4 +1,4 @@
-link_id,A,B,Value,evacuation_route,link_availability,comments
+link_id,from_node_id,to_node_id,Value,evacuation_route,link_availability,comments
 1,1,2,0,0,1,river flood
 2,1,3,0,0,1,river flood
 3,2,1,0,0,1,river flood

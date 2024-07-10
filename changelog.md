@@ -1,5 +1,44 @@
 # RDR Changelog
 
+## v2024_1
+The RDR 2024.1 public release includes updates across the entire tool suite, primarily focused on improved user experience. The documentation has been updated to provide ease of access with a new RDR Quick Start Guide documenting installation and how to run a first RDR scenario. A new Reference Scenario Library has been added to provide the user with a fuller list of RDR example scenarios, including a new scenario focused on earthquake hazards and additional support for preparing a transit network for use in RDR.
+
+**RDR Metamodel**
+- Updated to AequilibraE version 1.0.0, a breaking AequilibraE update not backwards compatible with the version of AequilibraE (0.9.2) used by RDR 2023.2.  
+- Added new core model run outputs for validation and visualization, including a set of GeoJSON files to import into GIS software for visualization of network nodes and links.
+- Streamlined the process for using existing core model runs in a new RDR run.
+
+**RDR ROI Analysis Tool**
+- Revamped the Tableau workbook output by the ROI Analysis Tool to include dashboards for benefit-cost analysis, regret analysis, and parameter settings used by the RDR run. The new dashboards provide additional views into the analysis results and provide the user better documentation of what assumptions were made.
+- Reworked methodology for calculating emissions benefits to align with calculations for safety and noise benefits.
+
+**RDR Exposure Analysis Tool**
+- Added logging functionality for better user experience.
+- Created a new “Facility Type Manual” method for applying different exposure-disruption relationships for different asset types.
+- Aligned tool with rest of RDR Tool Suite in referring to nodes as from_node_id and to_node_id.
+
+**RDR Equity and Benefits Analysis Tool**
+- Renamed tool to emphasize its functionality beyond equity analyses.
+- Refreshed the TAZ metrics HTML report to provide more narrative context and update color scheme.
+- Edited equity configuration file to provide more flexibility in user-defined inputs and their file locations.
+- Created a Reference Scenario showcasing how to run the tool for a sample equity analysis with the Sioux Falls model network.
+
+**Helper Tools**
+- Created the RDR User Interface, a command-line interface to guide users through the steps of setting up a run of the RDR Metamodel and ROI Analysis Tool. The User Interface helps users:
+  - Set RDR configuration parameters,
+  - Define the scenario space for an RDR run,
+  - Save and load a configuration file in JSON format,
+  - Generate an RDR batch file, which can be used to execute an RDR run.
+- Created a Baseline Network Run helper tool to help the user validate the AequilibraE core model against their travel demand model. The tool runs the core model with no hazard scenario and no resilience projects to generate baseline network performance metrics that the user can compare at a high level against network performance data in their region of interest.
+- Updated scenario input validation helper tool to match changes for the RDR 2024.1 public release.
+
+**Other Updates**
+- Updated default values for monetization of safety, noise, and emissions benefits and transit-specific BCA monetization values including cost per vehicle-mile from the FTA’s National Transit Database 2022 metrics.
+- Added logging functionality to the setup module to provide the user with errors associated with their configuration file.
+- Reorganized and streamlined the configuration and batch files used by the RDR Tool Suite.
+
+See documentation files for additional details.
+
 ## v2023_2
 The RDR 2023.2 public release includes updates across the entire tool suite related to core model performance improvements, transit cost-benefit methodology, user input validation, TAZ metric analyses, and helper tools for processing transit and demand data. The following changes have been made:
 

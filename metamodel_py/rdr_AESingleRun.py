@@ -5,9 +5,11 @@
 import os
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 import sqlite3
 import shutil
 from scipy import stats
+from shapely import wkt
 
 
 def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
@@ -40,23 +42,27 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
     if run_params['socio'] == 'baseyear':
         base_run_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'base',
                                        str(cfg['run_id']), basescenname, run_params['matrix_name'])
+    elif run_params['socio'] == 'baseline_run':
+        base_run_folder = os.path.join(output_folder, 'aeq_runs_baseline', 'base',
+                                       str(cfg['run_id']), basescenname, run_params['matrix_name'])
     else:
         base_run_folder = os.path.join(output_folder, 'aeq_runs', 'base',
                                        str(cfg['run_id']), basescenname, run_params['matrix_name'])
 
-    disruptscenname = (basescenname + '_' + run_params['resil'] + '_' + elasname + '_' + run_params['hazard'] +
-                       '_' + run_params['recovery'])
-    if run_params['socio'] == 'baseyear':
-        disrupt_run_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'disrupt',
-                                          str(cfg['run_id']), disruptscenname, run_params['matrix_name'])
-    else:
-        disrupt_run_folder = os.path.join(output_folder, 'aeq_runs', 'disrupt',
-                                          str(cfg['run_id']), disruptscenname, run_params['matrix_name'])
+    if run_params['socio'] != 'baseline_run':
+        disruptscenname = (basescenname + '_' + run_params['resil'] + '_' + elasname + '_' + run_params['hazard'] +
+                           '_' + run_params['recovery'])
+        if run_params['socio'] == 'baseyear':
+            disrupt_run_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'disrupt',
+                                              str(cfg['run_id']), disruptscenname, run_params['matrix_name'])
+        else:
+            disrupt_run_folder = os.path.join(output_folder, 'aeq_runs', 'disrupt',
+                                              str(cfg['run_id']), disruptscenname, run_params['matrix_name'])
 
-    # check if AequilibraE run has already been done successfully (look for NetSkim.csv output) for this run ID
-    if os.path.exists(os.path.join(disrupt_run_folder, 'NetSkim.csv')):
-        logger.info("AequilibraE run for {} already done for this run ID, skipping run".format(disrupt_run_folder))
-        return
+        # check if AequilibraE run has already been done successfully (look for NetSkim.csv output) for this run ID
+        if os.path.exists(os.path.join(disrupt_run_folder, 'NetSkim.csv')):
+            logger.info("AequilibraE run for {} already done for this run ID, skipping run".format(disrupt_run_folder))
+            return
 
     # BASE NETWORK RUN #
     # ----------------------------------------------------------------
@@ -103,59 +109,68 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
         from rdr_AERouteBase import run_aeq_base
         run_aeq_base(run_params, base_run_folder, cfg, logger)
 
-    # DISRUPTED NETWORK RUN #
-    # ----------------------------------------------------------------
+        link_flow_file = os.path.join(base_run_folder, 'link_flow_' + basescenname + '.csv')
+        link_flows = merge_network_outputs(run_params, base_run_folder, output_network_fullfile, link_flow_file, logger)
+        create_gis_output(run_params, input_folder, base_run_folder, link_flows, logger)
 
-    # set up directory structure for AequilibraE run
-    network_db = setup_run_folder(run_params, input_folder, disrupt_run_folder, logger)
+    if run_params['socio'] != 'baseline_run':
+        # DISRUPTED NETWORK RUN #
+        # ----------------------------------------------------------------
 
-    # copy over base network run outputs, 'sp_{basescenname}.omx' and 'rt_{basescenname}.omx'
-    base_run_skims = os.path.join(base_run_folder, mtx_fldr, 'sp_' + basescenname + '.omx')
-    base_run_assignment = os.path.join(base_run_folder, mtx_fldr, 'rt_' + basescenname + '.omx')
-    if not os.path.exists(base_run_skims):
-        logger.error("BASE SKIMS FILE ERROR: {} could not be found".format(base_run_skims))
-        raise Exception("BASE SKIMS FILE ERROR: {} could not be found".format(base_run_skims))
-    if not os.path.exists(base_run_assignment):
-        logger.error("BASE ASSIGNMENT FILE ERROR: {} could not be found".format(base_run_assignment))
-        raise Exception("BASE ASSIGNMENT FILE ERROR: {} could not be found".format(base_run_assignment))
+        # set up directory structure for AequilibraE run
+        network_db = setup_run_folder(run_params, input_folder, disrupt_run_folder, logger)
 
-    # calculate link availability for the disrupted network
-    calc_link_availability(run_params, input_folder, disrupt_run_folder, cfg, logger)
+        # copy over base network run outputs, 'sp_{basescenname}.omx' and 'rt_{basescenname}.omx'
+        base_run_skims = os.path.join(base_run_folder, mtx_fldr, 'sp_' + basescenname + '.omx')
+        base_run_assignment = os.path.join(base_run_folder, mtx_fldr, 'rt_' + basescenname + '.omx')
+        if not os.path.exists(base_run_skims):
+            logger.error("BASE SKIMS FILE ERROR: {} could not be found".format(base_run_skims))
+            raise Exception("BASE SKIMS FILE ERROR: {} could not be found".format(base_run_skims))
+        if not os.path.exists(base_run_assignment):
+            logger.error("BASE ASSIGNMENT FILE ERROR: {} could not be found".format(base_run_assignment))
+            raise Exception("BASE ASSIGNMENT FILE ERROR: {} could not be found".format(base_run_assignment))
 
-    # create disrupted network csv file
-    create_network_link_csv('disrupt', run_params, input_folder, disrupt_run_folder, cfg, logger)
+        # calculate link availability for the disrupted network
+        calc_link_availability(run_params, input_folder, disrupt_run_folder, cfg, logger)
 
-    # open output_network_fullfile as pandas data frame, strip whitespace from headers
-    output_network_table = ('Group' + run_params['projgroup'] + '_' + run_params['resil'] +
-                            '_' + run_params['hazard'] + '_' + run_params['recovery'])
-    output_network_fullfile = os.path.join(disrupt_run_folder, output_network_table + '.csv')
-    if not os.path.exists(output_network_fullfile):
-        logger.error("DISRUPT NETWORK CSV FILE ERROR: {} could not be found".format(output_network_fullfile))
-        raise Exception("DISRUPT NETWORK CSV FILE ERROR: {} could not be found".format(output_network_fullfile))
-    disrupt_network = pd.read_csv(output_network_fullfile)
-    disrupt_network.columns = disrupt_network.columns.str.strip()
+        # create disrupted network csv file
+        create_network_link_csv('disrupt', run_params, input_folder, disrupt_run_folder, cfg, logger)
 
-    # SQLite code to create disrupted network link table
-    with sqlite3.connect(network_db) as db_con:
-        # use to_sql to import disrupt_network as table named output_network_table
-        # NOTE for to_sql: "Legacy support is provided for sqlite3.Connection objects."
-        disrupt_network.to_sql('GMNS_link', db_con, if_exists='replace', index=False)
-        db_cur = db_con.cursor()
+        # open output_network_fullfile as pandas data frame, strip whitespace from headers
+        output_network_table = ('Group' + run_params['projgroup'] + '_' + run_params['resil'] +
+                                '_' + run_params['hazard'] + '_' + run_params['recovery'])
+        output_network_fullfile = os.path.join(disrupt_run_folder, output_network_table + '.csv')
+        if not os.path.exists(output_network_fullfile):
+            logger.error("DISRUPT NETWORK CSV FILE ERROR: {} could not be found".format(output_network_fullfile))
+            raise Exception("DISRUPT NETWORK CSV FILE ERROR: {} could not be found".format(output_network_fullfile))
+        disrupt_network = pd.read_csv(output_network_fullfile)
+        disrupt_network.columns = disrupt_network.columns.str.strip()
 
-        # create links table
-        sql1 = "delete from links;"
-        db_cur.execute(sql1)
-        sql2 = """insert into links(ogc_fid, link_id, a_node, b_node, direction, distance, modes, link_type,
-                capacity_ab, speed_ab, free_flow_time, toll, alpha, beta)
-                select link_id, link_id, from_node_id, to_node_id, directed, length, allowed_uses,
-                facility_type, capacity, free_speed, travel_time, toll, alpha, beta
-                from GMNS_link where GMNS_link.link_available > 0;"""
-        db_cur.execute(sql2)
-        sql3 = "update links set capacity_ba = 0, speed_ba = 0"
-        db_cur.execute(sql3)
+        # SQLite code to create disrupted network link table
+        with sqlite3.connect(network_db) as db_con:
+            # use to_sql to import disrupt_network as table named output_network_table
+            # NOTE for to_sql: "Legacy support is provided for sqlite3.Connection objects."
+            disrupt_network.to_sql('GMNS_link', db_con, if_exists='replace', index=False)
+            db_cur = db_con.cursor()
 
-    from rdr_AERouteDisruptMiniEquilibrium import run_aeq_disrupt_miniequilibrium
-    run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_folder, cfg, logger)
+            # create links table
+            sql1 = "delete from links;"
+            db_cur.execute(sql1)
+            sql2 = """insert into links(ogc_fid, link_id, a_node, b_node, direction, distance, modes, link_type,
+                    capacity_ab, speed_ab, free_flow_time, toll, alpha, beta)
+                    select link_id, link_id, from_node_id, to_node_id, directed, length, allowed_uses,
+                    facility_type, capacity, free_speed, travel_time, toll, alpha, beta
+                    from GMNS_link where GMNS_link.link_available > 0;"""
+            db_cur.execute(sql2)
+            sql3 = "update links set capacity_ba = 0, speed_ba = 0"
+            db_cur.execute(sql3)
+
+        from rdr_AERouteDisruptMiniEquilibrium import run_aeq_disrupt_miniequilibrium
+        run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_folder, cfg, logger)
+
+        link_flow_file = os.path.join(disrupt_run_folder, 'link_flow_adjdem_' + disruptscenname + '.csv')
+        link_flows = merge_network_outputs(run_params, disrupt_run_folder, output_network_fullfile, link_flow_file, logger)
+        create_gis_output(run_params, input_folder, disrupt_run_folder, link_flows, logger)
 
     logger.info("Finished: AequilibraE single run module")
 
@@ -163,10 +178,63 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
 # ==============================================================================
 
 
+def merge_network_outputs(run_params, output_folder, network_file, flow_file, logger):
+    logger.info("Start: merge core model outputs")
+
+    links = pd.read_csv(network_file, converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'wkt': str})
+    flows = pd.read_csv(flow_file, usecols=['index', 'matrix_ab', 'matrix_ba', 'matrix_tot'],
+                        converters={'index': str, 'matrix_ab': float, 'matrix_ba': float, 'matrix_tot': float})
+    links = pd.merge(links, flows, how="left", left_on="link_id", right_on="index")
+    links = links.assign(vcr = lambda x: np.where(x['capacity'] == 0, 99999, x['matrix_ab'] / x['capacity']))
+    links = links.rename(columns={'matrix_ab': 'link_flow_ab', 'matrix_ba': 'link_flow_ba', 'matrix_tot': 'link_flow_total'})
+    combined_file = os.path.join(output_folder, 'link_flow_full.csv')
+    links.to_csv(combined_file, index=False)
+
+    logger.info("Finished: merge core model outputs")
+
+    return links
+
+
+# ==============================================================================
+
+
+def create_gis_output(run_params, input_folder, output_folder, link_flows, logger):
+    # This function converts a specified link_flows_full CSV to a GIS-compatible GeoJSON object
+    # Inputs:
+    # input_folder = input data directory (e.g., 'C:\GitHub\RDR\scenarios\qs1_sioux_falls\Data\inputs')
+    # output_folder = AequilibraE run directory (e.g., 'C:\GitHub\RDR\scenarios\qs1_sioux_falls\Data\generated_files\aeq_runs\base\QS1\base02\matrix')
+    # link_flows = DataFrame of joined network link attributes and link flows
+
+    # Links
+    # Set geometry column from wkt column
+    link_flows['geometry'] = link_flows['wkt'].apply(wkt.loads)
+
+    # Create GeoDataFrame
+    gdf = gpd.GeoDataFrame(link_flows, crs='epsg:4326')
+
+    # Export to GeoJSON
+    gdf.to_file(os.path.join(output_folder, 'link_flow_full.json'), driver="GeoJSON")
+
+    # Nodes
+    nodes_csv = os.path.join(input_folder, 'Networks', 'node.csv')
+    node_data = pd.read_csv(nodes_csv, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
+                            converters={'node_id': str, 'x_coord': float, 'y_coord': float, 'node_type': str})
+    node_data['geometry'] = gpd.points_from_xy(node_data.x_coord, node_data.y_coord, crs='epsg:4326')
+
+    # Create GeoDataFrame
+    gdf = gpd.GeoDataFrame(node_data, crs='epsg:4326')
+
+    # Export to GeoJSON
+    gdf.to_file(os.path.join(output_folder, 'node.json'), driver="GeoJSON")
+
+
+# ==============================================================================
+
+
 def calc_link_availability(run_params, input_folder, output_folder, cfg, logger):
-    logger.debug(("start: calculate link availability for " +
-                  "hazard = {}, recovery = {}, resil = {}".format(run_params['hazard'], run_params['recovery'],
-                                                                  run_params['resil'])))
+    logger.debug(("start: calculate link availability for hazard = {}, ".format(run_params['hazard']) +
+                  "recovery = {}, resil = {}, socio = {}, projgroup = {}".format(run_params['recovery'], run_params['resil'],
+                                                                                 run_params['socio'], run_params['projgroup'])))
 
     project_table = os.path.join(input_folder, 'LookupTables', 'project_table.csv')
     if not os.path.exists(project_table):
@@ -187,6 +255,11 @@ def calc_link_availability(run_params, input_folder, output_folder, cfg, logger)
         logger.error("EXPOSURE TABLE FILE ERROR: {} could not be found".format(exposure_table))
         raise Exception("EXPOSURE TABLE FILE ERROR: {} could not be found".format(exposure_table))
 
+    network_table = os.path.join(input_folder, 'Networks', run_params['socio'] + run_params['projgroup'] + '.csv')
+    if not os.path.exists(network_table):
+        logger.error("NETWORK TABLE FILE ERROR: {} could not be found".format(network_table))
+        raise Exception("NETWORK TABLE FILE ERROR: {} could not be found".format(network_table))
+
     # table mapping resilience project to network links
     # link availability for resilience project network links depends on mitigation impact
     # options are 'binary' (default), 'manual'
@@ -196,12 +269,12 @@ def calc_link_availability(run_params, input_folder, output_folder, cfg, logger)
     logger.config("{} resilience project mitigation approach to be used".format(resil_mitigation_approach))
     if resil_mitigation_approach == 'binary':
         projects = pd.read_csv(project_table, usecols=['Project ID', 'link_id'],
-                               converters={'Project ID': str, 'link_id': int})
+                               converters={'Project ID': str, 'link_id': str})
         # NOTE: use 99999 to denote complete mitigation
         projects['Exposure Reduction'] = 99999.0
     elif resil_mitigation_approach == 'manual':
         projects = pd.read_csv(project_table, usecols=['Project ID', 'link_id', 'Exposure Reduction'],
-                               converters={'Project ID': str, 'link_id': int, 'Exposure Reduction': float})
+                               converters={'Project ID': str, 'link_id': str, 'Exposure Reduction': float})
     else:
         logger.error("Invalid option selected for resilience mitigation approach.")
         raise Exception("Variable resil_mitigation_approach must be set to 'binary' or 'manual'.")
@@ -211,22 +284,37 @@ def calc_link_availability(run_params, input_folder, output_folder, cfg, logger)
     projects.drop_duplicates(subset=['Project ID', 'link_id'], inplace=True, ignore_index=True)
 
     # table with exposure levels for a particular hazard event
-    exposures = pd.read_csv(exposure_table, usecols=['link_id', 'A', 'B', cfg['exposure_field']],
-                            converters={'link_id': int, 'A': int, 'B': int, cfg['exposure_field']: float})
+    exposures = pd.read_csv(exposure_table, usecols=['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']],
+                            converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, cfg['exposure_field']: float})
     exposures.drop_duplicates(subset=['link_id'], inplace=True, ignore_index=True)
     # catch any empty values in exposure field and set to 0 exposure
     exposures[cfg['exposure_field']] = exposures[cfg['exposure_field']].fillna(0)
 
+    # table with facility types for each network link
+    network_links = pd.read_csv(network_table, usecols=['link_id', 'facility_type'],
+                                converters={'link_id': str, 'facility_type': str})
+
     logger.debug("Size of project table: {}".format(projects.shape))
     logger.debug("Size of exposure table: {}".format(exposures.shape))
+    logger.debug("Size of network link table: {}".format(network_links.shape))
 
     recovery_depth = int(run_params['recovery'])
 
     np_disrupt = exposures.copy(deep=True)
     num_rows = np_disrupt.shape[0]
 
+    # merge in facility_type from network link table
+    np_disrupt = pd.merge(np_disrupt, network_links, how='left', on=['link_id'], indicator=True)
+    logger.debug(("Number of network links not found in network table: {}".format(sum(np_disrupt['_merge'] == 'left_only'))))
+    if np_disrupt.shape[0] != num_rows:
+        logger.error(("TABLE JOIN ERROR: Join of exposure table with network link table " +
+                      "resulted in duplicate rows. Check that link_id in network link table is unique."))
+        raise Exception(("TABLE JOIN ERROR: Join of exposure table with network link table " +
+                         "resulted in duplicate rows. Check that link_id in network link table is unique."))
+    np_disrupt.drop(labels=['_merge'], axis=1, inplace=True)
+
     # zone connector network links defined as having at least one centroid node
-    np_disrupt['ZoneConn'] = np.where((np_disrupt['A'] < cfg['zone_conn']) | (np_disrupt['B'] < cfg['zone_conn']), 1, 0)
+    np_disrupt['ZoneConn'] = np.where((np_disrupt['from_node_id'].astype(int) < cfg['zone_conn']) | (np_disrupt['to_node_id'].astype(int) < cfg['zone_conn']), 1, 0)
 
     # convert any string in 'Project ID' column to 1 and NaN to 0 in new 'VulProject' column
     np_disrupt = pd.merge(np_disrupt, projects.loc[projects['Project ID'] == run_params['resil'],
@@ -282,11 +370,11 @@ def calc_link_availability(run_params, input_folder, output_folder, cfg, logger)
             raise Exception("LINK AVAILABILITY FILE ERROR: {} could not be found".format(link_availability_csv))
         # Set up default link availability to avoid key error
         np_disrupt['link_available'] = None
-        # Use manual approach where a user-defined csv lists the range of values and the link availability associated
+        # Use manual approach where a user-defined CSV lists the range of values and the link availability associated
         # with each range
         # Minimum (inclusive) and maximum (exclusive) value must be defined for each range
-        # Read through the csv
-        # for line in csv
+        # Read through the CSV
+        # for line in CSV
         with open(link_availability_csv, 'r') as rf:
             line_num = 1
             for line in rf:
@@ -297,6 +385,35 @@ def calc_link_availability(run_params, input_folder, output_folder, cfg, logger)
                     np_disrupt['link_available'] = np.where((np_disrupt['recov_value'] >= min) &
                                                             (np_disrupt['recov_value'] < max),
                                                             csv_row[2], np_disrupt['link_available'])
+                line_num += 1
+        # Set to fully available if the value is not in the table
+        np_disrupt['link_available'] = np_disrupt['link_available'].fillna(1)
+
+    if link_availability_approach == 'facility_type_manual':
+        link_availability_csv = cfg['link_availability_csv']
+        if not os.path.exists(link_availability_csv):
+            logger.error("LINK AVAILABILITY FILE ERROR: {} could not be found".format(link_availability_csv))
+            raise Exception("LINK AVAILABILITY FILE ERROR: {} could not be found".format(link_availability_csv))
+        # Set up default link availability to avoid key error
+        np_disrupt['link_available'] = None
+        # Use manual approach where a user-defined CSV lists the range of values and the link availability associated
+        # with each range for every facility type
+        # Minimum (inclusive) and maximum (exclusive) value must be defined for each range
+        # Read through the CSV
+        # for line in CSV
+        with open(link_availability_csv, 'r') as rf:
+            line_num = 1
+            for line in rf:
+                if line_num > 1:
+                    csv_row = line.rstrip('\n').split(',')
+                    # fac_type should be str
+                    fac_type = csv_row[0]
+                    min = float(csv_row[1])
+                    max = float(csv_row[2])
+                    np_disrupt['link_available'] = np.where((np_disrupt['facility_type'] == fac_type) &
+                                                            (np_disrupt['recov_value'] >= min) &
+                                                            (np_disrupt['recov_value'] < max),
+                                                            csv_row[3], np_disrupt['link_available'])
                 line_num += 1
         # Set to fully available if the value is not in the table
         np_disrupt['link_available'] = np_disrupt['link_available'].fillna(1)
@@ -396,14 +513,14 @@ def create_network_link_csv(run_type, run_params, input_folder, output_folder, c
         network = pd.read_csv(projgroup_network_table,
                               usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
                                        'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time'],
-                              converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                              converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': int,
                                           'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
                                           'lanes': int, 'allowed_uses': str, 'toll': float, 'travel_time': float})
     elif run_params['matrix_name'] == 'nocar':
         network = pd.read_csv(projgroup_network_table,
                               usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
                                        'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll_nocar', 'travel_time_nocar'],
-                              converters={'link_id': int, 'from_node_id': int, 'to_node_id': int, 'directed': int,
+                              converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': int,
                                           'length': float, 'facility_type': str, 'capacity': float, 'free_speed': float,
                                           'lanes': int, 'allowed_uses': str, 'toll_nocar': float, 'travel_time_nocar': float})
         network.rename({'toll_nocar': 'toll', 'travel_time_nocar': 'travel_time'}, axis='columns', inplace=True)
@@ -414,7 +531,7 @@ def create_network_link_csv(run_type, run_params, input_folder, output_folder, c
 
     if run_type == 'disrupt':
         availabilities = pd.read_csv(link_avail_table, usecols=['link_id', 'link_available'],
-                                     converters={'link_id': int, 'link_available': float})
+                                     converters={'link_id': str, 'link_available': float})
         # catch any empty fields and set to 0 link availability
         availabilities['link_available'] = availabilities['link_available'].fillna(0)
         logger.debug("Size of input link availability table: {}".format(availabilities.shape))
@@ -425,7 +542,7 @@ def create_network_link_csv(run_type, run_params, input_folder, output_folder, c
                        .format(true_shape_file))
     else:
         true_shape_table = pd.read_csv(true_shape_file, usecols=['link_id', 'WKT'],
-                                       converters={'link_id': int, 'WKT': str})
+                                       converters={'link_id': str, 'WKT': str})
         true_shape_table.drop_duplicates(inplace=True, ignore_index=True)
         logger.debug("Size of look-up table for wkt: {}".format(true_shape_table.shape))
 

@@ -32,13 +32,14 @@ def test_conf():
     import rdr_setup
     import rdr_supporting
     path_to_config = os.path.join(file_dir_path, 'QS1.config')
-    cfg = rdr_setup.read_config_file(path_to_config)
+    error_list, cfg = rdr_setup.read_config_file(path_to_config, 'config')
 
     input_folder = cfg['input_dir']
     output_folder = cfg['output_dir']
 
     seed = cfg['seed']
 
+    assert len(error_list) == 0
     assert os.path.isdir(input_folder)
     assert os.path.isdir(output_folder)
     assert seed == '8888'
