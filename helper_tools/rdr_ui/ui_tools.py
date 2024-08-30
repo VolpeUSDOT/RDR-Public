@@ -530,13 +530,13 @@ def move_non_config_files(input_dir: Param, haz: Param, ecf: Param, net: Param, 
     error_params = []
     for param in ncf_params:
         for multi in param.mval:
-            if os.path.exists(multi.fpath):
+            if os.path.exists(str(multi.fpath)):
                 continue
             else:
                 error_files.append('Name: {}, Shortcut: {}, File: {}'.format(param.name, param.short, multi.fpath))
                 error_params.append(param)
     for param in oth_params:
-        if os.path.exists(param.value):
+        if os.path.exists(str(param.value)):
             continue
         else:
             error_files.append('Name: {}, Shortcut: {}, File: {}'.format(param.name, param.short, param.value))
