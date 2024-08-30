@@ -227,6 +227,7 @@ def build_bat() -> None:
         pushinput = ''.join(['-', 'save', 'backto'])
         universal_commands(pushinput)
 
+    # Second half: non-config filepaths
     uinput = input('\n\n      To modify a parameter, type its shortcut and press enter to specify.\n      To continue without modifications, press enter.\n>>')
     if uinput == '':
         os.system('cls')
