@@ -1,0 +1,19 @@
+Asset Type,min_exposure,max_exposure,Damage (%)
+Highway,-999999,0,0
+Highway,0,0.2,0.01
+Highway,0.2,0.4,0.05
+Highway,0.4,0.6,0.1
+Highway,0.6,999999,0.25
+Bridge,-999999,0,0
+Bridge,0,0.1,0.1
+Bridge,0.1,0.2,0.2
+Bridge,0.2,0.3,0.3
+Bridge,0.3,0.4,0.4
+Bridge,0.4,0.5,0.5
+Bridge,0.5,0.6,0.6
+Bridge,0.6,0.7,0.7
+Bridge,0.7,0.8,0.8
+Bridge,0.8,0.9,0.9
+Bridge,0.9,999999,1
+Transit,-999999,0.5,0
+Transit,0.5,999999,0.5
