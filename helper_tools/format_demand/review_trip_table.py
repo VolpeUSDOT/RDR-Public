@@ -19,23 +19,47 @@ def readOMX(filename, selectedMatrix, debug_mode):
         print('Attributes: ', f.list_all_attributes())
     omx_df = f[selectedMatrix]
     if debug_mode:
-        print('Sum of matrix elements: {:.9}'.format(np.sum(omx_df)))
-        print('Percentiles: ', np.percentile(omx_df, (1, 10, 30, 50, 70, 90, 99)))
+        print('Sum of matrix elements: {:.9}'.format(float(np.sum(omx_df))))
+        print('Percentiles (1, 10, 30, 50, 70, 90, 99): ', np.percentile(omx_df, (1, 10, 30, 50, 70, 90, 99)))
         print('Maximum: ', np.amax(omx_df))
     return omx_df, matrix_size, f
 
 
-# Input arguments
-fldr = 'C:/GitHub/RDR/helper_tools/format_demand/matrices'
-filename = 'demand_new.omx'
-matrix_name = 'matrix'
+# ==============================================================================
 
-# Read the input OMX trip table
-matrix_filename = os.path.join(fldr, filename)
-dem, matrix_size, trip_omx_file = readOMX(matrix_filename, matrix_name, True)
 
-# Example code for analyzing demand matrix
-print('Percentiles: ', np.percentile(dem, (1, 25, 50, 75, 99)))
+def main():
+    # Input arguments
+    print("Provide trip table OMX file path to review (drag and drop is fine here):")
+    filename = ""
+    while not os.path.exists(filename):
+        filename = input('----------------------> ').strip('\"')
+        print("USER INPUT ----------------->:  {}".format(filename))
+        if not os.path.exists(filename):
+            print("Path is not valid. Please enter a valid OMX file path.")
 
-trip_omx_file.close()
+    f = omx.open_file(filename)
+    print("Matrix names in OMX file are: {}. Provide name of matrix to review:".format(f.list_matrices()))
+    matrix_name = ""
+    while matrix_name == "":
+        matrix_name = input('----------------------> ').strip('\"')
+        print("USER INPUT ----------------->:  {}".format(matrix_name))
+        if matrix_name == "exit":
+            break
+        elif matrix_name not in f.list_matrices():
+            print("Matrix name is not valid. Please enter a valid matrix name. Matrix names in OMX file are: {}. Enter 'exit' to exit.".format(f.list_matrices()))
+            matrix_name = ""
+    f.close()
 
+    if matrix_name != "exit":
+        # Read the input OMX trip table
+        dem, matrix_size, trip_omx_file = readOMX(filename, matrix_name, True)
+
+        trip_omx_file.close()
+
+
+# ==============================================================================
+
+
+if __name__ == "__main__":
+    main()
