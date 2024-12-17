@@ -1,6 +1,6 @@
 Category,Parameter,Description
 Model Run Configuration,input_dir,Input directory file location
-Model Run Configuration,output_dir,Output direction file location
+Model Run Configuration,output_dir,Output directory file location
 Model Run Configuration,run_id,Run ID
 Model Run Configuration,start_year,Start year of analysis period
 Model Run Configuration,end_year,End year of analysis period
@@ -12,59 +12,62 @@ Model Run Configuration,socio,Socioeconomic scenarios in scenario analysis frame
 Model Run Configuration,projgroup,Project groups in scenario analysis framework
 Model Run Configuration,elasticity,Trip loss elasticities in scenario analysis framework
 Model Run Configuration,hazard,Hazard events in scenario analysis framework
-Model Run Configuration,num_recov_stages,Number of hazard recovery stages
+Model Run Configuration,num_recov_stages,Hazard recovery stages in scenario analysis framework
 Model Run Configuration,resil,Resilience projects in scenario analysis framework
 Model Run Configuration,event_freq_factors,Event frequency factors in scenario analysis framework
 AequilibraE Settings,aeq_run_type,Core model run type
 AequilibraE Settings,run_minieq,0/1 for doing a mini-equilibrium run
-AequilibraE Settings,blocked_centroid_flows,0/1 for allowing flows through centroids
-AequilibraE Settings,calc_transit_metrics,0/1 for calculating transit-specific metrics
+AequilibraE Settings,blocked_centroid_flows,True/False for blocking flows through centroids
+AequilibraE Settings,calc_transit_metrics,True/False for calculating transit-specific metrics
+AequilibraE Settings,aeq_max_iter,Maximum iterations for core model traffic assignment algorithm
+AequilibraE Settings,aeq_rgap_target,Gap threshold for core model traffic assignment algorithm
 Disruption Module Parameters,link_availability_approach,Link exposure-disruption approach
 Disruption Module Parameters,exposure_field,Field name defining exposure value
 Disruption Module Parameters,exposure_unit,Unit of exposure value
-Disruption Module Parameters,link_availability_csv,Link availability CSV file path
-Disruption Module Parameters,alpha,Alpha parameter in beta distribution function
-Disruption Module Parameters,beta,Beta parameter in beta distribution function
-Disruption Module Parameters,lower_bound,Lower bound of beta distribution function
-Disruption Module Parameters,upper_bound,Upper bound of beta distribution function
-Disruption Module Parameters,beta_method,Lower or upper cumulative beta distribution function
+Disruption Module Parameters,link_availability_csv,Link availability CSV file path (if used)
+Disruption Module Parameters,alpha,Alpha parameter in beta distribution function (if used)
+Disruption Module Parameters,beta,Beta parameter in beta distribution function (if used)
+Disruption Module Parameters,lower_bound,Lower bound of beta distribution function (if used)
+Disruption Module Parameters,upper_bound,Upper bound of beta distribution function (if used)
+Disruption Module Parameters,beta_method,Lower or upper cumulative beta distribution function (if used)
 Disruption Module Parameters,zone_conn,Highest node ID designating a centroid
 Disruption Module Parameters,resil_mitigation_approach,Resilience project mitigation approach
-Recovery Module Parameters,min_duration,Minimum duration of initial hazard severity
-Recovery Module Parameters,max_duration,Maximum duration of initial hazard severity
+Recovery Module Parameters,min_duration,Minimum duration of initial hazard severity (days)
+Recovery Module Parameters,max_duration,Maximum duration of initial hazard severity (days)
 Recovery Module Parameters,num_duration_cases,Number of hazard duration cases
 Recovery Module Parameters,hazard_recov_type,Hazard recovery period as days or percent of initial hazard severity
 Recovery Module Parameters,hazard_recov_length,Length of hazard recovery
 Recovery Module Parameters,hazard_recov_path_model,Hazard recovery path model
 Recovery Module Parameters,exposure_damage_approach,Link exposure-damage approach
-Recovery Module Parameters,exposure_damage_csv,Exposure-damage CSV file path
+Recovery Module Parameters,exposure_damage_csv,Exposure-damage CSV file path (if used)
 Recovery Module Parameters,repair_cost_approach,Repair cost calculation approach
-Recovery Module Parameters,repair_network_type,Default repair cost network type
-Recovery Module Parameters,repair_cost_csv,Repair cost CSV file path
+Recovery Module Parameters,repair_network_type,Default repair cost network type (if used)
+Recovery Module Parameters,repair_cost_csv,Repair cost CSV file path (if used)
 Recovery Module Parameters,repair_time_approach,Repair time calculation approach
-Recovery Module Parameters,repair_time_csv,Repair time CSV file path
+Recovery Module Parameters,repair_time_csv,Repair time CSV file path (if used)
 ROI Module Parameters,roi_analysis_type,ROI analysis type run by RDR
 ROI Module Parameters,dollar_year,Year for dollar units
-ROI Module Parameters,discount_factor,Year-on-year discounting factor
-ROI Module Parameters,co2_discount_factor,Year-on-year CO2 discounting factor
-ROI Module Parameters,vehicle_occupancy,Passenger car vehicle occupancy rate
-ROI Module Parameters,vehicle_occupancy_bus,Transit bus vehicle occupancy rate
-ROI Module Parameters,vehicle_occupancy_light_rail,Light rail vehicle occupancy rate
-ROI Module Parameters,vehicle_occupancy_heavy_rail,Heavy rail vehicle occupany rate
-ROI Module Parameters,veh_oper_cost,Passenger car vehicle operating cost
-ROI Module Parameters,veh_oper_cost_bus,Transit bus vehicle operating cost
-ROI Module Parameters,veh_oper_cost_light_rail,Light rail vehicle operating cost
-ROI Module Parameters,veh_oper_cost_heavy_rail,Heavy rail vehicle operating cost
-ROI Module Parameters,vot_per_hour,Value of travel time
-ROI Module Parameters,vot_wait_per_hour,Value of waiting time
-ROI Module Parameters,transit_fare,Transit fare cost per trip
-ROI Module Parameters,maintenance,T/F for inclusion of annual maintenance cost
-ROI Module Parameters,redeployment,T/F for inclusion of project redeployment cost
-ROI Module Parameters,safety_cost,Safety external use cost for passenger vehicle
-ROI Module Parameters,safety_cost_bus,Safety external use cost for transit bus
-ROI Module Parameters,noise_cost,Noise external use cost for passenger vehicle
-ROI Module Parameters,noise_cost_bus,Noise external use cost for transit bus
-ROI Module Parameters,non_co2_cost,Non-CO2 emissions external use cost for passenger vehicle
-ROI Module Parameters,non_co2_cost_bus,Non-CO2 emissions external use cost for transit bus
-ROI Module Parameters,co2_cost,CO2 emissions external use cost for passenger vehicle
-ROI Module Parameters,co2_cost_bus,CO2 emissions external use cost for transit bus
+ROI Module Parameters,discount_factor,Year-on-year discounting factor (decimal)
+ROI Module Parameters,co2_discount_factor,Year-on-year CO2 discounting factor (decimal)
+ROI Module Parameters,vehicle_occupancy,Passenger car vehicle occupancy rate (person/vehicle)
+ROI Module Parameters,vehicle_occupancy_bus,Transit bus vehicle occupancy rate (person/vehicle if used)
+ROI Module Parameters,vehicle_occupancy_light_rail,Light rail vehicle occupancy rate (person/vehicle if used)
+ROI Module Parameters,vehicle_occupancy_heavy_rail,Heavy rail vehicle occupany rate (person/vehicle if used)
+ROI Module Parameters,veh_oper_cost,Passenger car vehicle operating cost ($/vehicle-mile)
+ROI Module Parameters,veh_oper_cost_bus,Transit bus vehicle operating cost ($/vehicle-mile if used)
+ROI Module Parameters,veh_oper_cost_light_rail,Light rail vehicle operating cost ($/vehicle-mile if used)
+ROI Module Parameters,veh_oper_cost_heavy_rail,Heavy rail vehicle operating cost ($/vehicle-mile if used)
+ROI Module Parameters,vot_per_hour,Value of travel time ($/hour)
+ROI Module Parameters,vot_wait_per_hour,Value of waiting time ($/hour if used)
+ROI Module Parameters,transit_fare,Transit fare cost per trip ($/trip if used)
+ROI Module Parameters,maintenance,True/False for inclusion of annual maintenance cost
+ROI Module Parameters,redeployment,True/False for inclusion of project redeployment cost
+ROI Module Parameters,safety_cost,Safety external use cost for passenger vehicle ($/vehicle-mile)
+ROI Module Parameters,safety_cost_bus,Safety external use cost for transit bus ($/vehicle-mile if used)
+ROI Module Parameters,noise_cost,Noise external use cost for passenger vehicle ($/vehicle-mile)
+ROI Module Parameters,noise_cost_bus,Noise external use cost for transit bus ($/vehicle-mile if used)
+ROI Module Parameters,non_co2_cost,Non-CO2 emissions external use cost for passenger vehicle ($/vehicle-mile)
+ROI Module Parameters,non_co2_cost_bus,Non-CO2 emissions external use cost for transit bus ($/vehicle-mile if used)
+ROI Module Parameters,co2_cost,CO2 emissions external use cost for passenger vehicle ($/vehicle-mile)
+ROI Module Parameters,co2_cost_bus,CO2 emissions external use cost for transit bus ($/vehicle-mile if used)
+ROI Module Parameters,crs,Coordinate reference system of true shapes file

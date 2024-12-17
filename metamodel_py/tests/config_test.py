@@ -25,7 +25,7 @@ def teardown_readconfig(output_folder):
 
 def test_files_exists():
     assert os.path.isfile(os.path.join(file_dir_path, 'QS1.config'))
-    assert os.path.isfile(os.path.join(file_dir_path, 'Data/inputs/UserInputs.xlsx'))
+    assert os.path.isfile(os.path.join(file_dir_path, 'Data/inputs/Model_Parameters.xlsx'))
     assert os.path.isfile(os.path.join(file_dir_path, 'Data/inputs/LookupTables/project_info.csv'))
 
 def test_conf():

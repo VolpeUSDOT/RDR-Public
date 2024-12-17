@@ -15,14 +15,32 @@ import sqlite3
 import pandas as pd
 import openmatrix as omx
 from itertools import product
+import numpy as np
+import datetime
 
 # Import modules from core code (two levels up) by setting path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.1"
-VERSION_DATE = "5/22/2024"
+VERSION_NUMBER = "2024.2"
+VERSION_DATE = "12/16/2024"
+
+# Create function to compute summary statistics of numeric variables to allow user to check 
+# whether they are reasonable. Function gets called in the main function a few times and then at the end
+# a composite dataframe is concatenated to summarize the statistics for these variables.
+def summary_info_by_type(df, ind, val, file, notes):
+    stats = pd.pivot_table(data = df, index = ind, aggfunc = {val : ["min", "median", "max"]})
+    stats = stats.reset_index()
+    stats.columns = stats.columns.get_level_values(1)
+    stats.iloc[:,0] = val + " (" + ind + " = " + stats.iloc[:,0] + ")"
+    stats = stats.rename(columns = {stats.columns[0]: "parameter"})
+    stats.insert(0, 'file', file)
+    stats['notes'] = notes
+    return stats
+
+
+# ==============================================================================
 
 
 def main():
@@ -68,14 +86,20 @@ def main():
     # Add errors from read_config_file method, if any
     error_list.extend(error_list_cfg)
 
+    # Create a list of dataframes with values to check for reasonableness
+    # These dataframes will get concatenated and saved as a CSV file for user review
+    param_dfs_list = []
+    # List of items not included in the CSV
+    excluded_list = []
+
     # ---------------------------------------------------------------------------------------------------
     # Model_Parameters.xlsx
     # 1) Is it present
-    # 2) Does it contain three tabs with required columns
+    # 2) Does it contain six tabs with required columns
 
     has_error_model_params = False
     has_error_resil_projects = False
-    has_error_hazards = False
+    has_error_hazards = False   
 
     model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
     # XLSX STEP 1: Check file exists
@@ -85,222 +109,135 @@ def main():
         error_list.append(error_text)
         has_error_model_params = True
     else:
-        # XLSX STEP 2: Check each tab exists
-        try:
-            model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters')
-        except:
-            error_text = "MODEL PARAMETERS FILE ERROR: UncertaintyParameters tab could not be found"
-            logger.error(error_text)
-            error_list.append(error_text)
-            has_error_model_params = True
-        else:
-            # XLSX STEP 3: Check each tab has necessary columns
+        # XLSX STEP 2: Check each tab exists (and if so, has necessary columns)
+        tabs = ['EconomicScenarios', 'Elasticities', 'ProjectGroups', 'Hazards', 'RecoveryStages', 'FrequencyFactors']
+        converters_dict = {'EconomicScenarios' : {'Economic Scenarios': str}, 
+                           'Elasticities' : {'Trip Loss Elasticities': str}, 
+                           'ProjectGroups' : {'Project Groups': str, 'Project ID': str}, 
+                           'Hazards' : {'Hazard Event': str, 'Filename': str, 'HazardDim1': str, 'HazardDim2': str, 'Event Probability in Start Year': str}, 
+                           'RecoveryStages' : {'Recovery Stages': str}, 
+                           'FrequencyFactors' : {'Event Frequency Factors': str}}
+        for t in tabs:
             try:
-                model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters',
-                                             converters={'Hazard Events': str, 'Recovery Stages': str,
-                                                         'Economic Scenarios': str, 'Trip Loss Elasticities': str,
-                                                         'Project Groups': str})
+                model_params = pd.read_excel(model_params_file, sheet_name = t)
             except:
-                error_text = "MODEL PARAMETERS FILE ERROR: UncertaintyParameters tab is missing required columns"
+                error_text = "MODEL PARAMETERS FILE ERROR: " + t + " tab could not be found."
                 logger.error(error_text)
                 error_list.append(error_text)
                 has_error_model_params = True
+
+            # XLSX STEP 3: Check it has necessary columns
             else:
-                # Test recovery stages are nonnegative numbers
                 try:
-                    recovery_num = pd.to_numeric(model_params['Recovery Stages'].dropna(), downcast='float')
-                    assert(all(recovery_num >= 0))
+                    model_params = pd.read_excel(model_params_file, sheet_name = t,
+                                                 converters = converters_dict[t])
                 except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: Recovery stages are not all nonnegative numbers"
+                    error_text = "MODEL PARAMETERS FILE ERROR: " + t + " tab is missing required columns."
                     logger.error(error_text)
                     error_list.append(error_text)
+                    has_error_model_params = True            
 
-                # Test elasticities can be converted to float
-                try:
-                    model_params['Trip Loss Elasticities'] = pd.to_numeric(model_params['Trip Loss Elasticities'].dropna(), downcast='float')
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: Elasticities could not be converted to float"
-                    logger.error(error_text)
-                    error_list.append(error_text)
+        if not(has_error_model_params):
+            # Test recovery stages are nonnegative numbers
+            try:
+                recovery = pd.read_excel(model_params_file, sheet_name='RecoveryStages',
+                                         converters={'Recovery Stages': str})
 
-                socio = set(model_params['Economic Scenarios'].dropna().tolist())
-                projgroup = set(model_params['Project Groups'].dropna().tolist())
-                elasticity = set(model_params['Trip Loss Elasticities'].dropna().tolist())
-                hazard = set(model_params['Hazard Events'].dropna().tolist())
-                recovery = set(model_params['Recovery Stages'].dropna().tolist())
-            
-        # XLSX STEP 2: Check each tab exists
-        try:
-            projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups')
-        except:
-            error_text = "MODEL PARAMETERS FILE ERROR: ProjectGroups tab could not be found"
-            logger.error(error_text)
-            error_list.append(error_text)
-            has_error_resil_projects = True
-        else:
-            # XLSX STEP 3: Check each tab has necessary columns
+                recovery_num = pd.to_numeric(recovery['Recovery Stages'].dropna(), downcast='float')
+                assert(all(recovery_num >= 0))
+            except:
+                error_text = "MODEL PARAMETERS FILE ERROR: Recovery stages are not all nonnegative numbers"
+                logger.error(error_text)
+                error_list.append(error_text)
+
+            # Test elasticities can be converted to float
+            try:
+                model_params = pd.read_excel(model_params_file, sheet_name='Elasticities',
+                                             converters={'Trip Loss Elasticities': str})
+                                
+                model_params['Trip Loss Elasticities'] = pd.to_numeric(model_params['Trip Loss Elasticities'].dropna(), downcast='float')
+            except:
+                error_text = "MODEL PARAMETERS FILE ERROR: Elasticities could not be converted to float"
+                logger.error(error_text)
+                error_list.append(error_text)
+
+            # Test event frequency factors are nonnegative numbers
+            try:
+                model_params = pd.read_excel(model_params_file, sheet_name='FrequencyFactors',
+                                             converters={'Event Frequency Factors': str})
+
+                event_frequency = pd.to_numeric(model_params['Event Frequency Factors'].dropna(), downcast='float')
+                assert(all(event_frequency >= 0))
+            except:
+                error_text = "MODEL PARAMETERS FILE ERROR: Event frequency factors are not all nonnegative numbers"
+                logger.error(error_text)
+                error_list.append(error_text)
+
+            # Confirm no resilience project is assigned to more than one project group
             try:
                 projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
-                                                   converters={'Project Groups': str, 'Resiliency Projects': str})
+                                                   converters={'Project Groups': str, 'Project ID': str})                
+                projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
+
+                test_resil_projects = projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] != 'no',
+                                                             ['Project Groups', 'Resiliency Projects']].drop_duplicates(ignore_index=True)
+                assert(test_resil_projects.groupby(['Resiliency Projects']).size().max() == 1)
             except:
-                error_text = "MODEL PARAMETERS FILE ERROR: ProjectGroups tab is missing required columns"
+                error_text = "MODEL PARAMETERS FILE ERROR: At least one resilience project assigned to multiple project groups"
                 logger.error(error_text)
                 error_list.append(error_text)
-                has_error_resil_projects = True
-            else:
-                resil = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
-
-                # Confirm project groups are a subset of those listed in this tab
-                if not has_error_model_params:
-                    try:
-                        assert(projgroup <= set(projgroup_to_resil['Project Groups'].dropna().tolist()))
-                    except:
-                        error_text = "MODEL PARAMETERS FILE ERROR: No resilience projects found for at least one project group"
-                        logger.error(error_text)
-                        error_list.append(error_text)
-
-                # Confirm no resilience project is assigned to more than one project group
-                try:
-                    test_resil_projects = projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] != 'no',
-                                                                 ['Project Groups', 'Resiliency Projects']].drop_duplicates(ignore_index=True)
-                    assert(test_resil_projects.groupby(['Resiliency Projects']).size().max() == 1)
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: At least one resilience project assigned to multiple project groups"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-
-        # XLSX STEP 2: Check each tab exists
-        try:
-            hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards')
-        except:
-            error_text = "MODEL PARAMETERS FILE ERROR: Hazards tab could not be found"
-            logger.error(error_text)
-            error_list.append(error_text)
-            has_error_hazards = True
-        else:
-            # XLSX STEP 3: Check each tab has necessary columns
+            
+            # Test HazardDim1 can be converted to int
+            hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
+                                          usecols=['Hazard Event', 'Filename', 'HazardDim1', 'HazardDim2', 'Event Probability in Start Year'],
+                                          converters={'Hazard Event': str, 'Filename': str, 'HazardDim1': str, 'HazardDim2': str,
+                                                      'Event Probability in Start Year': str})
+            
             try:
-                hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
-                                              usecols=['Hazard Event', 'Filename', 'HazardDim1', 'HazardDim2', 'Event Probability in Start Year'],
-                                              converters={'Hazard Event': str, 'Filename': str, 'HazardDim1': str, 'HazardDim2': str,
-                                                          'Event Probability in Start Year': str})
+                hazard_events['HazardDim1'] = pd.to_numeric(hazard_events['HazardDim1'], downcast='integer')
             except:
-                error_text = "MODEL PARAMETERS FILE ERROR: Hazards tab is missing required columns"
+                error_text = "MODEL PARAMETERS FILE ERROR: HazardDim1 column could not be converted to int"
                 logger.error(error_text)
                 error_list.append(error_text)
-                has_error_hazards = True
-            else:
-                # Test HazardDim1 can be converted to int
-                try:
-                    hazard_events['HazardDim1'] = pd.to_numeric(hazard_events['HazardDim1'], downcast='integer')
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: HazardDim1 column could not be converted to int"
-                    logger.error(error_text)
-                    error_list.append(error_text)
 
-                # Test HazardDim2 can be converted to int
-                try:
-                    hazard_events['HazardDim2'] = pd.to_numeric(hazard_events['HazardDim2'], downcast='integer')
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: HazardDim2 column could not be converted to int"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-
-                # Test Event Probability in Start Year can be converted to float
-                try:
-                    hazard_events['Event Probability in Start Year'] = pd.to_numeric(hazard_events['Event Probability in Start Year'], downcast='float')
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: Event Probability in Start Year column could not be converted to float"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-                else:
-                    if cfg['roi_analysis_type'] == 'Regret':
-                        try:
-                            assert(all(hazard_events['Event Probability in Start Year'] == 1.0))
-                        except:
-                            error_text = "MODEL PARAMETERS FILE ERROR: Event Probability in Start Year column must be set to 1 for regret analysis"
-                            logger.error(error_text)
-                            error_list.append(error_text)
-
-                # Confirm hazards are a subset of those listed in this tab
-                if not has_error_model_params:
-                    try:
-                        assert(hazard <= set(hazard_events['Hazard Event'].dropna().tolist()))
-                    except:
-                        error_text = "MODEL PARAMETERS FILE ERROR: No hazard row in Hazards tab found for at least one hazard event"
-                        logger.error(error_text)
-                        error_list.append(error_text)
-
-                if not has_error_model_params:
-                    hazards_list = pd.merge(pd.DataFrame(hazard, columns=['Hazard Event']),
-                                            hazard_events, how='left', on='Hazard Event')
-                else:
-                    has_error_hazards = True
-
-    # ---------------------------------------------------------------------------------------------------
-    # UserInputs.xlsx
-    # 1) Is it present
-    # 2) Does it contain one tab with required columns
-    # 3) Is every element of columns A-D of User Inputs file also an element of Model Parameters file
-    user_inputs_file = os.path.join(input_folder, 'UserInputs.xlsx')
-
-    # XLSX STEP 1: Check file exists
-    if not os.path.exists(user_inputs_file):
-        error_text = "USER INPUTS FILE ERROR: {} could not be found".format(user_inputs_file)
-        logger.error(error_text)
-        error_list.append(error_text)
-    else:
-        # XLSX STEP 2: Check each tab exists
-        try:
-            user_inputs = pd.read_excel(user_inputs_file, sheet_name='UserInputs')
-        except:
-            error_text = "USER INPUTS FILE ERROR: UserInputs tab could not be found"
-            logger.error(error_text)
-            error_list.append(error_text)
-        else:
-            # XLSX STEP 3: Check each tab has necessary columns
+            # Test HazardDim2 can be converted to int
             try:
-                user_inputs = pd.read_excel(user_inputs_file, sheet_name='UserInputs',
-                                            converters={'Hazard Events': str, 'Economic Scenarios': str,
-                                                        'Trip Loss Elasticities': str, 'Resiliency Projects': str,
-                                                        'Event Frequency Factors': str})
+                hazard_events['HazardDim2'] = pd.to_numeric(hazard_events['HazardDim2'], downcast='integer')
             except:
-                error_text = "USER INPUTS FILE ERROR: UserInputs tab is missing required columns"
+                error_text = "MODEL PARAMETERS FILE ERROR: HazardDim2 column could not be converted to int"
+                logger.error(error_text)
+                error_list.append(error_text)
+
+            # Test Event Probability in Start Year can be converted to float and is non-negative
+            try:
+                hazard_events['Event Probability in Start Year'] = pd.to_numeric(hazard_events['Event Probability in Start Year'], downcast='float')
+                assert(all(hazard_events['Event Probability in Start Year'] >= 0))
+            except:
+                error_text = "MODEL PARAMETERS FILE ERROR: Event Probability in Start Year column could not be converted to non-negative float"
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
-                # Test elasticities can be converted to float
-                try:
-                    user_inputs['Trip Loss Elasticities'] = pd.to_numeric(user_inputs['Trip Loss Elasticities'].dropna(), downcast='float')
-                except:
-                    error_text = "USER INPUTS FILE ERROR: Elasticities could not be converted to float"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-
-                # Test event frequency factors are nonnegative numbers
-                try:
-                    event_frequency = pd.to_numeric(user_inputs['Event Frequency Factors'].dropna(), downcast='float')
-                    assert(all(event_frequency >= 0))
-                except:
-                    error_text = "USER INPUTS FILE ERROR: Event frequency factors are not all nonnegative numbers"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-
-                if has_error_model_params:
-                    error_text = "USER INPUTS FILE WARNING: Not comparing UserInputs.xlsx to Model_Parameters.xlsx, errors with Model_Parameters.xlsx"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-                else:
-                    # Confirm user input parameters are a subset of those listed in model parameters file
+                if cfg['roi_analysis_type'] == 'Regret':
                     try:
-                        assert(set(user_inputs['Hazard Events'].dropna().tolist()) <= hazard)
-                        assert(set(user_inputs['Economic Scenarios'].dropna().tolist()) <= socio)
-                        assert(set(user_inputs['Trip Loss Elasticities'].dropna().tolist()) <= elasticity)
-                        assert(set(user_inputs['Resiliency Projects'].dropna().tolist()) <= resil)
+                        assert(all(hazard_events['Event Probability in Start Year'] == 1.0))
                     except:
-                        error_text = "USER INPUTS FILE ERROR: List of parameters in user inputs file not a subset of model parameters file"
+                        error_text = "MODEL PARAMETERS FILE ERROR: Event Probability in Start Year column must be set to 1 for regret analysis"
                         logger.error(error_text)
                         error_list.append(error_text)
+
+            hazards_list = hazard_events
+            hazard = set(hazard_events['Hazard Event'].dropna().tolist()) 
+            projgroup = set(projgroup_to_resil['Project Groups'].dropna().tolist())
+            recovery = set(recovery['Recovery Stages'].dropna().tolist())
+            resil = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
+
+            elasticity = pd.read_excel(model_params_file, sheet_name='Elasticities',
+                                       converters={'Trip Loss Elasticities': float})
+            elasticity = set(elasticity['Trip Loss Elasticities'].dropna().tolist())
+
+            socio = pd.read_excel(model_params_file, sheet_name='EconomicScenarios',
+                                  converters={'Economic Scenarios': str})     
+            socio = set(socio['Economic Scenarios'].dropna().tolist())
 
     # ---------------------------------------------------------------------------------------------------
     # Exposure analysis files
@@ -317,7 +254,7 @@ def main():
             if os.path.isfile(f):
                 hazard_file_list.append(filename)
 
-        if has_error_hazards:
+        if has_error_hazards or not os.path.exists(model_params_file):
             error_text = "EXPOSURE ANALYSIS FILE WARNING: Not validating exposure analysis files, errors with Model_Parameters.xlsx"
             logger.error(error_text)
             error_list.append(error_text)
@@ -382,12 +319,19 @@ def main():
     networks_folder = os.path.join(input_folder, 'Networks')
 
     if os.path.isdir(networks_folder):
-        # CSV STEP 1: Check file exists
+
         node_file = os.path.join(networks_folder, 'node.csv')
+        # These three variables are used at the end to report (if needed) that elements were excluded from the CSV report
+        node_f_excl = False
+        x_excl = False
+        y_excl = False
+        
+        # CSV STEP 1: Check file exists
         if not os.path.exists(node_file):
             error_text = "NETWORK NODE FILE ERROR: Node input file could not be found"
             logger.error(error_text)
             error_list.append(error_text)
+            node_f_excl = True
         else:
             # CSV STEP 2: Check file has necessary columns
             try:
@@ -421,6 +365,11 @@ def main():
                     error_text = "NETWORK NODE FILE ERROR: Column x_coord could not be converted to float"
                     logger.error(error_text)
                     error_list.append(error_text)
+                    x_excl = True
+                else:
+                    # Compute summary statistics on x_coord values
+                    x_coord_stats = summary_info_by_type(df = nodes, ind = 'node_type', val = 'x_coord', file = node_file, notes = "")
+                    param_dfs_list.append(x_coord_stats)                       
 
                 # Test y_coord can be converted to float
                 try:
@@ -429,6 +378,11 @@ def main():
                     error_text = "NETWORK NODE FILE ERROR: Column y_coord could not be converted to float"
                     logger.error(error_text)
                     error_list.append(error_text)
+                    y_excl = True
+                else:
+                    # Compute summary statistics on y_coord values
+                    y_coord_stats = summary_info_by_type(df = nodes, ind = 'node_type', val = 'y_coord', file = node_file, notes = "") 
+                    param_dfs_list.append(y_coord_stats)   
 
         links_file_list = []
         for filename in os.listdir(networks_folder):
@@ -499,11 +453,12 @@ def main():
                                 logger.error(error_text)
                                 error_list.append(error_text)
 
-                            # Test lanes can be converted to int
+                            # Test lanes can be converted to int and all values are positive integers (not negative, zero, or blank)
                             try:
                                 links['lanes'] = pd.to_numeric(links['lanes'], downcast='integer')
+                                assert(all(links['lanes'] > 0))
                             except:
-                                error_text = "NETWORK LINK FILE ERROR: Column lanes could not be converted to int for socio {} and project group {}".format(i, j)
+                                error_text = "NETWORK LINK FILE ERROR: Column lanes has at least one value that is not a positive integer (or is blank) for socio {} and project group {}".format(i, j)
                                 logger.error(error_text)
                                 error_list.append(error_text)
 
@@ -591,7 +546,36 @@ def main():
                                             error_list.append(error_text)
 
                                 else:
-                                    omx_file.close()
+                                    omx_file.close()           
+
+        for link_file in links_file_list:
+            try:
+                links = pd.read_csv(os.path.join(networks_folder, link_file),
+                                    usecols=['facility_type', 'length', 'capacity', 'free_speed', 'toll', 'travel_time'],
+                                    converters={'facility_type': str, 'length': float, 'capacity': float, 'free_speed': float, 'toll': float, 'travel_time': float})
+            except:
+                excluded_list.append(link_file)
+            else:
+                # Compute summary statistics
+                df_length_name = f"length_stats_{link_file}"
+                globals()[df_length_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'length', file = os.path.join(networks_folder, link_file), notes = "The units for length are miles.")
+                param_dfs_list.append(globals()[df_length_name])
+
+                df_capacity_name = f"capacity_stats_{link_file}"
+                globals()[df_capacity_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'capacity', file = os.path.join(networks_folder, link_file), notes = "The units for capacity are vehicles per day per lane.")
+                param_dfs_list.append(globals()[df_capacity_name])                            
+
+                df_speed_name = f"speed_stats_{link_file}"
+                globals()[df_speed_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'free_speed', file = os.path.join(networks_folder, link_file), notes = "The units for free speed are miles per hour.")
+                param_dfs_list.append(globals()[df_speed_name])
+
+                df_toll_name = f"toll_stats_{link_file}"
+                globals()[df_toll_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'toll', file = os.path.join(networks_folder, link_file), notes = "The units for toll are cents.")
+                param_dfs_list.append(globals()[df_toll_name])
+
+                df_travel_time_name = f"time_stats_{link_file}"
+                globals()[df_travel_time_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'travel_time', file = os.path.join(networks_folder, link_file), notes = "The units for travel time are minutes.")
+                param_dfs_list.append(globals()[df_travel_time_name])                                         
     else:
         error_text = "NETWORK FOLDER ERROR: Networks directory for network attribute files does not exist"
         logger.error(error_text)
@@ -801,7 +785,7 @@ def main():
             else:
                 # Test Project Cost can be converted to dollar amount
                 try:
-                    project_cost = project_info['Project Cost'].replace('[\$,]', '', regex=True).astype(float)
+                    project_cost = project_info['Project Cost'].replace('[\$,]', '', regex=True).replace('', '0.0').astype(float)
                 except:
                     error_text = "RESILIENCE PROJECTS FILE ERROR: Column Project Cost could not be translated to dollar amount in project info input file"
                     logger.error(error_text)
@@ -827,7 +811,7 @@ def main():
                 # Test Annual Maintenance Cost can be converted to dollar amount
                 if maintenance:
                     try:
-                        project_cost = project_info['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).astype(float)
+                        project_cost = project_info['Annual Maintenance Cost'].replace('[\$,]', '', regex=True).replace('', '0.0').astype(float)
                     except:
                         error_text = "RESILIENCE PROJECTS FILE ERROR: Column Annual Maintenance Cost could not be translated to dollar amount in project info input file"
                         logger.error(error_text)
@@ -836,7 +820,7 @@ def main():
                 # Test Redeployment Cost can be converted to dollar amount
                 if redeployment:
                     try:
-                        project_cost = project_info['Redeployment Cost'].replace('[\$,]', '', regex=True).astype(float)
+                        project_cost = project_info['Redeployment Cost'].replace('[\$,]', '', regex=True).replace('', '0.0').astype(float)
                     except:
                         error_text = "RESILIENCE PROJECTS FILE ERROR: Column Redeployment Cost could not be translated to dollar amount in project info input file"
                         logger.error(error_text)
@@ -899,7 +883,6 @@ def main():
                         error_text = "RESILIENCE PROJECTS TABLE FILE ERROR: Missing resilience projects in project table input file"
                         logger.error(error_text)
                         error_list.append(error_text)
-
     else:
         error_text = "RESILIENCE PROJECTS FOLDER ERROR: LookupTables directory for resilience projects files does not exist"
         logger.error(error_text)
@@ -907,16 +890,42 @@ def main():
 
     # ---------------------------------------------------------------------------------------------------
     # LAST STEPS
+
+    # Produce a CSV output to help user review inputs to ensure they are reasonable
+    if len(param_dfs_list) > 0:
+        run_id = cfg['run_id']
+        param_stats_df = pd.concat(param_dfs_list, ignore_index=True)
+        csv_filepath = os.path.join(output_folder, 'logs', 'input_validation_parameter_stats_{}_{}.csv'.format(run_id, datetime.datetime.now().strftime("%Y_%m_%d_%H-%M-%S")))
+        param_stats_df.to_csv(csv_filepath, index = False) 
+        # Tell the user about the CSV file that they can use to check whether values are reasonable
+        logger.info("A file with summary statistics on certain fields is available at: " + os.path.join(output_folder, 'logs', 'input_validation_parameter_stats_{}_{}.csv'.format(run_id, datetime.datetime.now().strftime("%Y_%m_%d_%H-%M-%S"))))
+        logger.info("Open it to check whether values are reasonable and match what was entered.")
+    if len(excluded_list) > 0:
+        warning_text = "Note: There is a problem with one or more link files: {}. As a result, summary statistics will not appear in the CSV file referenced above for the file(s). Consult prior messages in log file to understand the problem(s).".format(excluded_list)
+        logger.warning(warning_text)
+    if node_f_excl:
+        warning_text = "Note: The node.csv file could not be found so summary statistics will not appear in the CSV file referenced above for x_coord and y_coord (which would have come from the node.csv file)."
+        logger.warning(warning_text)
+    if x_excl:
+        warning_text = "Note: The x_coord column in the node.csv file could not be converted to float so summary statistics will not appear in the CSV file referenced above."
+        logger.warning(warning_text)
+    if y_excl:
+        warning_text = "Note: The y_coord column in the node.csv file could not be converted to float so summary statistics will not appear in the CSV file referenced above."
+        logger.warning(warning_text)
+
     # If any check failed, raise exception
     if len(error_list) > 0:
         logger.error(("Exiting script with {} breaking errors found! See logger.error outputs in log file for details. Consult the Run Checklist and User Guide to fix.".format(len(error_list))))
         raise Exception("Exiting script with {} breaking errors found! See logger.error outputs in log file for details. Consult the Run Checklist and User Guide to fix.".format(len(error_list)))
     else:
+        # Inform the user that the check passed
         logger.info("All input validation checks passed successfully! No errors found.")
-    
+
     return
 
 
 # ---------------------------------------------------------------------------------------------------
+
+
 if __name__ == "__main__":
     main()

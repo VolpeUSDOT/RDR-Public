@@ -86,8 +86,14 @@ param_list.append(run_minieq)
 allow_centroid_flows = Param('allow_centroid_flows', dtype = 'options', value = 1, required = False, options = [0, 1], short = 'acf')
 param_list.append(allow_centroid_flows)
 
-calc_transit_metrics = Param('calc_transit_metrics', dtype = 'options', value = 1, required = False, options = [0, 1], short = 'ctm')
+calc_transit_metrics = Param('calc_transit_metrics', dtype = 'options', value = 0, required = False, options = [0, 1], short = 'ctm')
 param_list.append(calc_transit_metrics)
+
+aeq_max_iter = Param('aeq_max_iter', dtype = 'int', value = 100, required = False, short = 'ami')
+param_list.append(aeq_max_iter)
+
+aeq_rgap_target = Param('aeq_rgap_target', dtype = 'float', value = 0.01, required = False, short = 'agt')
+param_list.append(aeq_rgap_target)
 
 # ===================
 # DISRUPTION VALUES
@@ -161,7 +167,7 @@ param_list.append(exposure_unit)
 exposure_damage_csv = Param('exposure_damage_csv', dtype = 'path', short = 'edp')
 param_list.append(exposure_damage_csv)
 
-repair_cost_approach = Param('repair_cost_approach', dtype = 'options', options = ['default', 'user-defined'], short = 'rca')
+repair_cost_approach = Param('repair_cost_approach', dtype = 'options', value = 'default', options = ['default', 'user-defined'], short = 'rca')
 param_list.append(repair_cost_approach)
 
 repair_network_type = Param('repair_network_type', dtype = 'options', 
@@ -195,7 +201,7 @@ param_list.append(discount_factor)
 co2_discount_factor = Param('co2_discount_factor', dtype = 'float', value = 0.02, required = False, short = 'cfa')
 param_list.append(co2_discount_factor)
 
-vehicle_occupancy_car = Param('vehicle_occupancy_car', dtype = 'float', value = 1.67, required = False, short = 'occ')
+vehicle_occupancy_car = Param('vehicle_occupancy_car', dtype = 'float', value = 1.52, required = False, short = 'occ')
 param_list.append(vehicle_occupancy_car)
 
 vehicle_occupancy_bus = Param('vehicle_occupancy_bus', dtype = 'float', value = 20, required = False, short = 'ocb')
@@ -207,22 +213,22 @@ param_list.append(vehicle_occupancy_light_rail)
 vehicle_occupancy_heavy_rail = Param('vehicle_occupancy_heavy_rail', dtype = 'float', value = 400, required = False, short = 'ocr')
 param_list.append(vehicle_occupancy_heavy_rail)
 
-veh_oper_cost_car = Param('veh_oper_cost_car', dtype = 'float', value = 0.52, required = False, short = 'opc')
+veh_oper_cost_car = Param('veh_oper_cost_car', dtype = 'float', value = 0.56, required = False, short = 'opc')
 param_list.append(veh_oper_cost_car)
 
-veh_oper_cost_bus = Param('veh_oper_cost_bus', dtype = 'float', value = 1.32, required = False, short = 'opb')
+veh_oper_cost_bus = Param('veh_oper_cost_bus', dtype = 'float', value = 1.37, required = False, short = 'opb')
 param_list.append(veh_oper_cost_bus)
 
-veh_oper_cost_light_rail = Param('veh_oper_cost_light_rail', dtype = 'float', value = 5.72, required = False, short = 'opl')
+veh_oper_cost_light_rail = Param('veh_oper_cost_light_rail', dtype = 'float', value = 5.95, required = False, short = 'opl')
 param_list.append(veh_oper_cost_light_rail)
 
-veh_oper_cost_heavy_rail = Param('veh_oper_cost_heavy_rail', dtype = 'float', value = 4.01, required = False, short = 'opr')
+veh_oper_cost_heavy_rail = Param('veh_oper_cost_heavy_rail', dtype = 'float', value = 4.17, required = False, short = 'opr')
 param_list.append(veh_oper_cost_heavy_rail)
 
-vot_per_hour = Param('vot_per_hour', dtype = 'float', value = 19.60, required = False, short = 'vot')
+vot_per_hour = Param('vot_per_hour', dtype = 'float', value = 21.10, required = False, short = 'vot')
 param_list.append(vot_per_hour)
 
-vot_wait_per_hour = Param('vot_wait_per_hour', dtype = 'float', value = 35.80, required = False, short = 'vow')
+vot_wait_per_hour = Param('vot_wait_per_hour', dtype = 'float', value = 38.80, required = False, short = 'vow')
 param_list.append(vot_wait_per_hour)
 
 transit_fare = Param('transit_fare', dtype = 'float', short = 'far')
@@ -234,29 +240,32 @@ param_list.append(maintenance)
 redeployment = Param('redeployment', dtype = 'options', value = False, required = False, options = [True, False], short = 'rdp')
 param_list.append(redeployment)
 
-safety_cost = Param('safety_cost', dtype = 'float', value = 0.17, required = False, short = 'saf')
+safety_cost = Param('safety_cost', dtype = 'float', value = 0.18, required = False, short = 'saf')
 param_list.append(safety_cost)
 
-safety_cost_bus = Param('safety_cost_bus', dtype = 'float', value = 0.094, required = False, short = 'sab')
+safety_cost_bus = Param('safety_cost_bus', dtype = 'float', value = 0.10, required = False, short = 'sab')
 param_list.append(safety_cost_bus)
 
-noise_cost = Param('noise_cost', dtype = 'float', value = 0.0019, required = False, short = 'nco')
+noise_cost = Param('noise_cost', dtype = 'float', value = 0.0020, required = False, short = 'nco')
 param_list.append(noise_cost)
 
-noise_cost_bus = Param('noise_cost_bus', dtype = 'float', value = 0.0437, required = False, short = 'ncb')
+noise_cost_bus = Param('noise_cost_bus', dtype = 'float', value = 0.0453, required = False, short = 'ncb')
 param_list.append(noise_cost_bus)
 
-non_co2_cost = Param('non_co2_cost', dtype = 'float', value = 0.012, required = False, short = 'nra')
+non_co2_cost = Param('non_co2_cost', dtype = 'float', value = 0.013, required = False, short = 'nra')
 param_list.append(non_co2_cost)
 
-non_co2_cost_bus = Param('non_co2_cost_bus', dtype = 'float', value = 0.035, required = False, short = 'nrb')
+non_co2_cost_bus = Param('non_co2_cost_bus', dtype = 'float', value = 0.037, required = False, short = 'nrb')
 param_list.append(non_co2_cost_bus)
 
-co2_cost = Param('co2_cost', dtype = 'float', value = 0.107, required = False, short = 'cra')
+co2_cost = Param('co2_cost', dtype = 'float', value = 0.110, required = False, short = 'cra')
 param_list.append(co2_cost)
 
-co2_cost_bus = Param('co2_cost_bus', dtype = 'float', value = 0.303, required = False, short = 'crb')
+co2_cost_bus = Param('co2_cost_bus', dtype = 'float', value = 0.314, required = False, short = 'crb')
 param_list.append(co2_cost_bus)
+
+crs = Param('crs', value = 'EPSG:4326', short = 'crs')
+param_list.append(crs)
 
 # ===================
 # NON-CONFIG PARAMS
@@ -403,7 +412,7 @@ param_list.append(seed)
 save_folder = Param('save_folder', dtype = 'path', short = 'hsavd')
 hidden_list.append(save_folder)
 
-save_name = Param('save_name', dtype = 'str', short = 'hsavn')
+save_name = Param('save_name', dtype = 'str', value = 'myRDRsave', short = 'hsavn')
 hidden_list.append(save_name)
 
 save_file = Param('save_file', dtype = 'path', short = 'hsavf')
@@ -441,3 +450,4 @@ if len(set(names)) != len(names):
     raise Exception('DEV ERROR: Parameter name must be unique for each parameter. {} non-unique names detected.'.format(len(names) - len(set(names))))
 
 short_dict = {names[x]:shorts[x] for x in list(range(0,len(names)))}
+names_dict = {shorts[x]:names[x] for x in list(range(0,len(shorts)))}

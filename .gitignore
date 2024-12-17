@@ -23,7 +23,7 @@ Data/*
 scenarios/qs1_sioux_falls/Data/generated_files/*
 scenarios/rs1_earthquake/Data/generated_files/*
 scenarios/rs2_add_scenarios/Data/generated_files/*
-scenarios/rs3_equity/Data/generated_files/*
+scenarios/rs3_taz_metrics/Data/generated_files/*
 scenarios/rs4_transit/Data/generated_files/*
 !scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.cpg
 !scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.dbf
@@ -32,6 +32,7 @@ scenarios/rs4_transit/Data/generated_files/*
 !scenarios/rs5_prepare_network/Data/inputs/TAZ_shapes/*.shx
 scenarios/rs5_prepare_network/Data/inputs/GTFS_data/*.csv
 scenarios/rs5_prepare_network/Data/generated_files/*
+scenarios/rs6_public_data/Data/generated_files/*
 
 # Test files
 !metamodel_py/tests/*

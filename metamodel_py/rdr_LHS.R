@@ -78,16 +78,16 @@ if (file_ext(model_params_file) == 'xlsx') {
 } else {
   cfg_json <- fromJSON(model_params_file)
   prgrps <- cfg_json$rep
-  prgrps <- prgrps %>% rename("Resiliency Projects" = name, "Project Groups" = group)
+  prgrps <- prgrps %>% rename("Project ID" = name, "Project Groups" = group)
 }
 
 names(prgrps) <- make.names(names(prgrps))
 # Add 'no' resil case for each project group
 prgrps <- prgrps %>%
-  add_row(Project.Groups = unique(prgrps$Project.Groups), Resiliency.Projects = "no") %>%
-  unite("projgroup_resil", Project.Groups:Resiliency.Projects, remove = FALSE)
+  add_row(Project.Groups = unique(prgrps$Project.Groups), Project.ID = "no") %>%
+  unite("projgroup_resil", Project.Groups:Project.ID, remove = FALSE)
 prgrps$Project.Groups <- as.factor(prgrps$Project.Groups)
-prgrps$Resiliency.Projects <- as.factor(prgrps$Resiliency.Projects)
+prgrps$Project.ID <- as.factor(prgrps$Project.ID)
 prgrps$projgroup_resil <- as.factor(prgrps$projgroup_resil)
 
 # Read inputs from full_combos_runID.csv
@@ -237,7 +237,7 @@ while (try_count <= max_tries && pass == FALSE) {
   # Make ID columns
   r_named <- suppressMessages(r_named %>%
     left_join(prgrps) %>%
-    rename(projgroup = Project.Groups, resil = Resiliency.Projects) %>%
+    rename(projgroup = Project.Groups, resil = Project.ID) %>%
     mutate(
       projgroup_resil = NULL,
       LHS_ID = paste(socio, projgroup, resil, elasticity, hazard, recovery, sep = "_")
