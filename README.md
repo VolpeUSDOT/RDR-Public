@@ -1,6 +1,6 @@
 <!-- working badge, for working branch -->
 
-[![Python_package Status](https://github.com/VolpeUSDOT/RDR/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR/actions)
+[![Python_package Status](https://github.com/VolpeUSDOT/RDR-Public/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR-Public/actions)
 
 
 # Resilience and Disaster Recovery (RDR) Tool Suite
