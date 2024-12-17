@@ -1,5 +1,50 @@
 # RDR Changelog
 
+## v2024_2
+The RDR 2024.2 public release includes updates across the entire tool suite, primarily focused on use of publicly available data to generate an RDR analysis. The documentation has been expanded to include public data workflows as well as a new Reference Scenario based on the 2022 Ferndale earthquake. Updated visualizations, particularly in the Tableau workbook, provide better insight into where and under what scenarios benefits are found. Several highlights of the release are detailed below.
+
+**RDR Metamodel**
+- Reformatted the Model Parameters input file and eliminated the User Inputs input file to improve usability and clarity of how to define the scenario space.
+- Added two new user parameters to control convergence criteria for the core model (AequilibraE user equilibrium routing): maximum gap and maximum number of iterations.
+- Fixed a bug in the regression module that was assigning core model run outputs to the incorrect resilience projects.
+
+**RDR ROI Analysis Tool**
+- Updated methodology for the resilience return on investment (ROI) module for monetization of trips lost/gained and calculation of safety, noise, and emissions benefits.
+- Corrected a bug in the benefits calculation related to associating network performance metric savings with project benefits.
+- Developed a new Map dashboard in the Tableau workbook for visualizing the user's resilience projects geospatially. The map allows users to dynamically explore their project outcomes and symbolize network links by average exposure, project cost, and regret ranking.
+- Refactored ROI module for readability and efficiency.
+- Refreshed Tableau workbook with clearer text and resolved visualization bugs.
+
+**RDR Benefits Analysis Tool**
+- Renamed tool to emphasize its focus on understanding the distribution of benefits across users of the transportation network.
+- Improved usability of the TAZ metrics HTML report by adding toggle on charts so users can switch between showing data for (a) all TAZ/TAZ pairs versus (b) only the subset of TAZ/TAZ pairs that would be impacted by the disruption.
+- Refactored the equity overlay tool to rely on geospatial processing via geopandas instead of arcpy, meaning that an ArcGIS license is no longer needed to run the tool.
+- Updated default layer for the equity overlay component to use data from the Council on Environmental Quality (CEQ) Climate and Economic Justice Screening Tool (CEJST) in lieu of the prior default data from the Department of Transportation (DOT) Equitable Transportation Community Explorer.
+
+**Public Data**
+- Documented publicly available datasets and general workflows in the User Guide and Reference Scenario Library for developing:
+  - Road and transit networks,
+  - Trip tables,
+  - Hazard impacts.
+- Added helper tools demonstrating various public data workflows, including (a) creation of a road network from OpenStreetMap data, (b) implementation of a gravity model to translate production-attractions to origin-destination trips, (c) overlay of historical earthquake data on a real-world network to calculate link-level capacity and damage impacts.
+- Created a new Reference Scenario to demonstrate the above public data workflows based on the 2022 Ferndale earthquake.
+
+**Helper Tools**
+- Added new functionality to the RDR User Interface:
+  - Updated the order that parameters are set to prioritize those essential to running RDR.
+  - Added more input validation to improve usability.
+  - Updated scenario input validation helper tool to produce a CSV output that allows the user to review summary statistics on certain fields in the node and link files to check their reasonableness.
+- Built in more user flexibility for the suite of Format Demand helper tools.
+- Deprecated the GMNS_link_conversion Excel helper tool.
+
+**Other Updates**
+- Rebuilt the RDR conda environment, which now includes geopandas and osm2gmns.
+- Updated default values in the ROI module to align with the latest USDOT BCA guidance from November 2024.
+- Updated default repair cost values to align with the latest FHWA data.
+- Converted all dollar values to 2023 dollars.
+
+See documentation files for additional details.
+
 ## v2024_1
 The RDR 2024.1 public release includes updates across the entire tool suite, primarily focused on improved user experience. The documentation has been updated to provide ease of access with a new RDR Quick Start Guide documenting installation and how to run a first RDR scenario. A new Reference Scenario Library has been added to provide the user with a fuller list of RDR example scenarios, including a new scenario focused on earthquake hazards and additional support for preparing a transit network for use in RDR.
 
@@ -14,7 +59,7 @@ The RDR 2024.1 public release includes updates across the entire tool suite, pri
 
 **RDR Exposure Analysis Tool**
 - Added logging functionality for better user experience.
-- Created a new “Facility Type Manual” method for applying different exposure-disruption relationships for different asset types.
+- Created a new 'Facility Type Manual' method for applying different exposure-disruption relationships for different asset types.
 - Aligned tool with rest of RDR Tool Suite in referring to nodes as from_node_id and to_node_id.
 
 **RDR Equity and Benefits Analysis Tool**
@@ -33,7 +78,7 @@ The RDR 2024.1 public release includes updates across the entire tool suite, pri
 - Updated scenario input validation helper tool to match changes for the RDR 2024.1 public release.
 
 **Other Updates**
-- Updated default values for monetization of safety, noise, and emissions benefits and transit-specific BCA monetization values including cost per vehicle-mile from the FTA’s National Transit Database 2022 metrics.
+- Updated default values for monetization of safety, noise, and emissions benefits and transit-specific BCA monetization values including cost per vehicle-mile from the FTA's National Transit Database 2022 metrics.
 - Added logging functionality to the setup module to provide the user with errors associated with their configuration file.
 - Reorganized and streamlined the configuration and batch files used by the RDR Tool Suite.
 
@@ -50,14 +95,14 @@ The RDR 2023.2 public release includes updates across the entire tool suite rela
 
 **RDR ROI Analysis Module**
 - Addressed transit-specific benefits and costs by integrating these costs into the ROI calculation by mode of transport. Transit-related costs include transit waiting time, lost transit fares, and incorporation of mode-specific vehicle operating costs.
-- Added noise benefits/disbenefits for associated VMT changes due to detouring using the US DOT BCA guidance external highway cost values. Safety benefit/disbenefits calculations now use the US DOT BCA guidance external highway cost values. The emissions benefits/disbenefits use emissions per mile rates from EPA’s MOVES model and monetary values from the US DOT BCA guidance.
+- Added noise benefits/disbenefits for associated VMT changes due to detouring using the US DOT BCA guidance external highway cost values. Safety benefit/disbenefits calculations now use the US DOT BCA guidance external highway cost values. The emissions benefits/disbenefits use emissions per mile rates from EPA's MOVES model and monetary values from the US DOT BCA guidance.
 - Added CO2-specific discount factor of 3 percent to reflect existing US DOT BCA guidance.
 - Added an optional redeployment cost and an optional annual maintenance cost to project cost user inputs if future costs differ from the initial costs.
 - Updated Tableau template to incorporate above changes so that additional benefit categories are incorporated into the BCA net benefits.
 
 **RDR Equity Analysis Tool**
-- Changed methodology to group and show metrics based on TAZ of origin (rather than TAZ pair (origin-destination pair).
-- Changed the metrics of interest from “trips,” “miles,” and “hours” to “trips,” “minutes per trip,” and “miles per trip.” While this deviates from the main RDR Tool Suite, it provides results that are easier for the user to interpret in the context of the Equity Analysis Tool.
+- Changed methodology to group and show metrics based on TAZ of origin (rather than TAZ pair (origin-destination pair)).
+- Changed the metrics of interest from 'trips,' 'miles,' and 'hours' to 'trips,' 'minutes per trip,' and 'miles per trip.' While this deviates from the main RDR Tool Suite, it provides results that are easier for the user to interpret in the context of the Equity Analysis Tool.
 - Made the tool more flexible to accommodate user-supplied equity variables that are continuous, in addition to the existing functionality to accept and analyze categorical variables. The tool automatically determines whether to treat the user-supplied equity data as continuous or categorical based on the number of unique values.
 - Updated HTML report to include enhanced charts (e.g., more informative hover boxes) and statistical analyses with corresponding narrative.
 - Added CSV outputs with summary table data so that users can access and analyze the underlying data results with their own analytical tools of choice.
@@ -73,9 +118,9 @@ The RDR 2023.2 public release includes updates across the entire tool suite rela
 - Updated scenario input validation helper tool to match changes for the RDR 2023.2 public release.
 
 **Default data**
-- Refreshed RDR’s set of default facility types to align with FHWA’s road functional classes and GTFS route classifications. Explicit categories for transit boarding, transfer, and deboarding links allow for mode-specific benefit-cost analysis.
+- Refreshed RDR's set of default facility types to align with FHWA's road functional classes and GTFS route classifications. Explicit categories for transit boarding, transfer, and deboarding links allow for mode-specific benefit-cost analysis.
 - Provided default values for bridge and transit depth-damage relationships, transit repair costs, and transit repair times.
-- Added default values for transit-specific BCA monetization values including cost per vehicle-mile from the FTA’s National Transit Database 2021 metrics.
+- Added default values for transit-specific BCA monetization values including cost per vehicle-mile from the FTA's National Transit Database 2021 metrics.
 
 See documentation files for additional details.
 

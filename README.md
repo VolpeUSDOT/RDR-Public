@@ -1,6 +1,6 @@
 <!-- working badge, for working branch -->
 
-[![Python_package Status](https://github.com/VolpeUSDOT/RDR-Public/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR-Public/actions)
+[![Python_package Status](https://github.com/VolpeUSDOT/RDR/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR/actions)
 
 
 # Resilience and Disaster Recovery (RDR) Tool Suite
@@ -13,22 +13,10 @@ The RDR Tool Suite is a Python based tool.
 
 The RDR Exposure Analysis Tool and components of other helper tools are ESRI ArcGIS Pro based tools.
 
-Detailed installation and usage instructions are explained in the RDR User Guide documentation here: [https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf)
+Installation instructions are provided in the [Quick Start Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_GettingStarted_final.pdf), and more detailed usage instructions are provided in the [User Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf).
 * Download the latest release on the [Releases page](https://github.com/VolpeUSDOT/RDR-Public/releases).
 * Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool or components of other helper tools).
-* The documentation and quick start scenario files are included with the code release.
-
-### Using this code
-The Python dependencies are detailed in [`environment.yml`](https://github.com/VolpeUSDOT/RDR-Public/blob/main/environment.yml). This assumes you have an installation of Python 3.7 and conda. These steps follow [this reference](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). There are R components as well, which will be installed by conda in the R package library within the user's RDR conda environment.
-
-From your Anaconda Prompt terminal, navigate to the location where you cloned this repository and run the following:
-
-```
-conda env create -f environment.yml
-conda info --envs
-```
-
-You should see `RDRenv` show up as an available environment.
+* The documentation, quick start, and reference scenario files are included with the code release.
 
 ## Contributing:
 Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub repository](https://github.com/VolpeUSDOT/RDR-Public/issues) for the Volpe Development Team to triage.
@@ -48,7 +36,7 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 * Kevin Zhang, PhD (Volpe)
 
 ## Project Sponsors:
-The development of the RDR Tool Suite that contributed to the original public version was funded by the U.S. Federal Highway Administration under Interagency Agreement (IAA) 693JJ319N300014 under the supervision of Michael Culp of the FHWA Office of Natural Environment and by the U.S. Dept. of Transportation under IAA 693JK421NT800008 under the supervision of Shawn Johnson of the Office of Research, Development and Technology (OST-R). Current development is sponsored through IAAs with OST-R under supervision of OST-R's Hamid Ghasemi and Shawn Johnson. 'Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the FHWA or OST-R.
+The development of the RDR Tool Suite that contributed to the original public version was funded by the U.S. Federal Highway Administration under Interagency Agreement (IAA) 693JJ319N300014 under the supervision of Michael Culp of the FHWA Office of Natural Environment and by the U.S. Dept. of Transportation under IAA 693JK421NT800008 under the supervision of Shawn Johnson of the Office of Research, Development and Technology (OST-R). Current development is sponsored through IAAs with OST-R under supervision of OST-R's Hamid Ghasemi and Shawn Johnson. Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the FHWA or OST-R.
 
 ## Acknowledgements:
 The RDR team thanks our beta testers and collaborators at the Hampton Roads Transportation Planning Organization, the Hampton Roads Planning District Commission, the Houston-Galveston Area Council, and the Hillsborough Transportation Planning Organization, as well as Virginia DOT and Florida DOT, for their input during development.
