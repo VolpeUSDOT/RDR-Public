@@ -148,6 +148,9 @@ full_combos <- full_combos %>%
   mutate(across(where(is.integer), as.factor)) %>%
   mutate(across(where(is.numeric), as.factor))
 
+# Ensure that 'no' is the reference level for the resil column
+full_combos$resil <- relevel(full_combos$resil, ref = "no")
+
 stopifnot(all(sapply(full_combos, class) == "factor"))
 
 predictors <- names(full_combos)

@@ -17,8 +17,8 @@ import traceback
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.1"
-VERSION_DATE = "5/22/2024"
+VERSION_NUMBER = "2024.2"
+VERSION_DATE = "12/16/2024"
 
 # ===================================================================================================
 # set up config file and logger
@@ -124,7 +124,7 @@ def main():
     if len(error_list) > 0:
         setup_logger = rdr_supporting.create_loggers(output_folder, 'setup_and_config_validation', cfg)
         setup_logger.error('\n'.join(error_list))
-        raise Exception('{} errors found in config and/or setup file(s). Check setup_and_config_validation log file in {} for list of errors.'.format(len(error_list)), output_folder)
+        raise Exception('{} errors found in config and/or setup file(s). Check setup_and_config_validation log file in {} for list of errors.'.format(len(error_list), output_folder))
 
     logger = rdr_supporting.create_loggers(output_folder, args.task, cfg)
 

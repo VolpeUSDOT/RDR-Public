@@ -81,7 +81,9 @@ def read_config_file(cfg_file, cfg_type='config'):
 
     error_list, cfg_dict['input_dir'] = read_config_file_helper(cfg, cfg_type, 'common', 'input_dir', 'REQUIRED', error_list)
 
+    automated_tests_directory = False
     if re.search('^\\.\\\\tests', cfg_dict['input_dir']):
+        automated_tests_directory = True
         cfg_dict['input_dir'] = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_dict['input_dir']))
 
     if not os.path.exists(cfg_dict['input_dir']):
@@ -90,14 +92,28 @@ def read_config_file(cfg_file, cfg_type='config'):
     error_list, cfg_dict['output_dir'] = read_config_file_helper(cfg, cfg_type, 'common', 'output_dir', 'REQUIRED', error_list)
 
     if re.search('^\\.\\\\tests', cfg_dict['output_dir']):
+        automated_tests_directory = True
         cfg_dict['output_dir'] = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), cfg_dict['output_dir']))
 
+    compare_run_id = False
     if not os.path.exists(cfg_dict['output_dir']):
         p = Path(cfg_dict['output_dir'])
         p.mkdir(parents=True, exist_ok=True)
         print('Created ' + cfg_dict['output_dir'])
+    else:
+        if not automated_tests_directory:
+            if len(os.listdir(cfg_dict['output_dir'])) > 0:
+                if os.path.exists(os.path.join(cfg_dict['output_dir'], 'logs')):
+                    compare_run_id = True
 
     error_list, cfg_dict['run_id'] = read_config_file_helper(cfg, cfg_type, 'common', 'run_id', 'REQUIRED', error_list)
+    if compare_run_id:
+        if len(os.listdir(os.path.join(cfg_dict['output_dir'], 'logs'))) > 0:
+            file_from_previous_run = os.listdir(os.path.join(cfg_dict['output_dir'], 'logs'))[0]
+            previous_run_id = file_from_previous_run[file_from_previous_run.find('_log_')+5:-24]
+            if not (previous_run_id == cfg_dict['run_id']):
+                error_list.append("CONFIG FILE ERROR: new run ID {} differs from previous run ID {} found in current output directory {}. Specify new output directory for the new run ID.".format(
+                                  cfg_dict['run_id'], previous_run_id, cfg_dict['output_dir']))
 
     error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'start_year', 'REQUIRED', error_list)
     cfg_dict['start_year'] = int(value)
@@ -182,6 +198,28 @@ def read_config_file(cfg_file, cfg_type='config'):
 
     if cfg_dict['calc_transit_metrics'] and cfg_dict['aeq_run_type'] == 'SP':
         error_list.append("CONFIG FILE ERROR: aeq_run_type must be set to 'RT' if calc_transit_metrics is set to 1")
+
+    error_list, aeq_max_iter = read_config_file_helper(cfg, cfg_type, 'metamodel', 'aeq_max_iter', 'OPTIONAL', error_list)
+    # Set default to 100 if this is not specified
+    cfg_dict['aeq_max_iter'] = 100
+    if aeq_max_iter is not None:
+        aeq_max_iter = int(aeq_max_iter)
+        if aeq_max_iter <= 0:
+            error_list.append(
+                "CONFIG FILE ERROR: {} is an invalid value for aeq_max_iter, should be an integer greater than zero".format(str(aeq_max_iter)))
+        else:
+            cfg_dict['aeq_max_iter'] = aeq_max_iter
+
+    error_list, aeq_rgap_target = read_config_file_helper(cfg, cfg_type, 'metamodel', 'aeq_rgap_target', 'OPTIONAL', error_list)
+    # Set default to 0.01 if this is not specified
+    cfg_dict['aeq_rgap_target'] = 0.01
+    if aeq_rgap_target is not None:
+        aeq_rgap_target = float(aeq_rgap_target)
+        if aeq_rgap_target <= 0:
+            error_list.append(
+                "CONFIG FILE ERROR: {} is an invalid value for aeq_rgap_target, should be a number greater than zero".format(str(aeq_rgap_target)))
+        else:
+            cfg_dict['aeq_rgap_target'] = aeq_rgap_target
 
     # ===================
     # DISRUPTION VALUES
@@ -571,6 +609,16 @@ def read_config_file(cfg_file, cfg_type='config'):
     else:
         cfg_dict['co2_cost_bus'] = None
 
+    # Coordinate reference system
+    error_list, crs = read_config_file_helper(cfg, cfg_type, 'analysis', 'crs', 'OPTIONAL', error_list)
+    if os.path.exists(os.path.join(cfg_dict['input_dir'], 'LookupTables', 'TrueShape.csv')):
+        if crs is not None:
+            cfg_dict['crs'] = crs
+        else:
+            error_list.append("CONFIG FILE ERROR: crs is a required parameter if TrueShape.csv is provided.")
+    else:
+        cfg_dict['crs'] = None
+
     # ===================
     # UI NON-CONFIG VALUES
     # ===================
@@ -626,7 +674,7 @@ def read_config_file(cfg_file, cfg_type='config'):
             error_list.append("CONFIG FILE ERROR: Can't find 'rep' in UI-prepared config file")
         else:
             projects = pd.DataFrame(cfg['rep'])
-            cfg_dict['projects'] = projects.rename(columns={"name": "Resiliency Projects",
+            cfg_dict['projects'] = projects.rename(columns={"name": "Project ID",
                                                             "group": "Project Groups"})
 
         # Not using UI parameters 'go_to', 'bl', 'py', 'rd'

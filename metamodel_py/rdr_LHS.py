@@ -31,7 +31,6 @@ def main(input_folder, output_folder, cfg_filepath, cfg, logger):
         logger.warning('      - [recovery] section parameters')
         logger.warning('      - [analysis] section parameters except for Value of Travel Time')
         logger.warning('- Addition of new scenario dimensions or removal of prior scenario dimensions (e.g., hazards, economic scenarios, trip loss elasticities, resilience projects), and corresponding edits in the following input files to capture addition/subtraction of scenario dimensions: ')
-        logger.warning('      - UserInputs.xlsx')
         logger.warning('      - Model_Parameters.xlsx')
         logger.warning('      - Base year core model runs file')
         logger.warning('      - Resilience projects files')
@@ -68,18 +67,34 @@ def main(input_folder, output_folder, cfg_filepath, cfg, logger):
                          "scenario space defined by {}".format(model_params_file)))
 
     if cfg['cfg_type'] == 'config':
-        model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters',
-                                     converters={'Hazard Events': str, 'Recovery Stages': str,
-                                                 'Economic Scenarios': str, 'Trip Loss Elasticities': float,
-                                                 'Project Groups': str})
-        projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
-                                           converters={'Project Groups': str, 'Resiliency Projects': str})
+        socio = pd.read_excel(model_params_file, sheet_name='EconomicScenarios',
+                              usecols=['Economic Scenarios'],
+                              converters={'Economic Scenarios': str})
+        
+        projgroup = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
+                                  usecols=['Project Groups'],
+                                  converters={'Project Groups': str})
+        
+        elasticity = pd.read_excel(model_params_file, sheet_name='Elasticities',
+                                   usecols=['Trip Loss Elasticities'],
+                                   converters={'Trip Loss Elasticities': float})
+                        
+        hazard = pd.read_excel(model_params_file, sheet_name='Hazards',
+                               usecols=['Hazard Event'],
+                               converters={'Hazard Event': str})
+                
+        recovery = pd.read_excel(model_params_file, sheet_name='RecoveryStages',
+                                 usecols=['Recovery Stages'],
+                                 converters={'Recovery Stages': str})
 
-        socio = set(model_params['Economic Scenarios'].dropna().tolist())
-        projgroup = set(model_params['Project Groups'].dropna().tolist())
-        elasticity = set(model_params['Trip Loss Elasticities'].dropna().tolist())
-        hazard = set(model_params['Hazard Events'].dropna().tolist())
-        recovery = set(model_params['Recovery Stages'].dropna().tolist())
+        projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
+                                           converters={'Project Groups': str, 'Project ID': str})
+
+        socio = set(socio['Economic Scenarios'].dropna().tolist())
+        projgroup = set(projgroup['Project Groups'].dropna().tolist())
+        elasticity = set(elasticity['Trip Loss Elasticities'].dropna().tolist())
+        hazard = set(hazard['Hazard Event'].dropna().tolist())
+        recovery = set(recovery['Recovery Stages'].dropna().tolist())
     else:  # cfg_type = 'json'
         projgroup_to_resil = cfg['projects']
 
@@ -90,13 +105,13 @@ def main(input_folder, output_folder, cfg_filepath, cfg, logger):
         recovery = cfg['recovery_stages']
 
     # Ensure baseline scenario of no resilience investment is included
-    if projgroup_to_resil['Resiliency Projects'].str.contains('no').any():
+    if projgroup_to_resil['Project ID'].str.contains('no').any():
         logger.warning("Resilience projects labeled 'no' are assumed to indicate no resilience investment.")
     projgroup_to_resil_copy = projgroup_to_resil.copy(deep=True)
-    projgroup_to_resil_copy.loc[:, ['Resiliency Projects']] = 'no'
+    projgroup_to_resil_copy.loc[:, ['Project ID']] = 'no'
     projgroup_to_resil = pd.concat([projgroup_to_resil, projgroup_to_resil_copy], ignore_index=True)
     projgroup_to_resil = projgroup_to_resil.loc[:, ['Project Groups',
-                                                    'Resiliency Projects']].drop_duplicates(ignore_index=True)
+                                                    'Project ID']].drop_duplicates(ignore_index=True)
 
     logger.config("List of economic scenarios: \t{}".format(', '.join(str(e) for e in socio)))
     logger.config("List of project groups: \t{}".format(', '.join(str(e) for e in projgroup)))
@@ -104,7 +119,7 @@ def main(input_folder, output_folder, cfg_filepath, cfg, logger):
     logger.config("List of hazards: \t{}".format(', '.join(str(e) for e in hazard)))
     logger.config("List of recovery stages: \t{}".format(', '.join(str(e) for e in recovery)))
 
-    resil = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
+    resil = set(projgroup_to_resil['Project ID'].dropna().tolist())
     logger.config("List of resilience projects: \t{}".format(', '.join(str(e) for e in resil)))
 
     combo_list = list(product(socio, projgroup, elasticity, hazard, recovery))
@@ -121,7 +136,7 @@ def main(input_folder, output_folder, cfg_filepath, cfg, logger):
                         "found in ProjectGroups tab of Model_Parameters.xlsx and will be excluded in analysis."))
     full_combos = full_combos.loc[full_combos['_merge'] == 'both', :]
     full_combos.drop(labels=['Project Groups', '_merge'], axis=1, inplace=True)
-    full_combos.rename({'Resiliency Projects': 'resil'}, axis='columns', inplace=True)
+    full_combos.rename({'Project ID': 'resil'}, axis='columns', inplace=True)
     logger.debug("Size of full scenario space: {}".format(full_combos.shape))
 
     with open(full_combos_file, "w", newline='') as f:
@@ -190,25 +205,34 @@ def check_model_params_coverage(model_params_file, input_folder, cfg, logger):
     is_covered = 1
 
     if cfg['cfg_type'] == 'config':
-        # If params_file is "Model_Parameters.xlsx" then sheet_name = 'UncertaintyParameters'
-        model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters',
-                                     usecols=['Hazard Events', 'Economic Scenarios', 'Project Groups'],
-                                     converters={'Hazard Events': str, 'Economic Scenarios': str, 'Project Groups': str})
-        hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
-                                      usecols=['Hazard Event', 'Filename'],
-                                      converters={'Hazard Event': str, 'Filename': str})
+        
+        # Read in columns 'Hazard Event', 'Economic Scenarios', 'Project Groups'
+        hazard = pd.read_excel(model_params_file, sheet_name='Hazards',
+                               usecols=['Hazard Event'],
+                               converters={'Hazard Event': str})
 
-        # Read in columns 'Hazard Events', 'Economic Scenarios', 'Project Groups'
+        socio = pd.read_excel(model_params_file, sheet_name='EconomicScenarios',
+                              usecols=['Economic Scenarios'],
+                              converters={'Economic Scenarios': str})
+        
+        projgroup = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
+                                  usecols=['Project Groups'],
+                                  converters={'Project Groups': str})
+        
+        hazards_list = pd.read_excel(model_params_file, sheet_name='Hazards',
+                                     usecols=['Hazard Event', 'Filename'],
+                                     converters={'Hazard Event': str, 'Filename': str})
+
         # Do not need to check resilience project coverage; if no links are listed in project_table.csv then no effect
-        hazard = set(model_params['Hazard Events'].dropna().tolist())
-        socio = set(model_params['Economic Scenarios'].dropna().tolist())
-        projgroup = set(model_params['Project Groups'].dropna().tolist())
+        hazard = set(hazard['Hazard Event'].dropna().tolist())
+        socio = set(socio['Economic Scenarios'].dropna().tolist())
+        projgroup = set(projgroup['Project Groups'].dropna().tolist())
     else:  # cfg_type = 'json'
-        hazard_events = cfg['hazards']
+        hazards_list = cfg['hazards']
 
-        # Create sets for 'Hazard Events', 'Economic Scenarios', 'Project Groups'
+        # Create sets for 'Hazard Event', 'Economic Scenarios', 'Project Groups'
         # Do not need to check resilience project coverage; if no links are listed in project_table.csv then no effect
-        hazard = set(hazard_events['Hazard Event'].dropna().tolist())
+        hazard = set(hazards_list['Hazard Event'].dropna().tolist())
         socio = set(cfg['socios']['Economic Scenarios'].dropna().tolist())
         projgroup = set(cfg['projects']['Project Groups'].dropna().tolist())
 
@@ -219,8 +243,6 @@ def check_model_params_coverage(model_params_file, input_folder, cfg, logger):
             is_covered = 0
             logger.error("Missing input file {}".format(filename))
 
-    hazards_list = pd.merge(pd.DataFrame(hazard, columns=['Hazard Event']),
-                            hazard_events, how='left', on='Hazard Event')
     for index, row in hazards_list.iterrows():
         filename = os.path.join(input_folder, 'Hazards', str(row['Filename']) + '.csv')
         if not os.path.exists(filename):
