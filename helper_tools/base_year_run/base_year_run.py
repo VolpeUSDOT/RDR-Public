@@ -14,8 +14,8 @@ import rdr_setup
 import rdr_supporting
 import rdr_CompileAE
 
-VERSION_NUMBER = "2024.1"
-VERSION_DATE = "5/22/2024"
+VERSION_NUMBER = "2024.2"
+VERSION_DATE = "12/16/2024"
 # ---------------------------------------------------------------------------------------------------
 # The following code processes an existing scenario configuration to automatically
 # generate the outputs of all of the AequilibraE base year runs into one consolidated CSV file
@@ -99,14 +99,17 @@ def main():
         raise Exception(("INSUFFICIENT HAZARD INPUT DATA ERROR: missing input files for " +
                          "scenario space defined by {}".format(model_params_file)))
 
-    model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters',
-                                 converters={'Hazard Events': str, 'Recovery Stages': str,
-                                             'Economic Scenarios': str, 'Trip Loss Elasticities': float,
-                                             'Project Groups': str})
+    hazard = pd.read_excel(model_params_file, sheet_name='Hazards',
+                           usecols=['Hazard Event'],
+                           converters={'Hazard Event': str})
+            
+    recovery = pd.read_excel(model_params_file, sheet_name='RecoveryStages',
+                             usecols=['Recovery Stages'],
+                             converters={'Recovery Stages': str})
 
-    hazard = set(model_params['Hazard Events'].dropna().tolist())
+    hazard = set(hazard['Hazard Event'].dropna().tolist())
     logger.config("List of hazards: \t{}".format(', '.join(str(e) for e in hazard)))
-    recovery = set(model_params['Recovery Stages'].dropna().tolist())
+    recovery = set(recovery['Recovery Stages'].dropna().tolist())
     logger.config("List of recovery stages: \t{}".format(', '.join(str(e) for e in recovery)))
 
     product1 = pd.DataFrame(list(product(hazard, recovery)),
@@ -178,22 +181,16 @@ def main():
 
 
 # ---------------------------------------------------------------------------------------------------
+
+
 def check_hazards_coverage(model_params_file, input_folder, logger):
     logger.info("Start: check_hazards_coverage")
     is_covered = 1
-    model_params = pd.read_excel(model_params_file, sheet_name='UncertaintyParameters',
-                                 usecols=['Hazard Events'],
-                                 converters={'Hazard Events': str})
     hazard_events = pd.read_excel(model_params_file, sheet_name='Hazards',
                                   usecols=['Hazard Event', 'Filename'],
                                   converters={'Hazard Event': str, 'Filename': str})
 
-    # Read in column 'Hazard Events'
-    hazard = set(model_params['Hazard Events'].dropna().tolist())
-
-    hazards_list = pd.merge(pd.DataFrame(hazard, columns=['Hazard Event']),
-                            hazard_events, how='left', on='Hazard Event')
-    for index, row in hazards_list.iterrows():
+    for index, row in hazard_events.iterrows():
         filename = os.path.join(input_folder, 'Hazards', str(row['Filename']) + '.csv')
         if not os.path.exists(filename):
             is_covered = 0
@@ -204,6 +201,8 @@ def check_hazards_coverage(model_params_file, input_folder, logger):
 
 
 # ---------------------------------------------------------------------------------------------------
+
+
 def setup_sql_nodes(input_dir, logger):
     # Aequilibrae requires a SQLite database to be setup first--this code is copied from rdr_RunAE.py
     # Set up AEMaster SQLite database with node information
@@ -238,5 +237,7 @@ def setup_sql_nodes(input_dir, logger):
 
 
 # ---------------------------------------------------------------------------------------------------
+
+
 if __name__ == "__main__":
     main()

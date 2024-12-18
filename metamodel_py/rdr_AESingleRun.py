@@ -16,6 +16,12 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
     logger.info("Start: AequilibraE single run module")
     mtx_fldr = 'matrices'
 
+    # TrueShape.csv path, later used to check for existence of TrueShape.csv
+    true_shape_file = os.path.join(input_folder, 'LookupTables', 'TrueShape.csv')
+
+    # Coordinate reference system
+    crs = cfg['crs']
+    
     # run_params is a dictionary containing the parameters defining a single AequilibraE run
     # run_params['socio'] = 'base'  # string, e.g., 'base', 'urban', 'suburban', 'water'
     # run_params['projgroup'] = '04'  # string, e.g., '04', '30'
@@ -111,7 +117,8 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
 
         link_flow_file = os.path.join(base_run_folder, 'link_flow_' + basescenname + '.csv')
         link_flows = merge_network_outputs(run_params, base_run_folder, output_network_fullfile, link_flow_file, logger)
-        create_gis_output(run_params, input_folder, base_run_folder, link_flows, logger)
+        if os.path.exists(true_shape_file):
+            create_gis_output(run_params, input_folder, base_run_folder, link_flows, logger, crs)
 
     if run_params['socio'] != 'baseline_run':
         # DISRUPTED NETWORK RUN #
@@ -170,7 +177,8 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
 
         link_flow_file = os.path.join(disrupt_run_folder, 'link_flow_adjdem_' + disruptscenname + '.csv')
         link_flows = merge_network_outputs(run_params, disrupt_run_folder, output_network_fullfile, link_flow_file, logger)
-        create_gis_output(run_params, input_folder, disrupt_run_folder, link_flows, logger)
+        if os.path.exists(true_shape_file):
+            create_gis_output(run_params, input_folder, disrupt_run_folder, link_flows, logger, crs)
 
     logger.info("Finished: AequilibraE single run module")
 
@@ -198,7 +206,7 @@ def merge_network_outputs(run_params, output_folder, network_file, flow_file, lo
 # ==============================================================================
 
 
-def create_gis_output(run_params, input_folder, output_folder, link_flows, logger):
+def create_gis_output(run_params, input_folder, output_folder, link_flows, logger, crs):
     # This function converts a specified link_flows_full CSV to a GIS-compatible GeoJSON object
     # Inputs:
     # input_folder = input data directory (e.g., 'C:\GitHub\RDR\scenarios\qs1_sioux_falls\Data\inputs')
@@ -210,7 +218,8 @@ def create_gis_output(run_params, input_folder, output_folder, link_flows, logge
     link_flows['geometry'] = link_flows['wkt'].apply(wkt.loads)
 
     # Create GeoDataFrame
-    gdf = gpd.GeoDataFrame(link_flows, crs='epsg:4326')
+    gdf = gpd.GeoDataFrame(link_flows, crs=crs)
+    gdf = gdf.to_crs('epsg:4326')
 
     # Export to GeoJSON
     gdf.to_file(os.path.join(output_folder, 'link_flow_full.json'), driver="GeoJSON")

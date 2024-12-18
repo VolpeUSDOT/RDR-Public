@@ -101,5 +101,5 @@ def test_qs2(add_sample = True):
     tableau_file = tableau_file.reset_index().copy()
     assert tableau_file.ResiliencyProject[0] == 'L8-9_comp'
 
-    # Discounted cost for this project is approx 697,290
-    assert round(tableau_file.ProjectCosts_Discounted[0]) == 697290
+    # Discounted cost for this project is approx 718,906
+    assert round(tableau_file.ProjectCosts_Discounted[0]) == 718906

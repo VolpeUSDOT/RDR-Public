@@ -8,7 +8,7 @@ RDR uses automated testing to ensure the quality of the code base. The following
 4. `qs2B_test.py`
 5. `qs2C_test.py`
 6. `rs2_test.py`
-7. `rs3_equity_test.py`
+7. `rs3_taz_metrics_test.py`
 8. `rs4_full_test.py`
 
 The first validates that input folders are set up correctly, that the config file has the correct values, and that initial setup of the RDR run has been done.
@@ -22,7 +22,7 @@ The third - fifth are tests of (now deprecated) Quick Start 2, which modifies ou
 
 The sixth runs Reference Scenario 2, which likewise modifies the outputs of QS1 by expanding the scenario space.
 
-The seventh runs Reference Scenario 3, which is a test of the Equity and Benefits Analysis Tool using QS1 input files.
+The seventh runs Reference Scenario 3, which is a test of the Benefits Analysis Tool using QS1 input files.
 
 The eighth runs Reference Scenario 4, which includes a transit network and 0-car trip table.
 

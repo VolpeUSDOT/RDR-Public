@@ -108,4 +108,4 @@ def test_rs4(add_sample = True):
 
     # Check repair cost of transit project
     rail_repair_cost = tableau_file.RepairCleanupCostSavings[tableau_file.ResiliencyProject == 'Rail'].min()
-    assert rail_repair_cost == -58676832
+    assert rail_repair_cost == -65104914.24

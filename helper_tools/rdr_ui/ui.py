@@ -11,9 +11,9 @@ import error_classes as ec
 header = "\n\n\
 ________________________________________________________________________________________\n\n\
        R D R   U I\n\n\n\n\
-       UI version 2024.1 alpha\n\n\n\n\
-       RDR version 2024.1\n\n\n\n\
-       UI created by Kevin Zhang, Andrew Breck, and Juwon Drake at the Volpe Center\n\n\n\n\
+       UI version 2024.2 alpha\n\n\n\n\
+       RDR version 2024.2\n\n\n\n\
+       UI created by Andrew Breck, Juwon Drake, and Kevin Zhang at the Volpe Center\n\n\n\n\
 ________________________________________________________________________________________"
 
 bad_selection = '\n\n\n     Invalid selection.\n\n     Type one of the below options or a universal command and press enter.'
@@ -186,7 +186,7 @@ def build_bat() -> None:
     print("\n\n\n\n      CREATE RDR BATCH FILE")
 
     # Batch file location
-    print("\n\n      Current batch folder location: {}".format(params.bat_location.value))
+    print("\n\n      Current batch folder location: {}\n      Shortcut: -{}".format(params.bat_location.value, params.bat_location.short))
     if params.bat_location.value is None:
         input('\n\n\n        Batch file location not set. Redirecting to Set Parameters. Press Enter...')
         pushinput = ''.join(['-', params.bat_location.short, 'backto'])
@@ -227,6 +227,7 @@ def build_bat() -> None:
         pushinput = ''.join(['-', 'save', 'backto'])
         universal_commands(pushinput)
 
+    # Second half: non-config filepaths
     uinput = input('\n\n      To modify a parameter, type its shortcut and press enter to specify.\n      To continue without modifications, press enter.\n>>')
     if uinput == '':
         os.system('cls')

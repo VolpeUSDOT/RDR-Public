@@ -9,6 +9,7 @@ import ui
 from params import dtypes, param_list, shorts, shorts_multi, MultiParam, Param
 import params
 import set_params as sp
+import ui_validation as uv
 
 def clean_input():
     pass
@@ -45,30 +46,29 @@ def ask_path(message: str = '', fn_or_dir: str = 'filename', should_exist: bool 
 
     # the path should be a filename if that is specified in fn_or_dir of the param, same for directory
     # this only checks if the path actually exists
-    if os.path.isdir(user_input) and fn_or_dir == 'filename':
-        print("Invalid entry. Enter a file path instead of a directory (folder) path.")
-        ask_path(message, fn_or_dir, should_exist)
-    elif os.path.isfile(user_input) and fn_or_dir == 'directory':
-        print("Invalid entry. Enter a directory (folder) path instead of a file path.")
-        ask_path(message, fn_or_dir, should_exist)
-
-    if os.path.exists(user_input):
-        if should_exist:  # user provides a path to existing file or directory required for RDR
-            return user_input
-        else:  # RDR may overwrite a file or use a directory already containing files, may need to alert user
-            print('Warning: the {} already exists and may be overwritten'.format(fn_or_dir))
-            input('Press ↵ Enter to continue...')
-            return user_input
-    else:
-        if should_exist:  # user input error, call ask_path to get an existing path
-            os.system('cls')
-            print('The {} does not exist'.format(fn_or_dir))
-            ask_path(message, fn_or_dir, should_exist)
-        else:  # if directory, UI will create it; if filename, UI will record it but do nothing
-            if fn_or_dir == 'directory':
-                p = Path(user_input)
-                p.mkdir(parents=True, exist_ok=True)
-            return user_input
+    errors = uv.validate_path(fn_or_dir, user_input)
+    if len(errors) == 0:
+        if os.path.exists(user_input):
+            if should_exist:  # user provides a path to existing file or directory required for RDR
+                return user_input
+            else:  # RDR may overwrite a file or use a directory already containing files, may need to alert user
+                print('Warning: the {} already exists and may be overwritten'.format(fn_or_dir))
+                input('Press ↵ Enter to continue...')
+                return user_input
+        else:
+            if should_exist:  # user input error, call ask_path to get an existing path
+                os.system('cls')
+                print('The {} does not exist'.format(fn_or_dir))
+                ask_path(message, fn_or_dir, should_exist)
+            else:  # if directory, UI will create it; if filename, UI will record it but do nothing
+                if fn_or_dir == 'directory':
+                    p = Path(user_input)
+                    p.mkdir(parents=True, exist_ok=True)
+                return user_input
+        
+    os.system('cls')
+    print('\n'.join(errors))
+    ask_path(message, fn_or_dir, should_exist)
 
 def ask_num(message:str = '', dtype:str = 'year', low:Union[int, float] = 1000, high:Union[int, float] = 9999) -> Union[str, float, int]:
     print(message)
@@ -83,20 +83,15 @@ def ask_num(message:str = '', dtype:str = 'year', low:Union[int, float] = 1000, 
     ui.universal_commands(user_input)
     if user_input == '':
         return user_input
-    
-    try:
-        if dtype == 'float':
-            user_input = float(user_input)
-        else:
-            user_input = int(user_input)
-    except:
-        print('Invalid format.')
-        ask_num(message, dtype, low, high)
 
-    if (user_input >= low) and (user_input <= high):
-        return user_input
+    if len(uv.validate_num(dtype, low, high, user_input)) == 0:
+        if dtype == 'float':
+            return float(user_input)
+        elif dtype in ['int','year']:
+            return int(user_input)
     
-    print('{} is not between {} and {}.'.format(user_input, low, high))
+    os.system('cls')
+    print('Invalid input.')
     ask_num(message, dtype, low, high)
 
 def ask_string(message:str = '', char_floor:int = 0, char_ceiling:int = 1000, illegal_chars:str = None) -> str:
@@ -106,14 +101,12 @@ def ask_string(message:str = '', char_floor:int = 0, char_ceiling:int = 1000, il
     if user_input == '':
         return user_input
     
-    no_illegal_chars = set(user_input).isdisjoint(set(illegal_chars))  # borrowed from https://stackoverflow.com/a/17735466
-
-    if len(user_input) >= char_floor:
-        if len(user_input) <= char_ceiling:
-            if no_illegal_chars:
-                return user_input
+    errors = uv.validate_string(char_floor, char_ceiling, illegal_chars, user_input)
+    if len(errors) == 0:
+        return user_input
     
-    print('Invalid input.')
+    os.system('cls')
+    print('\n'.join(errors))
     ask_string(message, char_floor, char_ceiling, illegal_chars)
 
 def ask_options(message:str = '', options:list = None) -> Union[str, float, int, bool]:
@@ -129,14 +122,12 @@ def ask_options(message:str = '', options:list = None) -> Union[str, float, int,
     if user_input == '':
         return user_input
     
-    # TODO: add try-except for conversion to int
-    user_input = int(user_input)
-
-    if user_input in list(range(1, n+1)):
-        return options[user_input-1]
-
+    errors = uv.validate_options(user_input, n)
+    if len(errors) == 0:
+        return options[int(user_input) - 1]
+    
     os.system('cls')
-    print('Invalid input.')
+    print('\n'.join(errors))
     ask_options(message, options)
 
 def ask_multi(param:Param, message:str = '', info:str = '', mlist:list = None, n:int = 0) -> None:
@@ -180,7 +171,7 @@ def ask_multi(param:Param, message:str = '', info:str = '', mlist:list = None, n
 
     print('HINT: Type "done" if done setting {}.\nHINT: Type "--NUMBER" (for example: --3) to jump to that item number.'.format(param.name))
     print('HINT: To delete an item, type "deleteNUMBER" (for example delete3) to delete that item number.')
-    print('HINT: To delete all items, type deleteALL. (Use this if )')
+    print('HINT: To delete all items, type deleteALL.')
     
     user_input = input(input_message)
     user_input = user_input.replace("'", '').replace('"', '')
@@ -189,7 +180,19 @@ def ask_multi(param:Param, message:str = '', info:str = '', mlist:list = None, n
     if user_input.lower() in ['', 'done']:
         sp.main(go_to = 'next')
 
-    elif user_input[0:6] == 'delete':
+    elif user_input == 'deleteALL':
+        uinput = ask_y_n('Are you sure you want to delete all items?')
+        if uinput.lower() == 'y':
+            param.mval.clear()
+
+        os.system('cls')
+
+        for mini_param in mlist:
+            mini_param.value = None
+
+        ask_multi(param, info = info, mlist = mlist, n = 0)   
+
+    elif user_input[0:6].lower() == 'delete':
         uinput = ask_y_n('Are you sure you want to delete item number {}?'.format(user_input[6:]))
         if uinput.lower() == 'y':
             deleted = False
@@ -213,18 +216,6 @@ def ask_multi(param:Param, message:str = '', info:str = '', mlist:list = None, n
             mini_param.value = None
 
         ask_multi(param, info = info, mlist = mlist, n = n)
-
-    elif user_input == 'deleteALL':
-        uinput = ask_y_n('Are you sure you want to delete all items?')
-        if uinput.lower() == 'y':
-            param.mval.clear()
-
-        os.system('cls')
-
-        for mini_param in mlist:
-            mini_param.value = None
-
-        ask_multi(param, info = info, mlist = mlist, n = 0)   
 
     elif user_input[0:2] == '--':
         try:
@@ -264,20 +255,37 @@ def set_multi_using_list(param:Param, mparam:MultiParam, info:str = '', mlist:li
 
         print('Writing attributes...')
 
+        errors_list = []
         for mini_param, uinput in zip(mlist, ilist):
-            if mini_param.value is None or mini_param.value == '':
-                mini_param.value = uinput
-                # TODO: add input validation
+
             if uinput == '':
                 continue # Skip blank values
+            
+            if mini_param.value is None or mini_param.value == '':
+                errors = uv.validate_mini(mini_param, uinput)
+                if len(errors) == 0:
+                    mini_param.value = uinput
+                # TODO: add input validation
+                # NOTE: input validation - create list of errors that can be displayed to the user when they are re-prompted to enter inputs
+                    # ex: Hazard length: Integer error: must be between x and y
+                # NOTE: current uv.validate functions returning Bool won't work because user can't see why an error occurred..
+                    # maybe just return a list of errors? and if the list is empty, that's the equivalent of the old True
+                else:
+                    errors_list.append('\n'.join(errors))
+
+        if len(errors_list) > 0:
+            os.system('cls')
+            print('\n'.join(errors_list))
+            ask_multi(param, info = info, mlist = mlist, n = n)
 
         for mini_param in mlist:
             for attribute_name in list(mparam.__dict__.keys()):
                 if attribute_name in mini_param.name:
                     mparam.__dict__[attribute_name] = mini_param.value
         
-        if mparam.name[0] is None:  # TODO: figure out why mparam.name is contained in a tuple at this point when name is not assigned
-            mparam.name = param.short + '_' + str(n + 1)
+        if mparam.name is not None: # Name may not be set yet
+            if mparam.name[0] is None:  # TODO: figure out why mparam.name is contained in a tuple at this point when name is not assigned
+                mparam.name = param.short + '_' + str(n + 1)
 
         param.mval.append(mparam)
 
@@ -292,6 +300,8 @@ def set_multi_using_list(param:Param, mparam:MultiParam, info:str = '', mlist:li
     ask_multi(param, info = info, mlist = mlist, n = n)
 
 def set_multi_using_attr(param, mparam, info = '', mlist = None, user_input = None, n = 0):  # TODO: reintroduce functionality using argparse
+
+    # NOTE: This method of non-config param entry is currently unused
 
     pair_list = [pair.strip(' "') for pair in user_input.split(',')]
 
@@ -510,7 +520,7 @@ def copy_files(source_files: list, destination_dir: str, names: str = None) -> N
             n += 1
         dest = os.path.join(destination_dir, name)
         if os.path.exists(dest):
-            uinput = input('WARNING: {} exists and will be\noverwritten with {}.\nMove it to avoid overwriting.\nPress Enter key to continue...'.format(dest, file))
+            uinput = input('WARNING: {} exists and will be\noverwritten with {}.\nMove it to avoid overwriting. Identical files will not be overwritten and can be left in place.\nPress Enter key to continue...'.format(dest, file))
             ui.universal_commands(uinput)
         try:
             shutil.copy(file, dest)
@@ -530,13 +540,13 @@ def move_non_config_files(input_dir: Param, haz: Param, ecf: Param, net: Param, 
     error_params = []
     for param in ncf_params:
         for multi in param.mval:
-            if os.path.exists(multi.fpath):
+            if os.path.exists(str(multi.fpath)):
                 continue
             else:
                 error_files.append('Name: {}, Shortcut: {}, File: {}'.format(param.name, param.short, multi.fpath))
                 error_params.append(param)
     for param in oth_params:
-        if os.path.exists(param.value):
+        if os.path.exists(str(param.value)):
             continue
         else:
             error_files.append('Name: {}, Shortcut: {}, File: {}'.format(param.name, param.short, param.value))

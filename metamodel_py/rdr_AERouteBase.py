@@ -120,9 +120,9 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
     assigclass.set_vot(cent_per_min)
     assigclass.set_fixed_cost("toll", 1.0)
 
-    # Since I haven't checked the parameters file, let's make sure convergence criteria is good
-    assig.max_iter = 100  # was 1000 or 100
-    assig.rgap_target = 0.01  # was 0.00001 or 0.01
+    # Set the convergence criteria
+    assig.max_iter = cfg['aeq_max_iter']  # default is 100
+    assig.rgap_target = cfg['aeq_rgap_target']  # default is 0.01
 
     assig.execute()  # We then execute the assignment
 
