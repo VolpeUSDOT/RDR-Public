@@ -1,3 +1,5 @@
+{% include analytics.html %}
+
 # Resilience and Disaster Recovery (RDR) Tool Suite
 
 ## Description:
