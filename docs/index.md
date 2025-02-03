@@ -36,7 +36,7 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 ## Video Series:
 
 #### RDR Overview
-{% include youtube.html id="uMu84BcEOJ8" %}
+{% include youtube.html id="ElQ0i6wa8s0" %}
 <br>
 <br>
 
