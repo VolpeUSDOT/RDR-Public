@@ -13,8 +13,8 @@ import rdr_AESingleRun
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2"
-VERSION_DATE = "12/16/2024"
+VERSION_NUMBER = "2024.2.1"
+VERSION_DATE = "2/3/2025"
 # ---------------------------------------------------------------------------------------------------
 # The following code generates AequilibraE outputs for a baseline scenario configuration
 # with no hazard disruption and no resilience project improvements. Users can run this helper tool
