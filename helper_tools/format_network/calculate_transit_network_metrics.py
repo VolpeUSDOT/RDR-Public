@@ -9,8 +9,8 @@ import network_config_reader
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2"
-VERSION_DATE = "12/16/2024"
+VERSION_NUMBER = "2024.2.1"
+VERSION_DATE = "2/3/2025"
 # ---------------------------------------------------------------------------------------------------
 # The following code calculates travel time and toll fields for a network link CSV input file
 # based on user parameters and network node/link input CSV files

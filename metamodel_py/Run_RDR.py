@@ -17,8 +17,8 @@ import traceback
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2"
-VERSION_DATE = "12/16/2024"
+VERSION_NUMBER = "2024.2.1"
+VERSION_DATE = "2/3/2025"
 
 # ===================================================================================================
 # set up config file and logger

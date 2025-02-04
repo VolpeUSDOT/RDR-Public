@@ -46,17 +46,17 @@ def test_rs3():
 
     # TODO: may not be needed after running RS3
     sys.path.insert(0, './helper_tools/benefits_analysis/')
-    import equity_config_reader
+    import benefits_analysis_config_reader
 
     # Change working directory to RDR/helper_tools/benefits_analysis
     os.chdir(os.path.join(os.getcwd(), 'helper_tools', 'benefits_analysis'))
 
     path_to_config = os.path.join(file_dir_path, 'RS3_TAZ_metrics.config')
-    equity_cfg = equity_config_reader.read_equity_config_file(path_to_config)
+    TAZ_metrics_cfg = benefits_analysis_config_reader.read_benefits_analysis_config_file(path_to_config)
 
-    print(equity_cfg)
+    print(TAZ_metrics_cfg)
 
-    benefits_analysis_dir = os.path.normpath(equity_cfg['benefits_analysis_dir'])
+    benefits_analysis_dir = os.path.normpath(TAZ_metrics_cfg['benefits_analysis_dir'])
 
     print("benefits_analysis_dir exists? {}".format(os.path.exists(benefits_analysis_dir)))
 
@@ -64,7 +64,7 @@ def test_rs3():
     print(os.getcwd())
 
     # Get input_dir from the RDR config file
-    rdr_cfg_path = equity_cfg['path_to_RDR_config_file']
+    rdr_cfg_path = TAZ_metrics_cfg['path_to_RDR_config_file']
 
     error_list, cfg = rdr_setup.read_config_file(rdr_cfg_path, 'config')
     assert len(error_list) == 0
@@ -72,18 +72,18 @@ def test_rs3():
     print(cfg)
 
     # The helper tool requires AequilibraE inputs from the main RDR input directory input_dir
-    # Logs and the equity analysis core model outputs are stored in the equity output directory output_dir
+    # Logs and the benefits analysis core model outputs are stored in the benefits analysis output directory output_dir
     input_dir = cfg['input_dir']
 
     # # Tests:
-    # # - nrow of TAZ by origin and destination; should be identical to input CEJST_TAZ_Mapping.csv
+    # # - nrow of TAZ by origin and destination; should be identical to input TAZ_Mapping.csv
     # # - match the p-value of the proportion of trips disrupted with expected Number
     # # The p-value resulting from the chi square test was 0.97196, which is greater than the user-supplied p-value of 0.05.
     # # trips_percent_change_noresil
     # #-23.15032486
     # #-31.8499763
-    assert os.path.exists(os.path.join(input_dir, 'CEJST_TAZ_Mapping.csv'))
-    mapping_file = pd.read_csv(os.path.join(input_dir, 'CEJST_TAZ_Mapping.csv'))
+    assert os.path.exists(os.path.join(input_dir, 'TAZ_Mapping.csv'))
+    mapping_file = pd.read_csv(os.path.join(input_dir, 'TAZ_Mapping.csv'))
 
     # assert os.path.exists(os.path.join(benefits_analysis_dir, 'MetricsByTAZ_RS3BenefitsAnalysis.html'))
     # tazorigin_file = pd.read_csv(os.path.join(benefits_analysis_dir, 'MetricsByTAZ_summary_RS3BenefitsAnalysis_byTAZofOrigin.csv'))

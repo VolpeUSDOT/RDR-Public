@@ -15,8 +15,8 @@ import subprocess
 from itertools import product
 import shutil
 
-# Import code from equity_config_reader.py for read_equity_config_file method
-import equity_config_reader
+# Import code from benefits_analysis_config_reader.py for read_benefits_analysis_config_file method
+import benefits_analysis_config_reader
 
 # Import modules from core code (two levels up) by setting path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
@@ -24,8 +24,8 @@ import rdr_AESingleRun
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2"
-VERSION_DATE = "12/16/2024"
+VERSION_NUMBER = "2024.2.1"
+VERSION_DATE = "2/3/2025"
 
 def main():
 
@@ -44,15 +44,15 @@ def main():
         print("ERROR: config file {} can't be found!".format(full_path_to_config_file))
         sys.exit()
 
-    equity_cfg = equity_config_reader.read_equity_config_file(full_path_to_config_file)
+    TAZ_metrics_cfg = benefits_analysis_config_reader.read_benefits_analysis_config_file(full_path_to_config_file)
 
     # Values from TAZ metrics config file
-    output_dir = equity_cfg['benefits_analysis_dir']
-    run_id = equity_cfg['run_id']
-    rdr_cfg_path = equity_cfg['path_to_RDR_config_file']
+    output_dir = TAZ_metrics_cfg['benefits_analysis_dir']
+    run_id = TAZ_metrics_cfg['run_id']
+    rdr_cfg_path = TAZ_metrics_cfg['path_to_RDR_config_file']
 
     # Set up logging and report run start time
-    logger = rdr_supporting.create_loggers(output_dir, 'TAZ_metrics', equity_cfg)
+    logger = rdr_supporting.create_loggers(output_dir, 'TAZ_metrics', TAZ_metrics_cfg)
 
     logger.info("==============================================================================")
     logger.info("================= GENERATING MODEL RUNS FOR TAZ METRICS ======================")
@@ -62,7 +62,7 @@ def main():
     error_list, cfg = rdr_setup.read_config_file(rdr_cfg_path, 'config')
 
     # The helper tool requires AequilibraE inputs from the main RDR input directory input_dir
-    # Logs and the equity analysis core model outputs are stored in the equity output directory output_dir
+    # Logs and the benefits analysis core model outputs are stored in the benefits analysis output directory output_dir
     input_dir = cfg['input_dir']
 
     logger.info("Starting TAZ metrics run...")
@@ -105,7 +105,7 @@ def main():
             else:
                 # Confirm resilience project and project group match
                 try:
-                    assert(equity_cfg['projgroup'] == projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] == equity_cfg['resil'], 'Project Groups'][0])
+                    assert(TAZ_metrics_cfg['projgroup'] == projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] == TAZ_metrics_cfg['resil'], 'Project Groups'][0])
                 except:
                     error_text = "MODEL PARAMETERS FILE ERROR: Resilience project and project group specified in TAZ metrics config file do not match"
                     logger.error(error_text)
@@ -151,7 +151,7 @@ def main():
 
                 # Confirm resilience project is included in project table
                 try:
-                    assert(sum(project_table['Project ID'] == equity_cfg['resil']) > 0)
+                    assert(sum(project_table['Project ID'] == TAZ_metrics_cfg['resil']) > 0)
                 except:
                     error_text = "RESILIENCE PROJECTS FILE ERROR: Resilience project in TAZ metrics config file not found in project table input file"
                     logger.error(error_text)
@@ -167,7 +167,7 @@ def main():
     # 2) Check that link_id, from_node_id, to_node_id, Value (or similar) exist; from_node_id, to_node_id must be int, Value must be float
     hazard_folder = os.path.join(input_dir, 'Hazards')
     if os.path.isdir(hazard_folder):
-        filename = equity_cfg['hazard'] + '.csv'
+        filename = TAZ_metrics_cfg['hazard'] + '.csv'
         f = os.path.join(hazard_folder, filename)
 
         # CSV STEP 1: Check file exists
@@ -181,7 +181,7 @@ def main():
                 exposures = pd.read_csv(f, usecols=['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']],
                                         converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, cfg['exposure_field']: str})
             except:
-                error_text = "EXPOSURE ANALYSIS FILE ERROR: File for hazard {} is missing required columns".format(equity_cfg['hazard'])
+                error_text = "EXPOSURE ANALYSIS FILE ERROR: File for hazard {} is missing required columns".format(TAZ_metrics_cfg['hazard'])
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
@@ -189,7 +189,7 @@ def main():
                 try:
                     exposures['from_node_id'] = pd.to_numeric(exposures['from_node_id'], downcast='integer')
                 except:
-                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column from_node_id could not be converted to int for hazard {}".format(equity_cfg['hazard'])
+                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column from_node_id could not be converted to int for hazard {}".format(TAZ_metrics_cfg['hazard'])
                     logger.error(error_text)
                     error_list.append(error_text)
 
@@ -197,7 +197,7 @@ def main():
                 try:
                     exposures['to_node_id'] = pd.to_numeric(exposures['to_node_id'], downcast='integer')
                 except:
-                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column to_node_id could not be converted to int for hazard {}".format(equity_cfg['hazard'])
+                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column to_node_id could not be converted to int for hazard {}".format(TAZ_metrics_cfg['hazard'])
                     logger.error(error_text)
                     error_list.append(error_text)
 
@@ -205,7 +205,7 @@ def main():
                 try:
                     exposures[cfg['exposure_field']] = pd.to_numeric(exposures[cfg['exposure_field']], downcast='float')
                 except:
-                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column specifying exposure level could not be converted to float for hazard {}".format(equity_cfg['hazard'])
+                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column specifying exposure level could not be converted to float for hazard {}".format(TAZ_metrics_cfg['hazard'])
                     logger.error(error_text)
                     error_list.append(error_text)
     else:
@@ -276,8 +276,8 @@ def main():
                     error_list.append(error_text)
 
         # CSV STEP 1: Check file exists
-        i = equity_cfg['socio']
-        j = equity_cfg['projgroup']
+        i = TAZ_metrics_cfg['socio']
+        j = TAZ_metrics_cfg['projgroup']
         link_file = i + j + '.csv'
         if not os.path.exists(os.path.join(networks_folder, link_file)):
             error_text = "NETWORK LINK FILE ERROR: No network link file is present for socio {} and project group {} listed in TAZ metrics config file".format(i, j)
@@ -489,13 +489,13 @@ def main():
     # Baseline "no action" core model run
     logger.info("Running AequilibraE for the baseline 'no action' scenario")
     run_params = {}
-    run_params['socio'] = equity_cfg['socio']
-    run_params['projgroup'] = equity_cfg['projgroup']
-    run_params['resil'] = equity_cfg['baseline']  # always no for baseline run
-    run_params['elasticity'] = equity_cfg['elasticity']
-    run_params['hazard'] = equity_cfg['hazard']
-    run_params['recovery'] = equity_cfg['recovery']  # always '0' for TAZ metrics runs
-    run_params['run_minieq'] = equity_cfg['run_minieq']
+    run_params['socio'] = TAZ_metrics_cfg['socio']
+    run_params['projgroup'] = TAZ_metrics_cfg['projgroup']
+    run_params['resil'] = TAZ_metrics_cfg['baseline']  # always no for baseline run
+    run_params['elasticity'] = TAZ_metrics_cfg['elasticity']
+    run_params['hazard'] = TAZ_metrics_cfg['hazard']
+    run_params['recovery'] = TAZ_metrics_cfg['recovery']  # always '0' for TAZ metrics runs
+    run_params['run_minieq'] = TAZ_metrics_cfg['run_minieq']
     run_params['matrix_name'] = 'matrix'  # always run AequilibraE for the default 'matrix'
 
     # Method rdr_AESingleRun.run_AESingleRun runs both 'SP' and 'RT'; TAZ metrics notebook uses config file parameter to pull correct skims from outputs
@@ -521,7 +521,7 @@ def main():
 
     # Resilience project core model run
     logger.info("Running AequilibraE for the resilience project scenario")
-    run_params['resil'] = equity_cfg['resil']
+    run_params['resil'] = TAZ_metrics_cfg['resil']
     run_params['matrix_name'] = 'matrix'  # always run AequilibraE for the default 'matrix'
 
     # Method rdr_AESingleRun.run_AESingleRun runs both 'SP' and 'RT'; TAZ metrics notebook uses config file parameter to pull correct skims from outputs
@@ -545,7 +545,7 @@ def main():
 
     logger.info("Finished running AequilibraE for resilience project scenario")
 
-    run_notebook(full_path_to_config_file, equity_cfg, logger)
+    run_notebook(full_path_to_config_file, TAZ_metrics_cfg, logger)
 
     logger.info("Finished TAZ metrics run")
 
@@ -553,24 +553,24 @@ def main():
 # ==============================================================================
 
 
-def run_notebook(full_path_to_config_file, equity_cfg, logger):
+def run_notebook(full_path_to_config_file, TAZ_metrics_cfg, logger):
 
     # Values from config file
-    output_dir = equity_cfg['benefits_analysis_dir']
-    run_id = equity_cfg['run_id']
-    TAZ_col_name = equity_cfg['TAZ_col_name']
+    output_dir = TAZ_metrics_cfg['benefits_analysis_dir']
+    run_id = TAZ_metrics_cfg['run_id']
+    TAZ_col_name = TAZ_metrics_cfg['TAZ_col_name']
 
-    category_name = equity_cfg['TAZ_feature']
-    category_filename = equity_cfg['TAZ_mapping']
+    category_name = TAZ_metrics_cfg['TAZ_feature']
+    category_filename = TAZ_metrics_cfg['TAZ_mapping']
 
-    rdr_cfg_path = equity_cfg['path_to_RDR_config_file']
-    resil = equity_cfg['resil']
-    baseline = equity_cfg['baseline']
-    hazard = equity_cfg['hazard']
-    recovery = equity_cfg['recovery']
-    socio = equity_cfg['socio']
-    projgroup = equity_cfg['projgroup']
-    elasticity = equity_cfg['elasticity']
+    rdr_cfg_path = TAZ_metrics_cfg['path_to_RDR_config_file']
+    resil = TAZ_metrics_cfg['resil']
+    baseline = TAZ_metrics_cfg['baseline']
+    hazard = TAZ_metrics_cfg['hazard']
+    recovery = TAZ_metrics_cfg['recovery']
+    socio = TAZ_metrics_cfg['socio']
+    projgroup = TAZ_metrics_cfg['projgroup']
+    elasticity = TAZ_metrics_cfg['elasticity']
     elasname = str(int(10 * -elasticity))
 
     if not os.path.exists(rdr_cfg_path):
@@ -584,20 +584,20 @@ def run_notebook(full_path_to_config_file, equity_cfg, logger):
 
     # Check that the TAZ mapping data file specified in the TAZ metrics config exists
     if not os.path.exists(category_filename):
-        logger.error('ERROR: {} not found. Please run the equity_overlay first or directly provide your own TAZ mapping data file and specify the filename for it as TAZ_mapping in the TAZ_metrics.config file.'.format(category_filename))
+        logger.error('ERROR: {} not found. Please run the TAZ_attribute_overlay first or directly provide your own TAZ mapping data file and specify the filename for it as TAZ_mapping in the TAZ_metrics.config file.'.format(category_filename))
         raise Exception('ERROR: {} not found.'.format(category_filename))
 
     # Check that the TAZ mapping data are numeric
-    taz_equity = pd.read_csv(category_filename,
+    taz_attribute = pd.read_csv(category_filename,
                              usecols=[TAZ_col_name, category_name])
-    if taz_equity[category_name].dtype == 'O':
+    if taz_attribute[category_name].dtype == 'O':
         logger.error("ERROR: Some of the data in {} are not numeric. The TAZ mapping data must be binary, ordinal, or continuous for the current version of this tool.".format(category_filename))
         raise Exception("ERROR: Some of the data in {} are not numeric. The TAZ mapping data must be binary, ordinal, or continuous for the current version of this tool.".format(category_filename))
 
     # Check for blank values in TAZ mapping category
-    if any(pd.isna(taz_equity[category_name])):
-        logger.error("ERROR: TAZ feature column {} in {} contains blank values. Reduce min_percentile_include parameter in TAZ metrics config.".format(category_name, taz_equity))
-        raise Exception("ERROR: TAZ feature column {} in {} contains blank values. Reduce min_percentile_include parameter in TAZ metrics config.".format(category_name, taz_equity))
+    if any(pd.isna(taz_attribute[category_name])):
+        logger.error("ERROR: TAZ feature column {} in {} contains blank values. Reduce min_percentile_include parameter in TAZ metrics config.".format(category_name, taz_attribute))
+        raise Exception("ERROR: TAZ feature column {} in {} contains blank values. Reduce min_percentile_include parameter in TAZ metrics config.".format(category_name, taz_attribute))
 
     # Check that AequilibraE parameters that the user entered map to file paths associated with a corresponding RDR run
     # Location of the OMX files for "base"
@@ -630,12 +630,12 @@ def run_notebook(full_path_to_config_file, equity_cfg, logger):
     if os.path.exists(existingFile):
         logger.warning("An existing file of the same name will be overwritten. A new MetricsByTAZ_{}.html file will be created in {}.".format(run_id, output_dir))
 
-    # Create a temporary file to store the equity configuration file path so that the notebook can access it
+    # Create a temporary file to store the TAZ metrics configuration file path so that the notebook can access it
     with open('temp.txt', 'w') as f:
         f.write(full_path_to_config_file)
 
     # Point to categorical or continuous notebook based on the number of unique values in the TAZ mapping variable
-    if taz_equity[category_name].nunique() < 20:
+    if taz_attribute[category_name].nunique() < 20:
         notebookname = 'MetricsByTAZ_categorical.ipynb'
     else:
         notebookname = 'MetricsByTAZ_continuous.ipynb'
