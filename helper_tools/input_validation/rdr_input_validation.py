@@ -23,8 +23,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_p
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2"
-VERSION_DATE = "12/16/2024"
+VERSION_NUMBER = "2024.2.1"
+VERSION_DATE = "2/3/2025"
 
 # Create function to compute summary statistics of numeric variables to allow user to check 
 # whether they are reasonable. Function gets called in the main function a few times and then at the end

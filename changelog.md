@@ -1,5 +1,10 @@
 # RDR Changelog
 
+## v2024_2_1
+The RDR 2024.2.1 public release includes a revision to the Benefits Analysis Tool, specifically the TAZ Attribute Overlay tool, that enables the user to overlay geographic attributes onto their TAZs. This tool was formerly called the Equity Overlay tool, but the tool actually provides a more generalized overlay functionality and can apply any attribute to TAZs; therefore it has been renamed to more accurately represent its functionality.
+
+The previous example/default approach applying disadvantaged community metrics has been replaced with an example/default showing the application of census tract level poverty metrics. 
+
 ## v2024_2
 The RDR 2024.2 public release includes updates across the entire tool suite, primarily focused on use of publicly available data to generate an RDR analysis. The documentation has been expanded to include public data workflows as well as a new Reference Scenario based on the 2022 Ferndale earthquake. Updated visualizations, particularly in the Tableau workbook, provide better insight into where and under what scenarios benefits are found. Several highlights of the release are detailed below.
 
