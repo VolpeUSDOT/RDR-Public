@@ -12,7 +12,7 @@ The RDR Exposure Analysis Tool and some helper tools also depend on ESRI ArcGIS 
 
 Installation instructions are provided in the [RDR Quick Start Guide documentation](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_GettingStarted_final.pdf). A [video tutorial](#installing-rdr) on how to install RDR is also available.
 * Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool or dependent helper tools).
-* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/releases/tag/v2024-2) Alternatively, the GitHub code repository is available [here](https://github.com/VolpeUSDOT/RDR-Public). Extract the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-main_.)
+* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/releases/tag/v2024.2.1) Alternatively, the GitHub code repository is available [here](https://github.com/VolpeUSDOT/RDR-Public). Extract the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-main_.)
 * The documentation and example scenario files are included with the code release.
 
 ### Using this code
