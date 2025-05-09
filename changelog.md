@@ -1,7 +1,7 @@
 # RDR Changelog
 
 ## v2024_2_1
-The RDR 2024.2.1 public release includes a revision to the Benefits Analysis Tool, specifically the TAZ Attribute Overlay tool, that enables the user to overlay geographic attributes onto their TAZs. This tool was formerly called the Equity Overlay tool, but the tool actually provides a more generalized overlay functionality and can apply any attribute to TAZs; therefore it has been renamed to more accurately represent its functionality.
+The RDR 2024.2.1 public release includes a revision to the Benefits Analysis Tool, specifically the TAZ Attribute Overlay tool, that enables the user to overlay geographic attributes onto their TAZs. This tool provides a generalized overlay functionality and can apply any attribute to TAZs; therefore it has been renamed to more accurately represent its functionality.
 
 The previous example/default approach applying disadvantaged community metrics has been replaced with an example/default showing the application of census tract level poverty metrics. 
 
@@ -23,8 +23,8 @@ The RDR 2024.2 public release includes updates across the entire tool suite, pri
 **RDR Benefits Analysis Tool**
 - Renamed tool to emphasize its focus on understanding the distribution of benefits across users of the transportation network.
 - Improved usability of the TAZ metrics HTML report by adding toggle on charts so users can switch between showing data for (a) all TAZ/TAZ pairs versus (b) only the subset of TAZ/TAZ pairs that would be impacted by the disruption.
-- Refactored the equity overlay tool to rely on geospatial processing via geopandas instead of arcpy, meaning that an ArcGIS license is no longer needed to run the tool.
-- Updated default layer for the equity overlay component to use data from the Council on Environmental Quality (CEQ) Climate and Economic Justice Screening Tool (CEJST) in lieu of the prior default data from the Department of Transportation (DOT) Equitable Transportation Community Explorer.
+- Refactored the benefits overlay tool to rely on geospatial processing via geopandas instead of arcpy, meaning that an ArcGIS license is no longer needed to run the tool.
+- Updated default layer for the overlay component to use data from the Council on Environmental Quality (CEQ) Climate and Economic Justice Screening Tool (CEJST) in lieu of the prior default data from the Department of Transportation (DOT) Equitable Transportation Community Explorer.
 
 **Public Data**
 - Documented publicly available datasets and general workflows in the User Guide and Reference Scenario Library for developing:
@@ -67,11 +67,11 @@ The RDR 2024.1 public release includes updates across the entire tool suite, pri
 - Created a new 'Facility Type Manual' method for applying different exposure-disruption relationships for different asset types.
 - Aligned tool with rest of RDR Tool Suite in referring to nodes as from_node_id and to_node_id.
 
-**RDR Equity and Benefits Analysis Tool**
-- Renamed tool to emphasize its functionality beyond equity analyses.
+**RDR Benefits Analysis Tool**
+- Renamed tool to emphasize its full functionality.
 - Refreshed the TAZ metrics HTML report to provide more narrative context and update color scheme.
-- Edited equity configuration file to provide more flexibility in user-defined inputs and their file locations.
-- Created a Reference Scenario showcasing how to run the tool for a sample equity analysis with the Sioux Falls model network.
+- Edited configuration file to provide more flexibility in user-defined inputs and their file locations.
+- Created a Reference Scenario showcasing how to run the tool for a sample analysis with the Sioux Falls model network.
 
 **Helper Tools**
 - Created the RDR User Interface, a command-line interface to guide users through the steps of setting up a run of the RDR Metamodel and ROI Analysis Tool. The User Interface helps users:
@@ -105,10 +105,10 @@ The RDR 2023.2 public release includes updates across the entire tool suite rela
 - Added an optional redeployment cost and an optional annual maintenance cost to project cost user inputs if future costs differ from the initial costs.
 - Updated Tableau template to incorporate above changes so that additional benefit categories are incorporated into the BCA net benefits.
 
-**RDR Equity Analysis Tool**
+**RDR Benefits Analysis Tool**
 - Changed methodology to group and show metrics based on TAZ of origin (rather than TAZ pair (origin-destination pair)).
-- Changed the metrics of interest from 'trips,' 'miles,' and 'hours' to 'trips,' 'minutes per trip,' and 'miles per trip.' While this deviates from the main RDR Tool Suite, it provides results that are easier for the user to interpret in the context of the Equity Analysis Tool.
-- Made the tool more flexible to accommodate user-supplied equity variables that are continuous, in addition to the existing functionality to accept and analyze categorical variables. The tool automatically determines whether to treat the user-supplied equity data as continuous or categorical based on the number of unique values.
+- Changed the metrics of interest from 'trips,' 'miles,' and 'hours' to 'trips,' 'minutes per trip,' and 'miles per trip.' While this deviates from the main RDR Tool Suite, it provides results that are easier for the user to interpret in the context of the Benefits Analysis Tool.
+- Made the tool more flexible to accommodate user-supplied variables that are continuous, in addition to the existing functionality to accept and analyze categorical variables. The tool automatically determines whether to treat the user-supplied data as continuous or categorical based on the number of unique values.
 - Updated HTML report to include enhanced charts (e.g., more informative hover boxes) and statistical analyses with corresponding narrative.
 - Added CSV outputs with summary table data so that users can access and analyze the underlying data results with their own analytical tools of choice.
 - Integrated data for 0-car households (where applicable based on user inputs).
@@ -130,10 +130,10 @@ The RDR 2023.2 public release includes updates across the entire tool suite rela
 See documentation files for additional details.
 
 ## v2023_1
-The RDR 2023.1 public release includes updates related to transit modeling, incorporation of multiple trip tables, equity analysis, metamodel enhancements, expanded ROI analysis and reporting capabilities, and other minor bug fixes. The following changes have been made:
+The RDR 2023.1 public release includes updates related to transit modeling, incorporation of multiple trip tables, user benefits analysis, metamodel enhancements, expanded ROI analysis and reporting capabilities, and other minor bug fixes. The following changes have been made:
 - Implements a transit network specification to allow for RDR scenarios to include transit trips in the analysis. The new specification aligns with the General Modeling Network Specification (GMNS) and can be constructed from the General Transit Feed Specification (GTFS) through a series of helper tools. The new specification is accompanied by user guidance, a new quick start example, and helper tools for construction and verification of the required RDR input files; see documentation for technical details.
-- Adds the ability to run RDR scenarios with two separate trip tables--one for households owning vehicles and one for households without vehicles. The 'matrix' and 'nocar' trip tables should be contained in the same OMX file for input to the RDR Tool Suite. Separate trip tables allows for more nuanced modeling of network routing (e.g., interaction with transit, TNCs) and will be incorporated into the equity analysis in a future release.
-- Includes a beta version of the RDR Equity Analysis Tool. The standalone suite of equity analysis tools includes an ArcGIS-based equity overlay tool for intersecting TAZs with categorical overlays (e.g., Justice40 Transportation Disadvantaged Census Tracts) and a TAZ metrics tool for disaggregating resilience project benefits across categories of TAZs.
+- Adds the ability to run RDR scenarios with two separate trip tables--one for households owning vehicles and one for households without vehicles. The 'matrix' and 'nocar' trip tables should be contained in the same OMX file for input to the RDR Tool Suite. Separate trip tables allows for more nuanced modeling of network routing (e.g., interaction with transit, TNCs) and will be incorporated into the user benefits analysis in a future release.
+- Includes a beta version of the RDR Benefits Analysis Tool. The standalone suite of user benefits analysis tools includes an ArcGIS-based overlay tool for intersecting TAZs with categorical overlays (e.g., Justice40 Transportation Disadvantaged Census Tracts) and a TAZ metrics tool for disaggregating resilience project benefits across categories of TAZs.
 - Updates the RDR Metamodel to use the multitarget regression model as the default. Validation testing across several sample sizes and scenario space structures has shown the 'multitarget' approach to perform best out of all available RDR Metamodel approaches.
 - Expands the RDR ROI Analysis Module to include tracking of safety (e.g., crash rates per vehicle-miles traveled) and emissions (e.g., CO2, NOx, SO2, PM2.5) benefits associated with the change in VMT from the resilience project investment. The ROI Analysis Module also requires users to specify the type of ROI analysis they wish to run (BCA, Regret, Breakeven) and allows for specification of project lifespans and calculates project residual cost as a benefit.
 
