@@ -13,8 +13,8 @@ import rdr_AESingleRun
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2.1"
-VERSION_DATE = "2/3/2025"
+VERSION_NUMBER = "2025.1"
+VERSION_DATE = "6/20/2025"
 # ---------------------------------------------------------------------------------------------------
 # The following code generates AequilibraE outputs for a baseline scenario configuration
 # with no hazard disruption and no resilience project improvements. Users can run this helper tool
@@ -87,8 +87,8 @@ def main():
     rdr_AESingleRun.run_AESingleRun(run_params, input_dir, output_dir, cfg, logger)
 
     # run AequilibraE a second time if a 'nocar' trip table exists
-    mtx_fldr = 'matrices'
-    demand_file = os.path.join(input_dir, 'AEMaster', mtx_fldr, run_params['socio'] + '_demand_summed.omx')
+
+    demand_file = os.path.join(input_dir, 'AEMaster', 'matrices', run_params['socio'] + '_demand_summed.omx')
     if not os.path.exists(demand_file):
         logger.error("DEMAND OMX FILE ERROR: {} could not be found".format(demand_file))
         raise Exception("DEMAND OMX FILE ERROR: {} could not be found".format(demand_file))
