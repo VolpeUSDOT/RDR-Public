@@ -97,6 +97,9 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
 
     assig = TrafficAssignment()
 
+    # Setting demand to float here because if it is integer it fails downstream
+    demand.matrix_view.dtype = float
+
     # Creates the assignment class
     # Currently restricted to 'car', can be made multimodal later
     assigclass = TrafficClass(name='car', graph=graph, matrix=demand)
@@ -126,9 +129,12 @@ def run_aeq_base(run_params, run_folder, cfg, logger):
 
     assig.execute()  # We then execute the assignment
 
-    # The link flows are easy to export
+    # The link flows are easy to export. This code is compatible with AequilibraE 1.4.2
     # We do so for csv and AequilibraEData
-    assigclass.results.save_to_disk(join(fldr, 'link_flow_' + scenname + '.csv'), output="loads")  # changes for each run
+    assig.save_results(join('link_flow', scenname))   # put results in the results database
+    results_df = assig.results()  # also put results in a dataframe, then save to disk
+    results_df.to_csv(join(fldr, 'link_flow_' + scenname + '.csv'))
+    # assigclass.results.save_to_disk(join(fldr, 'link_flow_' + scenname + '.csv'), output="loads")  # changes for each run. Per AequilibraE 1.1.4, this code is deprecated
 
     # The skims are easy to get
 
