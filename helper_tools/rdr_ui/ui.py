@@ -11,8 +11,8 @@ import error_classes as ec
 header = "\n\n\
 ________________________________________________________________________________________\n\n\
        R D R   U I\n\n\n\n\
-       UI version 2024.2.1 alpha\n\n\n\n\
-       RDR version 2024.2.1\n\n\n\n\
+       UI version 2025.1 alpha\n\n\n\n\
+       RDR version 2025.1\n\n\n\n\
        UI created by Andrew Breck, Juwon Drake, and Kevin Zhang at the Volpe Center\n\n\n\n\
 ________________________________________________________________________________________"
 

@@ -844,7 +844,7 @@ def set_recovery_1(go_to:str = 'sequential') -> None:
 # ===================
 def set_analysis_1(go_to:str = 'sequential') -> None:
     parameter = params.discount_factor
-    message = "Year-on-Year Discounting Factor \nDefines the discounting factor used to convert metrics across entire period of analysis to year specified for dollar units. \nU.S. DOT recommended value is 0.031. Value should be entered as a decimal, not a percent."
+    message = "Year-on-Year Discounting Factor \nDefines the discounting factor used to convert metrics across entire period of analysis to year specified for dollar units. \nU.S. DOT recommended value is 0.07. Value should be entered as a decimal, not a percent."
     if go_to in [parameter.short, 'sequential']:
         params.current_param.value = parameter.short
         uinput = ut.build_input(parameter, message, low = 0, high = 1)
@@ -854,7 +854,7 @@ def set_analysis_1(go_to:str = 'sequential') -> None:
         params.previous_param.value = parameter.short
 
     parameter = params.co2_discount_factor
-    message = "Year-on-Year CO2 Discounting Factor \nDefines the CO2-specific discounting factor used to convert metrics across entire period of analysis to year specified for dollar units. \nU.S. DOT recommended value is 0.02. Value should be entered as a decimal, not a percent."
+    message = "Year-on-Year CO2 Discounting Factor \nDefines the CO2-specific discounting factor used to convert metrics across entire period of analysis to year specified for dollar units. \nU.S. DOT recommended value is 0.07. Value should be entered as a decimal, not a percent."
     if go_to in [parameter.short, 'sequential']:
         params.current_param.value = parameter.short
         uinput = ut.build_input(parameter, message, low = 0, high = 1)
@@ -1095,7 +1095,7 @@ def set_analysis_7(go_to:str = 'sequential') -> None:
             params.previous_param.value = parameter.short
 
     parameter = params.co2_cost
-    message = "Light Duty CO2 Emissions Costs [$/vehicle-mile] \nDefines the CO2 emissions external highway use costs per mile driven for light duty vehicles. \nU.S. DOT recommended value in 2023 dollars for light duty vehicles in urban location is 0.110."
+    message = "Light Duty CO2 Emissions Costs [$/vehicle-mile] \nDefines the CO2 emissions external highway use costs per mile driven for light duty vehicles. \nU.S. DOT recommended value in 2023 dollars for light duty vehicles in urban location is 0."
     if go_to in [parameter.short, 'sequential']:
         params.current_param.value = parameter.short
         uinput = ut.build_input(parameter, message, low = 0, high = 10000)
@@ -1106,7 +1106,7 @@ def set_analysis_7(go_to:str = 'sequential') -> None:
 
     if params.calc_transit_metrics.value == 1:
         parameter = params.co2_cost_bus
-        message = "Bus CO2 Emissions Costs [$/vehicle-mile] \nDefines the CO2 emissions external highway use costs per mile driven for transit buses. \nU.S. DOT recommended value in 2023 dollars for buses in urban location is 0.314."
+        message = "Bus CO2 Emissions Costs [$/vehicle-mile] \nDefines the CO2 emissions external highway use costs per mile driven for transit buses. \nU.S. DOT recommended value in 2023 dollars for buses in urban location is 0."
         if go_to in [parameter.short, 'sequential']:
             params.current_param.value = parameter.short
             uinput = ut.build_input(parameter, message, low = 0, high = 10000)

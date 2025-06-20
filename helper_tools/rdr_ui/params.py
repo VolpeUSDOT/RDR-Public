@@ -195,10 +195,10 @@ param_list.append(roi_analysis_type)
 dollar_year = Param('dollar_year', dtype = 'year', short = 'dyr')
 param_list.append(dollar_year)
 
-discount_factor = Param('discount_factor', dtype = 'float', value = 0.031, required = False, short = 'dfa')
+discount_factor = Param('discount_factor', dtype = 'float', value = 0.07, required = False, short = 'dfa')
 param_list.append(discount_factor)
 
-co2_discount_factor = Param('co2_discount_factor', dtype = 'float', value = 0.02, required = False, short = 'cfa')
+co2_discount_factor = Param('co2_discount_factor', dtype = 'float', value = 0.07, required = False, short = 'cfa')
 param_list.append(co2_discount_factor)
 
 vehicle_occupancy_car = Param('vehicle_occupancy_car', dtype = 'float', value = 1.52, required = False, short = 'occ')
@@ -258,10 +258,10 @@ param_list.append(non_co2_cost)
 non_co2_cost_bus = Param('non_co2_cost_bus', dtype = 'float', value = 0.037, required = False, short = 'nrb')
 param_list.append(non_co2_cost_bus)
 
-co2_cost = Param('co2_cost', dtype = 'float', value = 0.110, required = False, short = 'cra')
+co2_cost = Param('co2_cost', dtype = 'float', value = 0, required = False, short = 'cra')
 param_list.append(co2_cost)
 
-co2_cost_bus = Param('co2_cost_bus', dtype = 'float', value = 0.314, required = False, short = 'crb')
+co2_cost_bus = Param('co2_cost_bus', dtype = 'float', value = 0, required = False, short = 'crb')
 param_list.append(co2_cost_bus)
 
 crs = Param('crs', value = 'EPSG:4326', short = 'crs')
