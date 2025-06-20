@@ -14,6 +14,9 @@ link_id,from_node_id,to_node_id,directed,length,facility_type,facility_name,capa
 100,1,11,1,0.2,901,road centroid connector,10000,10,1,c,0,350,1.2,11.2
 101,2,12,1,0.1,901,road centroid connector,10000,10,1,c,0,325,0.6,10.6
 102,15,3,1,0.2,901,road centroid connector,10000,10,1,c,0,50,1.2,1.2
+103,11,1,1,0.2,901,road centroid connector,10000,10,1,c,0,350,1.2,11.2
+104,12,2,1,0.1,901,road centroid connector,10000,10,1,c,0,325,0.6,10.6
+105,3,15,1,0.2,901,road centroid connector,10000,10,1,c,0,50,1.2,1.2
 20,23,27,1,0.9,101,subway,10000,40,1,c,0,0,1.35,1.35
 21,27,23,1,0.9,101,subway,10000,40,1,c,0,0,1.35,1.35
 22,22,26,1,0.9,103,bus,1000,20,1,c,0,0,2.7,2.7
@@ -23,6 +26,9 @@ link_id,from_node_id,to_node_id,directed,length,facility_type,facility_name,capa
 120,1,20,1,0.8,903,transit CC walk,10000,3,1,c,0,0,16,16
 121,2,20,1,0.1,903,transit CC walk,10000,3,1,c,0,0,2,2
 122,21,3,1,0.1,903,transit CC walk,10000,3,1,c,0,0,2,2
+123,20,1,1,0.8,903,transit CC walk,10000,3,1,c,0,0,16,16
+124,20,2,1,0.1,903,transit CC walk,10000,3,1,c,0,0,2,2
+125,3,21,1,0.1,903,transit CC walk,10000,3,1,c,0,0,2,2
 130,20,23,1,0.01,601,boarding,10000,3,1,c,200,200,4,4
 131,20,22,1,0.01,603,boarding,10000,3,1,c,200,200,7,7
 132,26,29,1,0.01,703,deboarding,10000,3,1,c,0,0,0.2,0.2

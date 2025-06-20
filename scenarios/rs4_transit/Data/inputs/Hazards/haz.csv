@@ -14,6 +14,9 @@ link_id,from_node_id,to_node_id,Value,evacuation_route,link_availability,comment
 100,1,11,0,0,1,
 101,2,12,0,0,1,
 102,15,3,0,0,1,
+103,11,1,0,0,1,
+104,12,2,0,0,1,
+105,3,15,0,0,1,
 20,23,27,1,0,0,flood on rail
 21,27,23,1,0,0,flood on rail
 22,22,26,0,0,1,
@@ -23,6 +26,9 @@ link_id,from_node_id,to_node_id,Value,evacuation_route,link_availability,comment
 120,1,20,0,0,1,
 121,2,20,0,0,1,
 122,21,3,0,0,1,
+123,20,1,0,0,1,
+124,20,2,0,0,1,
+125,3,21,0,0,1,
 130,20,23,0,0,1,
 131,20,22,0,0,1,
 132,26,29,0,0,1,
