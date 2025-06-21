@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+import openmatrix as omx
 import sqlite3
 import shutil
 from scipy import stats
@@ -69,6 +70,18 @@ def run_AESingleRun(run_params, input_folder, output_folder, cfg, logger):
         if os.path.exists(os.path.join(disrupt_run_folder, 'NetSkim.csv')):
             logger.info("AequilibraE run for {} already done for this run ID, skipping run".format(disrupt_run_folder))
             return
+
+    # create OMX file if CSV (or CSVs) are provided instead of OMX
+    demand_folder = os.path.join(input_folder, 'AEMaster', mtx_fldr)
+    demand_file = os.path.join(demand_folder, run_params['socio'] + '_demand_summed.omx')
+    if not os.path.exists(demand_file):
+        logger.info("No OMX file detected for demand scenario {}. Reading from CSV to create OMX matrix.".format(run_params['socio']))
+        demand_csv_file = os.path.join(demand_folder, run_params['socio'] + '_demand_summed.csv')
+        nocar_demand_csv_file = os.path.join(demand_folder, run_params['socio'] + '_demand_summed_nocar.csv')
+        if not os.path.exists(demand_csv_file):
+            logger.error("DEMAND CSV FILE ERROR: {} could not be found".format(demand_csv_file))
+            raise Exception("DEMAND CSV FILE ERROR: {} could not be found".format(demand_csv_file))
+        demand_csv_to_omx(demand_folder, run_params['socio'], demand_csv_file, nocar_demand_csv_file, cfg, logger)
 
     # BASE NETWORK RUN #
     # ----------------------------------------------------------------
@@ -190,9 +203,9 @@ def merge_network_outputs(run_params, output_folder, network_file, flow_file, lo
     logger.info("Start: merge core model outputs")
 
     links = pd.read_csv(network_file, converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'wkt': str})
-    flows = pd.read_csv(flow_file, usecols=['index', 'matrix_ab', 'matrix_ba', 'matrix_tot'],
-                        converters={'index': str, 'matrix_ab': float, 'matrix_ba': float, 'matrix_tot': float})
-    links = pd.merge(links, flows, how="left", left_on="link_id", right_on="index")
+    flows = pd.read_csv(flow_file, usecols=['link_id', 'matrix_ab', 'matrix_ba', 'matrix_tot'],
+                        converters={'link_id': str, 'matrix_ab': float, 'matrix_ba': float, 'matrix_tot': float})
+    links = pd.merge(links, flows, how="left", left_on="link_id", right_on="link_id")
     links = links.assign(vcr = lambda x: np.where(x['capacity'] == 0, 99999, x['matrix_ab'] / x['capacity']))
     links = links.rename(columns={'matrix_ab': 'link_flow_ab', 'matrix_ba': 'link_flow_ba', 'matrix_tot': 'link_flow_total'})
     combined_file = os.path.join(output_folder, 'link_flow_full.csv')
@@ -678,3 +691,77 @@ def setup_run_folder(run_params, input_folder, run_folder, logger):
 
     logger.debug("finished: set up AequilibraE run directory, returned path to project_database.sqlite database")
     return network_db
+
+
+# ==============================================================================
+
+
+def create_matrix(output_folder, socio, trip_csv_file, output_matrixname, f_output, matrix_size, logger):
+    if output_matrixname == 'matrix':
+        debug_filename = os.path.join(output_folder, socio + '_debug_demand.csv')
+    elif output_matrixname == 'nocar':
+        debug_filename = os.path.join(output_folder, socio + '_debug_demand_nocar.csv')
+
+    # Read a flat file trip table into pandas dataframe
+    # Presuming we have a long-format CSV file
+    df_trip = pd.read_csv(trip_csv_file, header=0)
+    df_trip.astype({'trips': 'float'}).dtypes
+    logger.debug(df_trip.head())
+    logger.debug("The trip table file {} has size {} by {}".format(trip_csv_file, str(df_trip.shape[0]), str(df_trip.shape[1])))
+    logger.debug("Total number of trips: {}".format(str(df_trip['trips'].sum())))
+
+    # Sanity check: Number of rows in df_trip can be at most matrix_size * matrix_size
+    matrix_size_squared = matrix_size * matrix_size
+    logger.debug("Rows in trip_csv_file: {}. Matrix size square: {}.".format(str(df_trip.shape[0]), str(matrix_size_squared)))
+    if (df_trip.shape[0] > matrix_size_squared):
+        logger.error("Error: Number of rows in the CSV file exceeds matrix size squared!")
+        raise Exception("Error: Number of rows in the CSV file exceeds matrix size squared!")
+    # Assuming we have an O-D format trip type
+    pivot = df_trip.pivot(index='orig_node', columns='dest_node', values='trips')
+    pivotnp = pivot.to_numpy()
+    pivotnp = np.nan_to_num(pivotnp, nan=0)
+    f_output[output_matrixname] = pivotnp  # Put the filled-in matrix into the OMX file
+    pivot.to_csv(debug_filename, index=True)
+
+    return
+
+
+# ==============================================================================
+
+
+def demand_csv_to_omx(demand_folder, socio, trip_csv_file, no_car_csv_file, cfg, logger):
+    node_csv_file = os.path.join(cfg['input_dir'], 'Networks', 'node.csv')
+    outfile = os.path.join(demand_folder, socio + '_demand_summed.omx')
+
+    # Read the nodes file into a dataframe
+    df_node = pd.read_csv(node_csv_file, header=0)
+    logger.debug(df_node.head())
+
+    # Set up the dictionary of centroids
+    # Assumption: node_type = 'centroid' for centroid nodes in nodes file
+    # Centroid nodes are the lowest numbered nodes, provided at the beginning of the list of nodes, but node numbers need not be consecutive
+    tazdictrow = {}
+    centroid_index = 0
+    for index in df_node.index:
+        if df_node['node_type'][index] == 'centroid':
+            tazdictrow[df_node['node_id'][index]] = centroid_index
+            centroid_index = centroid_index + 1
+    taz_list = list(tazdictrow.keys())  # This is the taz mapping that will be used when building the OMX matrix file
+    matrix_size = len(tazdictrow)  # Should match the number of nodes flagged as centroids
+    logger.debug("Total number of centroids: {}".format(str(matrix_size)))
+    highest_centroid_node_number = max(tazdictrow, key=tazdictrow.get)
+    logger.debug("Highest centroid node is {}".format(str(highest_centroid_node_number)))
+
+    # Set up the OMX output
+    f_output = omx.open_file(outfile, 'w')
+    f_output.create_mapping('taz', taz_list)  # Set up the TAZ mapping
+    # Write the dataframe to an OMX file
+    # This makes use of tazdictrow and matrix_size that was established earlier
+    # The rows are also written to a file that is used for debugging
+
+    create_matrix(cfg['output_dir'], socio, trip_csv_file, "matrix", f_output, matrix_size, logger)
+
+    if os.path.exists(no_car_csv_file):
+        create_matrix(cfg['output_dir'], socio, no_car_csv_file, "nocar", f_output, matrix_size, logger)
+
+    f_output.close()  # Close the OMX file

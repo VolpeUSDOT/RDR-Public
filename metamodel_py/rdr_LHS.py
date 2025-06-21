@@ -238,8 +238,9 @@ def check_model_params_coverage(model_params_file, input_folder, cfg, logger):
 
     # Check demand OMX files, exposure CSV files, network CSV files
     for i in socio:
-        filename = os.path.join(input_folder, 'AEMaster', 'matrices', i + '_demand_summed.omx')
-        if not os.path.exists(filename):
+        omx_filename = os.path.join(input_folder, 'AEMaster', 'matrices', i + '_demand_summed.omx')
+        csv_filename = os.path.join(input_folder, 'AEMaster', 'matrices', i + '_demand_summed.csv')
+        if not os.path.exists(omx_filename) and not os.path.exists(csv_filename):
             is_covered = 0
             logger.error("Missing input file {}".format(filename))
 

@@ -17,6 +17,10 @@ def readOMX(filename, selectedMatrix, debug_mode):
         print('Number of tables: ', len(f))
         print('Table names: ', f.list_matrices())
         print('Attributes: ', f.list_all_attributes())
+        print('Mappings: ', f.list_mappings())
+        if 'taz' in f.list_mappings():
+            tazs = f.mapping('taz')
+            print('TAZ mappings: ', tazs)
     omx_df = f[selectedMatrix]
     if debug_mode:
         print('Sum of matrix elements: {:.9}'.format(float(np.sum(omx_df))))

@@ -15,8 +15,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_p
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2.1"
-VERSION_DATE = "2/3/2025"
+VERSION_NUMBER = "2025.1"
+VERSION_DATE = "6/20/2025"
 # ---------------------------------------------------------------------------------------------------
 # The following code creates transit centroid connectors by building buffer zones around transit
 # boarding nodes and identifying TAZs within the buffer and (optionally) builds a geodatabase of

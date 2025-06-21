@@ -23,8 +23,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_p
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2024.2.1"
-VERSION_DATE = "2/3/2025"
+VERSION_NUMBER = "2025.1"
+VERSION_DATE = "6/20/2025"
 
 # Create function to compute summary statistics of numeric variables to allow user to check 
 # whether they are reasonable. Function gets called in the main function a few times and then at the end
@@ -511,15 +511,24 @@ def main():
                                 error_list.append(error_text)
 
                             demand_folder = os.path.join(input_folder, 'AEMaster', 'matrices')
-                            demand_file = i + '_demand_summed.omx'
-                            if not os.path.exists(os.path.join(demand_folder, demand_file)):
-                                error_text = "DEMAND FILE ERROR: No demand OMX file is present for socio {} corresponding to network link file {}".format(i, link_file)
+                            omx_demand_file = i + '_demand_summed.omx'
+                            csv_demand_file = i + '_demand_summed.csv'
+                            nocar_csv_demand_file = i + '_demand_summed_nocar.csv'
+                            if not os.path.exists(os.path.join(demand_folder, omx_demand_file)) and not os.path.exists(os.path.join(demand_folder, csv_demand_file)):
+                                error_text = "DEMAND FILE ERROR: No demand OMX or CSV file is present for socio {} corresponding to network link file {}".format(i, link_file)
                                 logger.error(error_text)
                                 error_list.append(error_text)
                             else:
-                                omx_file = omx.open_file(os.path.join(demand_folder, demand_file))
-                                if 'nocar' in omx_file.list_matrices():
+                                nocar = False
+                                if os.path.exists(os.path.join(demand_folder, omx_demand_file)):
+                                    omx_file = omx.open_file(os.path.join(demand_folder, omx_demand_file))
+                                    if 'nocar' in omx_file.list_matrices():
+                                        nocar = True
                                     omx_file.close()
+                                elif os.path.exists(os.path.join(demand_folder, nocar_csv_demand_file)):
+                                    nocar = True
+
+                                if nocar:
                                     try:
                                         links = pd.read_csv(os.path.join(networks_folder, link_file),
                                                 usecols=['toll_nocar', 'travel_time_nocar'],
@@ -544,9 +553,6 @@ def main():
                                             error_text = "NETWORK LINK FILE ERROR: Column travel_time_nocar could not be converted to float for socio {} and project group {}".format(i, j)
                                             logger.error(error_text)
                                             error_list.append(error_text)
-
-                                else:
-                                    omx_file.close()           
 
         for link_file in links_file_list:
             try:
@@ -584,9 +590,10 @@ def main():
     # ---------------------------------------------------------------------------------------------------
     # Demand files
     # For each socio listed in Model_Parameters.xlsx:
-    # 1) Is there a demand OMX file
-    # 2) Check OMX file has 'matrix' square demand matrix and 'taz' mapping
+    # 1) Is there a demand OMX or CSV file
+    # 2) If OMX, check file has 'matrix' square demand matrix and 'taz' mapping
     # 3) If 'nocar' trip table matrix, check that it is square
+    # 4) If CSV, check that orig_node, dest_node, trips exist; orig_node, dest_node must be int, trips must be float
     demand_folder = os.path.join(input_folder, 'AEMaster', 'matrices')
 
     if os.path.isdir(demand_folder):
@@ -599,40 +606,68 @@ def main():
                 demand_file_list.append(filename)
 
         if has_error_model_params:
-            error_text = "DEMAND FILE WARNING: Not validating demand OMX files, errors with Model_Parameters.xlsx"
+            error_text = "DEMAND FILE WARNING: Not validating demand OMX and CSV files, errors with Model_Parameters.xlsx"
             logger.error(error_text)
             error_list.append(error_text)
         else:
             for i in socio:
                 # OMX STEP 1: Check file exists
-                demand_file = i + '_demand_summed.omx'
-                if demand_file not in demand_file_list:
-                    error_text = "DEMAND FILE ERROR: No demand OMX file is present for socio {} listed in Model_Parameters.xlsx".format(i)
+                omx_demand_file = i + '_demand_summed.omx'
+                csv_demand_file = i + '_demand_summed.csv'
+                nocar_csv_demand_file = i + '_demand_summed_nocar.csv'
+                if omx_demand_file not in demand_file_list and csv_demand_file not in demand_file_list:
+                    error_text = "DEMAND FILE ERROR: No demand OMX or CSV file is present for socio {} listed in Model_Parameters.xlsx".format(i)
                     logger.error(error_text)
                     error_list.append(error_text)
                 else:
                     try:
-                        omx_file = omx.open_file(os.path.join(demand_folder, demand_file))
-                        assert('matrix' in omx_file.list_matrices())
-                        assert('taz' in omx_file.list_mappings())
-                        matrix_shape = omx_file['matrix'].shape
-                        assert(matrix_shape[0] == matrix_shape[1])
+                        if omx_demand_file in demand_file_list:
+                            omx_file = omx.open_file(os.path.join(demand_folder, omx_demand_file))
+                            assert('matrix' in omx_file.list_matrices())
+                            assert('taz' in omx_file.list_mappings())
+                            matrix_shape = omx_file['matrix'].shape
+                            assert(matrix_shape[0] == matrix_shape[1])
+                        elif csv_demand_file in demand_file_list:
+                            trips = pd.read_csv(os.path.join(demand_folder, csv_demand_file),
+                                                usecols=['orig_node', 'dest_node', 'trips'],
+                                                converters={'orig_node': str, 'dest_node': str, 'trips': str})
+                            # Test orig_node and dest_node can be converted to int
+                            trips['orig_node'] = pd.to_numeric(trips['orig_node'], downcast='integer')
+                            trips['dest_node'] = pd.to_numeric(trips['dest_node'], downcast='integer')
+                            # Test trips can be converted to float
+                            trips['trips'] = pd.to_numeric(trips['trips'], downcast='float')
                     except:
-                        error_text = "DEMAND FILE ERROR: OMX file is missing required attributes for socio {}".format(i)
+                        error_text = "DEMAND FILE ERROR: OMX or CSV file is missing required attributes for socio {}".format(i)
                         logger.error(error_text)
                         error_list.append(error_text)
                     else:
-                        if 'nocar' in omx_file.list_matrices():
-                            try:
-                                matrix_shape = omx_file['nocar'].shape
-                                assert(matrix_shape[0] == matrix_shape[1])
-                            except:
-                                error_text = "DEMAND FILE ERROR: OMX file 'nocar' trip table is not square for socio {}".format(i)
-                                logger.error(error_text)
-                                error_list.append(error_text)
-                        omx_file.close()
+                        if omx_demand_file in demand_file_list:
+                            if 'nocar' in omx_file.list_matrices():
+                                try:
+                                    matrix_shape = omx_file['nocar'].shape
+                                    assert(matrix_shape[0] == matrix_shape[1])
+                                except:
+                                    error_text = "DEMAND FILE ERROR: OMX file 'nocar' trip table is not square for socio {}".format(i)
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
+                            omx_file.close()
+                        elif csv_demand_file in demand_file_list:
+                            if nocar_csv_demand_file in demand_file_list:
+                                try:
+                                    trips = pd.read_csv(os.path.join(demand_folder, nocar_csv_demand_file),
+                                                        usecols=['orig_node', 'dest_node', 'trips'],
+                                                        converters={'orig_node': str, 'dest_node': str, 'trips': str})
+                                    # Test orig_node and dest_node can be converted to int
+                                    trips['orig_node'] = pd.to_numeric(trips['orig_node'], downcast='integer')
+                                    trips['dest_node'] = pd.to_numeric(trips['dest_node'], downcast='integer')
+                                    # Test trips can be converted to float
+                                    trips['trips'] = pd.to_numeric(trips['trips'], downcast='float')
+                                except:
+                                    error_text = "DEMAND FILE ERROR: CSV file for 'nocar' trip table is missing required attributes for socio {}".format(i)
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
     else:
-        error_text = "DEMAND FOLDER ERROR: Matrices directory for demand OMX files does not exist"
+        error_text = "DEMAND FOLDER ERROR: Matrices directory for demand OMX and CSV files does not exist"
         logger.error(error_text)
         error_list.append(error_text)
 

@@ -229,10 +229,6 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
 
     assig.execute()  # We then execute the assignment
 
-    # The link flows are easy to export
-    # We do so for csv and AequilibraEData
-    assigclass.results.save_to_disk(join(fldr, 'link_flow_adjdem_' + scenname + '.csv'), output="loads")
-
     # The blended skims are here
     avg_skims = assigclass.results.skims
 
@@ -368,10 +364,6 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
 
         assig.execute()  # We then execute the assignment
 
-        # The link flows are easy to export
-        # We do so for csv and AequilibraEData
-        assigclass.results.save_to_disk(join(fldr, 'link_flow_adjdem_' + scenname + '.csv'), output="loads")
-
         # The blended skims are here
         avg_skims = assigclass.results.skims
 
@@ -382,8 +374,15 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
         avg_skims.export(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
         demand.close()
 
-    # Calculate summary statistics
+    # Save link flows
+    # The link flows are easy to export. This code is compatible with AequilibraE 1.4.2
+    # We do so for csv and AequilibraEData
+    assig.save_results(join('link_flow_adjdem_', scenname))  # put results in the results database
+    results_df = assig.results()  # also put results in a dataframe, then save to disk
+    results_df.to_csv(join(fldr, 'link_flow_adjdem_' + scenname + '.csv'))
+    # assigclass.results.save_to_disk(join(fldr, 'link_flow_adjdem_' + scenname + '.csv'), output="loads")  # changes for each run. Per AequilibraE 1.1.4, this code is deprecated
 
+	# Calculate summary statistics
     f = omx.open_file(join(fldr, mtx_fldr, socio + '_demand_summed.omx'), 'r')
     logger.debug("DEMAND FILE Shape: {}   Tables: {}   Mappings: {}".format(f.shape(), f.list_matrices(),
                                                                             f.list_mappings()))
@@ -531,10 +530,10 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
             logger.error("LINK FLOW FILE ERROR: {} could not be found".format(link_flow_file))
             raise Exception("LINK FLOW FILE ERROR: {} could not be found".format(link_flow_file))
 
-        link_flows = pd.read_csv(link_flow_file, usecols=['index', 'matrix_tot'],
-                                 converters={'index': str, 'matrix_tot': float})
+        link_flows = pd.read_csv(link_flow_file, usecols=['link_id', 'matrix_tot'],
+                                 converters={'link_id': str, 'matrix_tot': float})
 
-        transit_calcs = pd.merge(network, link_flows, how='left', left_on='link_id', right_on='index', indicator=True)
+        transit_calcs = pd.merge(network, link_flows, how='left', left_on='link_id', right_on='link_id', indicator=True)
         logger.debug(("Number of links not found in link flows " +
                       "table: {}".format(sum(transit_calcs['_merge'] == 'left_only'))))
         if sum(transit_calcs['_merge'] == 'left_only') == transit_calcs.shape[0]:
@@ -542,7 +541,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
                          "failed to produce any matches for scenario {}. Check the corresponding table columns.".format(scenname)))
             raise Exception(("TABLE JOIN ERROR: Join of network links file with link flows table " +
                              "failed to produce any matches for scenario {}. Check the corresponding table columns.".format(scenname)))
-        transit_calcs.drop(labels=['index', '_merge'], axis=1, inplace=True)
+        transit_calcs.drop(labels=['link_id', '_merge'], axis=1, inplace=True)
         transit_calcs['matrix_tot'] = np.where(transit_calcs['matrix_tot'].isna(), 0, transit_calcs['matrix_tot'])
         transit_calcs = transit_calcs.assign(miles_tot=transit_calcs['matrix_tot'] * transit_calcs['length'],
                                              hours_tot=transit_calcs['matrix_tot'] * transit_calcs['travel_time'] / 60)

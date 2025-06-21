@@ -6,7 +6,7 @@ dependencies:
   - conda-forge::r-base=4.4.1
   - conda-forge::geopandas=1.0.1
   - conda-forge::jupyter=1.1.1
-  - conda-forge::ipykernel=6.29.5  
+  - conda-forge::ipykernel=6.29.5
   - conda-forge::openmatrix=0.3.5.0
   - conda-forge::hdf5=1.14.4
   - conda-forge::plotly=5.24.1
@@ -19,17 +19,17 @@ dependencies:
   - conda-forge::python=3.11
   - conda-forge::contourpy=1.3.0
   - conda-forge::cycler=0.12.1
-  - conda-forge::cython=3.0.11
+  - conda-forge::cython=3.0.12
   - conda-forge::fonttools=4.53.1
   - conda-forge::kiwisolver=1.4.7
   - conda-forge::matplotlib=3.9.2
-  - conda-forge::ndindex=1.8
+  - conda-forge::ndindex=1.9.2
   - conda-forge::pillow=10.4.0
   - conda-forge::py-cpuinfo=9.0.0
-  - conda-forge::pyaml=24.7.0
-  - conda-forge::scipy=1.14.1
-  - conda-forge::urllib3=2.2.3
+  - conda-forge::pyaml=25.1.0
+  - conda-forge::scipy=1.15.2
+  - conda-forge::urllib3=2.3.0
   - pip:
-      - aequilibrae==1.0.0
+      - aequilibrae==1.4.2
       - osm2gmns==0.7.6
       - pyogrio==0.9.0
