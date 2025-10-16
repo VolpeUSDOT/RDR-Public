@@ -24,8 +24,8 @@ import rdr_AESingleRun
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2025.1"
-VERSION_DATE = "6/20/2025"
+VERSION_NUMBER = "2025.1.1"
+VERSION_DATE = "10/16/2025"
 
 def main():
 
@@ -105,7 +105,7 @@ def main():
             else:
                 # Confirm resilience project and project group match
                 try:
-                    assert(TAZ_metrics_cfg['projgroup'] == projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] == TAZ_metrics_cfg['resil'], 'Project Groups'][0])
+                    assert(TAZ_metrics_cfg['projgroup'] == projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] == TAZ_metrics_cfg['resil'], 'Project Groups'].iloc[0])
                 except:
                     error_text = "MODEL PARAMETERS FILE ERROR: Resilience project and project group specified in TAZ metrics config file do not match"
                     logger.error(error_text)
