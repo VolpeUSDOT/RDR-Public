@@ -2,8 +2,6 @@
 
 # Resilience and Disaster Recovery (RDR) Tool Suite
 
-## Sponsored by the Office of the Secretary of Transportation's Office of Research, Development & Technology
-
 ## Description:
 The RDR Tool Suite enables transportation agencies to assess transportation resilience return on investment (ROI) for specific transportation assets over a range of potential future conditions and hazard scenarios, which can then be used as a consideration in existing project prioritization processes. The tool suite utilizes established Robust Decision-Making concepts developed to build on current TDM analyses and address deeply uncertain future scenarios. The RDR Tool Suite was developed at the US Dept. of Transportation's Volpe National Transportation Systems Center in support of the [Office of the Secretary of Transportation's Office of Research, Development & Technology](https://www.transportation.gov/policy/ost-r/rdt). [Click here](https://github.com/VolpeUSDOT/RDR-Public/tree/main/documentation) to download the technical documentation, user guide, quick start guide, reference scenario library, and scenario checklist, as well as a brief overview document.
 
