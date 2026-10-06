@@ -12,6 +12,8 @@ import os
 import logging
 import datetime
 import glob
+import numpy as np
+import pandas as pd
 
 from Run_RDR import VERSION_NUMBER
 
@@ -21,6 +23,13 @@ from Run_RDR import VERSION_NUMBER
 
 # checks existence of filepath, returns filepath if valid
 def check_file_exists(filepath, logger):
+    """Validate that a filesystem path exists.
+
+    :param filepath: Path to validate.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: The original path when it exists.
+    :rtype: str
+    """
     if not os.path.exists(filepath):
         logger.error("FILE ERROR: {} could not be found".format(filepath))
         raise Exception("FILE ERROR: {} could not be found".format(filepath))
@@ -36,6 +45,17 @@ def check_file_exists(filepath, logger):
 # check_type should be "all" if all need to be 'left_only' to raise exception
 # check_type should be "any" if any being 'left_only' will raise exception
 def check_left_merge(df, check_type, left_var, right_var, logger, guidance="",):
+    """Validate a left merge result and drop the merge marker.
+
+    :param df: DataFrame being checked or transformed.
+    :param check_type: The `check_type` value used by the workflow.
+    :param left_var: The `left_var` value used by the workflow.
+    :param right_var: The `right_var` value used by the workflow.
+    :param logger: Logger used for status, warning, and error reporting.
+    :param guidance: The `guidance` value used by the workflow.
+    :returns: The DataFrame with the `_merge` column removed.
+    :rtype: pandas.DataFrame
+    """
     logger.debug(("Number of {} not found in ".format(left_var) +
                   "{} table: {}".format(right_var, sum(df['_merge'] == 'left_only'))))
     if check_type == 'any':
@@ -61,7 +81,159 @@ def check_left_merge(df, check_type, left_var, right_var, logger, guidance="",):
 # ==============================================================================
 
 
+def get_missing_columns(required_columns, available_columns):
+    """Return required column names that are absent from an input header.
+
+    Column names are compared exactly and returned in the order supplied by
+    ``required_columns``.
+
+    :param required_columns: Column names required by the input contract.
+    :param available_columns: Column names found in the input header.
+    :returns: Required column names not present in ``available_columns``.
+    :rtype: list
+    """
+    return [column for column in required_columns if column not in available_columns]
+
+
+# ==============================================================================
+
+
+def read_csv_with_optional_columns(csv_path, required_usecols, optional_usecols=None, converters=None, **kwargs):
+    optional_usecols = optional_usecols or []
+    converters = converters or {}
+    header = pd.read_csv(csv_path, nrows=0).columns
+    optional_present = [col for col in optional_usecols if col in header]
+    usecols = required_usecols + optional_present
+    converters = {col: converter for col, converter in converters.items()
+                  if col in required_usecols or col in optional_present}
+
+    return pd.read_csv(csv_path, usecols=usecols, converters=converters, **kwargs)
+
+
+# ==============================================================================
+
+
+def get_valid_network_project_ids(project_ids):
+    if isinstance(project_ids, pd.DataFrame):
+        if 'Project ID' in project_ids.columns:
+            project_ids = project_ids['Project ID']
+        elif 'Resiliency Projects' in project_ids.columns:
+            project_ids = project_ids['Resiliency Projects']
+
+    valid_project_ids = set()
+    for project_id in project_ids:
+        if pd.isna(project_id):
+            continue
+        project_id = str(project_id)
+        if project_id not in ['', 'no']:
+            valid_project_ids.add(project_id)
+
+    return valid_project_ids
+
+
+def get_project_id_source_label():
+    return 'Model_Parameters.xlsx ProjectGroups.Project ID'
+
+
+def get_valid_project_ids_from_model_params(input_folder):
+    model_params_file = os.path.join(input_folder, 'Model_Parameters.xlsx')
+    projects = pd.read_excel(model_params_file, sheet_name='ProjectGroups', usecols=['Project ID'],
+                             converters={'Project ID': str})
+    return get_valid_network_project_ids(projects['Project ID'])
+
+
+def build_network_project_id_error(network_links, network_file, valid_project_ids,
+                                   project_source_label='the configured project list'):
+    if 'project_id' not in network_links.columns:
+        return None
+
+    project_ids = network_links['project_id'].dropna().astype(str)
+    project_ids = project_ids.loc[project_ids != '']
+    invalid_project_ids = sorted(set(project_ids).difference(set(valid_project_ids)))
+
+    if not invalid_project_ids:
+        return None
+
+    invalid_count = project_ids.loc[project_ids.isin(invalid_project_ids)].shape[0]
+    invalid_values = ', '.join(repr(project_id) for project_id in invalid_project_ids[:10])
+    if len(invalid_project_ids) > 10:
+        invalid_values = invalid_values + ', ...'
+
+    return ("NETWORK LINK FILE ERROR: Network link file {} contains {} project_id value(s) not listed in {}. " +
+            "Invalid values include: {}").format(network_file, invalid_count, project_source_label, invalid_values)
+
+
+def build_helper_network_link_uniqueness_error(network_links, socio, project_group):
+    identifier_columns = ['link_id']
+    identifier_values = network_links.loc[:, identifier_columns]
+
+    if 'project_id' in network_links.columns:
+        identifier_columns.append('project_id')
+        identifier_values = network_links.loc[:, identifier_columns].copy()
+        identifier_values['project_id'] = identifier_values['project_id'].fillna('').replace('nan', '')
+
+    if not identifier_values.duplicated(subset=identifier_columns).any():
+        return None
+
+    if 'project_id' in network_links.columns:
+        return ("NETWORK LINK FILE ERROR: The combination of columns link_id and project_id is not a unique " +
+                "identifier for socio {} and project group {}").format(socio, project_group)
+
+    return "NETWORK LINK FILE ERROR: Column link_id is not a unique identifier for socio {} and project group {}".format(
+        socio, project_group)
+
+
+def build_helper_travel_time_error(network_links, socio, project_group):
+    travel_time = network_links['travel_time']
+    valid_travel_time = np.isfinite(travel_time) & (travel_time > 0)
+
+    if valid_travel_time.all():
+        return None
+
+    return ("NETWORK LINK FILE ERROR: Column travel_time must contain finite values greater than zero for socio " +
+            "{} and project group {}").format(socio, project_group)
+
+
+def build_helper_network_project_id_error(network_links, socio, project_group, valid_project_ids):
+    if 'project_id' not in network_links.columns:
+        return None
+
+    project_ids = network_links['project_id'].dropna().astype(str)
+    project_ids = project_ids.loc[project_ids != '']
+    invalid_project_ids = sorted(set(project_ids).difference(set(valid_project_ids)))
+
+    if not invalid_project_ids:
+        return None
+
+    invalid_count = project_ids.loc[project_ids.isin(invalid_project_ids)].shape[0]
+    invalid_values = ', '.join(repr(project_id) for project_id in invalid_project_ids[:10])
+    if len(invalid_project_ids) > 10:
+        invalid_values = invalid_values + ', ...'
+
+    return ("NETWORK LINK FILE ERROR: File for socio {} and project group {} contains {} project_id value(s) " +
+            "not listed in Model_Parameters.xlsx ProjectGroups.Project ID. Invalid values include: {}").format(
+                socio, project_group, invalid_count, invalid_values)
+
+
+def validate_network_project_ids(network_links, network_file, valid_project_ids, logger,
+                                 project_source_label='the configured project list'):
+    error_text = build_network_project_id_error(network_links, network_file, valid_project_ids, project_source_label)
+    if error_text is not None:
+        logger.error(error_text)
+        raise Exception(error_text)
+
+
+# ==============================================================================
+
+
 def log_subprocess_output(pipe, logger):
+    """Stream subprocess stdout to the logger.
+
+    :param pipe: Subprocess pipe to read from.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: None. The function only logs subprocess stdout lines.
+    :rtype: None
+    """
     for line in iter(pipe.readline, b''):  # b'\n'-separated lines
         logger.info('R PROCESS: %r', line.strip().decode('ascii'))
 
@@ -70,6 +242,13 @@ def log_subprocess_output(pipe, logger):
 
 
 def log_subprocess_error(pipe, logger):
+    """Stream subprocess stderr to the logger and detect failures.
+
+    :param pipe: Subprocess pipe to read from.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: True when stderr contained any output, otherwise False.
+    :rtype: bool
+    """
     is_error = False
 
     for line in iter(pipe.readline, b''):  # b'\n'-separated lines
@@ -85,6 +264,12 @@ def log_subprocess_error(pipe, logger):
 
 # Taken from FTOT project, ftot_supporting.py
 def get_total_runtime_string(start_time):
+    """Format elapsed time as `HH:MM:SS`.
+
+    :param start_time: Datetime marking the start of the timed interval.
+    :returns: The elapsed runtime formatted as `HH:MM:SS`.
+    :rtype: str
+    """
     end_time = datetime.datetime.now()
 
     duration = end_time - start_time
@@ -108,7 +293,14 @@ def get_total_runtime_string(start_time):
 # Taken from FTOT project, ftot_supporting.py
 # <!--Create the logger -->
 def create_loggers(dirLocation, task, cfg):
-    """Create the logger"""
+    """Create file and console loggers for a run.
+
+    :param dirLocation: Directory that contains the run outputs.
+    :param task: Short task name used in log-file names.
+    :param cfg: Parsed configuration dictionary.
+    :returns: The configured logger.
+    :rtype: logging.Logger
+    """
 
     loggingLocation = os.path.join(dirLocation, "logs")
 
@@ -181,6 +373,14 @@ def create_loggers(dirLocation, task, cfg):
 
 
 def generate_reports(dirLocation, cfg, logger):
+    """Collect recent log files and assemble report artifacts.
+
+    :param dirLocation: Directory that contains the run outputs.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: None. The function writes report artifacts to disk.
+    :rtype: None
+    """
     logger.info("start: parse log operation for reports")
     report_directory = os.path.join(dirLocation, "Reports")
     if not os.path.exists(report_directory):

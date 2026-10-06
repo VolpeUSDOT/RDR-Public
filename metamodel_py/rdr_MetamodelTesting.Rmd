@@ -208,7 +208,7 @@ write.xlsx(training_set, file = file.path(output_dir, paste0("AequilibraE_Runs_C
 
 # Fitting Metamodel Formulations
 
-For methods `base`, `interact`, `projgroupLM`, and `multitarget`, run regressions on `trips`, `miles`, and `hours` from the common training set of AequilibraE runs.
+For methods `linear`, `interact`, `projgroupLM`, and `multitarget`, run regressions on `trips`, `miles`, and `hours` from the common training set of AequilibraE runs.
 
 ```{r test_eqn_builder}
 Use_Names <- data.frame(
@@ -228,7 +228,7 @@ use_pred_vars <- names(full_combos)[sapply(full_combos, function(x) length(level
 use_pred_Names <- Use_Names[match(use_pred_vars, Use_Names$short), "Name"]
 len_pred <- 1:length(use_pred_vars)
 
-formula_text_base <- paste(
+formula_text_linear <- paste(
   "EstimatedTrips = \\beta_0 + ",
   paste(paste0("\\beta_", len_pred, " ", use_pred_Names), collapse = " + "),
   " + \\epsilon"
@@ -277,20 +277,20 @@ formula_text_multitarget <- "[EstTrips,EstMiles,EstHours] = \\mathcal{GP}(m(\\bo
 formula_text_mixedeffects <- paste("EstimatedTrips_{ij} = \\gamma_{00} + ", paste(paste0("\\gamma_{0", len_pred, "} ", paste0(use_pred_Names, "_{ij}")), collapse = " + "), " + U_{0j} + U_{1j} Resil_{ij} + \\epsilon_{ij}")
 ```
 
-### 'base' metamodel formulation
+### 'linear' metamodel formulation
 Regressions will take the following form (for each response variable, separately). Note that the predictors are all categorical, with a separate estimated coefficient for each level of the predictor:
 
 $$
-`r formula_text_base`
+`r formula_text_linear`
 $$
 
-```{r descrip_base, echo=FALSE, results='asis'}
+```{r descrip_linear, echo=FALSE, results='asis'}
 cat("The metamodel assesses the best-fit values for the $\\beta$ coefficients, as well as the overall uncertainty $\\epsilon$.")
 ```
 
-```{r mm_base, include=FALSE}
+```{r mm_linear, include=FALSE}
 
-method <- "base"
+method <- "linear"
 
 # inputs: AequilibraE_Runs_Compiled_{run_id}.xlsx, full_combos_{run_id}.csv
 if (!file.exists("rdr_Metamodel_Regression.Rmd")) {
@@ -314,17 +314,17 @@ file.copy("rdr_Metamodel_Regression.html",
           overwrite = TRUE)
 file.remove("rdr_Metamodel_Regression.html")
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")))
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")))
 ```
 
 ### 'interact' metamodel formulation
@@ -365,17 +365,17 @@ file.copy("rdr_Metamodel_Regression.html",
           overwrite = TRUE)
 file.remove("rdr_Metamodel_Regression.html")
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")))
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")))
 ```
 
 ### 'projgroupLM' metamodel formulation
@@ -415,17 +415,17 @@ render("rdr_Metamodel_Regression.Rmd",
 file.copy("rdr_Metamodel_Regression.html", file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")), overwrite = TRUE)
 file.remove("rdr_Metamodel_Regression.html")
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")))
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")))
 ```
 
 ### 'multitarget' metamodel formulation
@@ -464,17 +464,17 @@ render("rdr_Metamodel_Regression.Rmd",
 file.copy("rdr_Metamodel_Regression.html", file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")), overwrite = TRUE)
 file.remove("rdr_Metamodel_Regression.html")
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")))
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")))
 ```
 
 
@@ -515,17 +515,17 @@ render("rdr_Metamodel_Regression.Rmd",
 file.copy("rdr_Metamodel_Regression.html", file.path(output_dir, paste0("rdr_Metamodel_Regression_", method, "_", run_type, ".html")), overwrite = TRUE)
 file.remove("rdr_Metamodel_Regression.html")
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_type, ".csv")))
 
-file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")),
-  file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", method, "_", run_type, ".csv")),
+file.copy(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")),
+  file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", method, "_", run_type, ".csv")),
   overwrite = TRUE
 )
-file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_type, ".csv")))
+file.remove(file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_type, ".csv")))
 ```
 
 
@@ -550,7 +550,7 @@ Better values for a specific response variable are indicated in blue.
 
 ```{r calc_metrics}
 
-methods <- c("base", "interact", "projgroupLM", "multitarget", "mixedeffects")
+methods <- c("linear", "interact", "projgroupLM", "multitarget", "mixedeffects")
 
 metrics_df <- data.frame(
   Method = character(),
@@ -570,10 +570,10 @@ metrics_df <- data.frame(
 for (aeq_type in c("SP", "RT")) {
   for (method in methods) {
     prediction_file <- file.path(output_dir,
-                                 paste0("Metamodel_scenarios_", aeq_type, "_futureyear_", method, "_", run_type, ".csv"))
+                                 paste0("Metamodel_scenarios_", aeq_type, "_future_year_", method, "_", run_type, ".csv"))
 
     if (!file.exists(prediction_file)) {
-      stop(paste0("Error: could not find Metamodel_scenarios_", aeq_type, "_futureyear_", method, "_", run_type, ".csv file."))
+      stop(paste0("Error: could not find Metamodel_scenarios_", aeq_type, "_future_year_", method, "_", run_type, ".csv file."))
     }
 
     predictions <- read.csv(prediction_file,

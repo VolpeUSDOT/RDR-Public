@@ -9,6 +9,7 @@
 #
 # ---------------------------------------------------------------------------------------------------
 import os
+import shutil
 import copy
 import pandas as pd
 import openmatrix as omx
@@ -17,6 +18,17 @@ import rdr_AESingleRun
 
 
 def main(input_folder, output_folder, cfg, logger):
+    """Initialize the AequilibraE database and execute all selected LHS runs.
+
+    :param input_folder: Path to the RDR input directory.
+    :param output_folder: Output directory for generated files.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: None. The function prepares the database and launches all selected AequilibraE runs.
+    :rtype: None
+    :db_reads: The function reads `node.csv` and opens `project_database.sqlite` for the working run.
+    :db_writes: The function writes `GMNS_node` and updates the `nodes` table in `project_database.sqlite`.
+    """
     logger.info("Start: AequilibraE run module")
 
     target = cfg['lhs_sample_target']
@@ -33,6 +45,17 @@ def main(input_folder, output_folder, cfg, logger):
                                                  'recovery': str, 'resil': str, 'ID': str, 'LHS_ID': str})
 
     # set up AEMaster SQLite database with node information
+    master_folder = os.path.join(input_folder, 'AEMaster')
+    if not os.path.exists(master_folder):
+        logger.error("AEQ DIRECTORY ERROR: AEMaster folder {} could not be found".format(master_folder))
+        raise Exception("AEQ DIRECTORY ERROR: AEMaster folder {} could not be found".format(master_folder))
+    # if project database not found in AEMaster folder, copy an empty project database from the config folder
+    db_file = os.path.join(master_folder, 'project_database.sqlite')
+    if not os.path.exists(db_file):
+        logger.info("copying SQLite database from template")
+        db_template = os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)), cfg['template_dir'], 'project_database.sqlite')
+        shutil.copy2(db_template, db_file)
+    
     logger.info("importing node input file into SQLite database")
     node_file = os.path.join(input_folder, 'Networks', 'node.csv')
     network_db = os.path.join(input_folder, 'AEMaster', 'project_database.sqlite')
