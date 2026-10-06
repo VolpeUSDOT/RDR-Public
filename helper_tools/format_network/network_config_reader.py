@@ -22,12 +22,13 @@ def read_config_file_helper(config, section, key, required_or_optional):
             return val
 
 
-def read_network_config_file(cfg_file):
+def read_network_config_file(cfg_file, root_dir=None):
     '''
     This method reads in the format network config file
     '''
-
     cfg_dict = {}  # return value
+    if cfg_file[0] == "." and root_dir:
+        cfg_file = cfg_file.replace(".\\", root_dir)
 
     if not os.path.exists(cfg_file):
         raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_file))
@@ -43,6 +44,9 @@ def read_network_config_file(cfg_file):
 
     cfg_dict['output_dir'] = read_config_file_helper(cfg, 'common', 'output_dir', 'REQUIRED')
 
+    if cfg_dict['output_dir'][0] == "." and root_dir:
+        cfg_dict['output_dir'] = cfg_dict['output_dir'].replace(".\\", root_dir)
+
     if not os.path.exists(cfg_dict['output_dir']):
         p = Path(cfg_dict['output_dir'])
         p.mkdir(parents=True, exist_ok=True)
@@ -52,24 +56,18 @@ def read_network_config_file(cfg_file):
     # ===========================
 
     cfg_dict['road_node_csv'] = read_config_file_helper(cfg, 'prepare_network', 'road_node_csv', 'REQUIRED')
-    if not os.path.exists(cfg_dict['road_node_csv']):
-        raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict['road_node_csv']))
-
     cfg_dict['road_link_csv'] = read_config_file_helper(cfg, 'prepare_network', 'road_link_csv', 'REQUIRED')
-    if not os.path.exists(cfg_dict['road_link_csv']):
-        raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict['road_link_csv']))
-
     cfg_dict['transit_node_csv'] = read_config_file_helper(cfg, 'prepare_network', 'transit_node_csv', 'REQUIRED')
-    if not os.path.exists(cfg_dict['transit_node_csv']):
-        raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict['transit_node_csv']))
-
     cfg_dict['transit_link_csv'] = read_config_file_helper(cfg, 'prepare_network', 'transit_link_csv', 'REQUIRED')
-    if not os.path.exists(cfg_dict['transit_link_csv']):
-        raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict['transit_link_csv']))
-
     cfg_dict['TAZ_shapefile'] = read_config_file_helper(cfg, 'prepare_network', 'TAZ_shapefile', 'REQUIRED')
-    if not os.path.exists(cfg_dict['TAZ_shapefile']):
-        raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict['TAZ_shapefile']))
+    cfg_dict['GTFS_folder'] = read_config_file_helper(cfg, 'prepare_network', 'GTFS_folder', 'REQUIRED')
+
+    for x in ["road_node_csv", 'road_link_csv', "output_dir", 'transit_node_csv', 'transit_link_csv', 'TAZ_shapefile', 'GTFS_folder']:
+        if x in cfg_dict:
+            if cfg_dict[x][0] == "." and root_dir:
+                cfg_dict[x] = cfg_dict[x].replace(".\\", root_dir)
+            if not os.path.exists(cfg_dict[x]):
+                raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict[x]))
 
     cfg_dict['zone_ID'] = read_config_file_helper(cfg, 'prepare_network', 'zone_ID', 'REQUIRED')
     if cfg_dict['zone_ID'] == 'node_id':
@@ -77,17 +75,13 @@ def read_network_config_file(cfg_file):
 
     cfg_dict['search_distance'] = read_config_file_helper(cfg, 'prepare_network', 'search_distance', 'REQUIRED')
 
-    create_gdb = read_config_file_helper(cfg, 'prepare_network', 'create_gdb', 'REQUIRED')
-    cfg_dict['create_gdb'] = False
-    create_gdb = create_gdb.lower()
-    if create_gdb not in ['t', 'true', 'f', 'false']:
-        raise Exception("CONFIG FILE ERROR: {} is an invalid value for create_gdb, should be True or False".format(create_gdb))
-    if create_gdb in ['t', 'true']:
-        cfg_dict['create_gdb'] = True
-
-    cfg_dict['GTFS_folder'] = read_config_file_helper(cfg, 'prepare_network', 'GTFS_folder', 'REQUIRED')
-    if not os.path.exists(cfg_dict['GTFS_folder']):
-        raise Exception("CONFIG FILE ERROR: {} could not be found".format(cfg_dict['GTFS_folder']))
+    create_gpkg = read_config_file_helper(cfg, 'prepare_network', 'create_gpkg', 'REQUIRED')
+    cfg_dict['create_gpkg'] = False
+    create_gpkg = create_gpkg.lower()
+    if create_gpkg not in ['t', 'true', 'f', 'false']:
+        raise Exception("CONFIG FILE ERROR: {} is an invalid value for create_gpkg, should be True or False".format(create_gpkg))
+    if create_gpkg in ['t', 'true']:
+        cfg_dict['create_gpkg'] = True
     
     # =============================
     # CALCULATE TRANSIT NETWORK METRICS

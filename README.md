@@ -1,6 +1,6 @@
 <!-- working badge, for working branch -->
 
-[![Python_package Status](https://github.com/VolpeUSDOT/RDR-Public/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR-Public/actions)
+[![Python_package Status](https://github.com/VolpeUSDOT/RDR/workflows/Python_package/badge.svg)](https://github.com/VolpeUSDOT/RDR/actions)
 
 # Resilience and Disaster Recovery (RDR) Tool Suite
 
@@ -12,12 +12,10 @@ The RDR Tool Suite enables transportation agencies to assess transportation resi
 
 The RDR Tool Suite is a Python based tool.
 
-The RDR Exposure Analysis Tool and components of other helper tools are ESRI ArcGIS Pro based tools.
-
 Installation instructions are provided in the [Quick Start Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_GettingStarted_final.pdf), and more detailed usage instructions are provided in the [User Guide](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_UserGuide_final.pdf).
 
 - Download the latest release on the [Releases page](https://github.com/VolpeUSDOT/RDR-Public/releases).
-- Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool or components of other helper tools).
+- Install the required dependencies.
 - The documentation, quick start, and reference scenario files are included with the code release.
 
 ## Contributing:
@@ -33,6 +31,8 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 - Daniel Flynn, PhD (Volpe)
 - Olivia Gillham (Volpe)
 - Michelle Gilmore (Volpe)
+- David Lamb (Volpe)
+- Kirby Ledvina (Volpe)
 - Tess Perrone (Volpe)
 - Gretchen Reese (Volpe)
 - Scott Smith, PhD (Volpe)

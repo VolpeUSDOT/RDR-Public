@@ -2,10 +2,10 @@ Category,Parameter,Description
 Model Run Configuration,input_dir,Input directory file location
 Model Run Configuration,output_dir,Output directory file location
 Model Run Configuration,run_id,Run ID
-Model Run Configuration,start_year,Start year of analysis period
-Model Run Configuration,end_year,End year of analysis period
-Model Run Configuration,base_year,Core model base year
-Model Run Configuration,future_year,Core model future year
+Model Run Configuration,analysis_period_start_year,Start year of analysis period
+Model Run Configuration,analysis_period_end_year,End year of analysis period
+Model Run Configuration,core_model_run_initial_year,Initial year for core model runs
+Model Run Configuration,core_model_run_future_year,Future year for core model runs
 Model Run Configuration,metamodel_type,Method used by RDR Metamodel
 Model Run Configuration,lhs_sample_target,Sample number of core model runs
 Model Run Configuration,socio,Socioeconomic scenarios in scenario analysis framework
@@ -48,7 +48,6 @@ Recovery Module Parameters,repair_time_csv,Repair time CSV file path (if used)
 ROI Module Parameters,roi_analysis_type,ROI analysis type run by RDR
 ROI Module Parameters,dollar_year,Year for dollar units
 ROI Module Parameters,discount_factor,Year-on-year discounting factor (decimal)
-ROI Module Parameters,co2_discount_factor,Year-on-year CO2 discounting factor (decimal)
 ROI Module Parameters,vehicle_occupancy,Passenger car vehicle occupancy rate (person/vehicle)
 ROI Module Parameters,vehicle_occupancy_bus,Transit bus vehicle occupancy rate (person/vehicle if used)
 ROI Module Parameters,vehicle_occupancy_light_rail,Light rail vehicle occupancy rate (person/vehicle if used)
@@ -68,6 +67,4 @@ ROI Module Parameters,noise_cost,Noise external use cost for passenger vehicle (
 ROI Module Parameters,noise_cost_bus,Noise external use cost for transit bus ($/vehicle-mile if used)
 ROI Module Parameters,non_co2_cost,Non-CO2 emissions external use cost for passenger vehicle ($/vehicle-mile)
 ROI Module Parameters,non_co2_cost_bus,Non-CO2 emissions external use cost for transit bus ($/vehicle-mile if used)
-ROI Module Parameters,co2_cost,CO2 emissions external use cost for passenger vehicle ($/vehicle-mile)
-ROI Module Parameters,co2_cost_bus,CO2 emissions external use cost for transit bus ($/vehicle-mile if used)
 ROI Module Parameters,crs,Coordinate reference system of true shapes file

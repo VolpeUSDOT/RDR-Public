@@ -23,8 +23,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_p
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2025.1"
-VERSION_DATE = "6/20/2025"
+VERSION_NUMBER = "2026.1"
+VERSION_DATE = "9/30/2026"
 
 # Create function to compute summary statistics of numeric variables to allow user to check 
 # whether they are reasonable. Function gets called in the main function a few times and then at the end
@@ -43,31 +43,36 @@ def summary_info_by_type(df, ind, val, file, notes):
 # ==============================================================================
 
 
-def main():
-
+def main(args:argparse.Namespace = None) -> None:
     # ----------------------------------------------------------------------------------------------
     # PARSE ARGS
-    program_description = 'Resilience Disaster Recovery Input Validation Helper Tool: ' \
-                          + VERSION_NUMBER + ", (" + VERSION_DATE + ")"
 
-    help_text = """
-    The command-line input expected for this script is as follows:
-    TheFilePathOfThisScript ConfigFilePath
-    """
+    config_type = 'json'
+    if args is None:
+        config_type = 'config'
 
-    parser = argparse.ArgumentParser(description=program_description, usage=help_text)
+        program_description = 'Resilience Disaster Recovery Input Validation Helper Tool: ' \
+                            + VERSION_NUMBER + ", (" + VERSION_DATE + ")"
 
-    parser.add_argument("config_file", help="The full path to the XML Scenario", type=str)
+        help_text = """
+        The command-line input expected for this script is as follows:
+        TheFilePathOfThisScript ConfigFilePath
+        """
 
-    if len(sys.argv) == 2:
-        args = parser.parse_args()
-    else:
-        parser.print_help()
-        sys.exit()
+        parser = argparse.ArgumentParser(description=program_description, usage=help_text)
+
+        parser.add_argument("config_file", help="The full path to the XML Scenario", type=str)
+
+        if len(sys.argv) == 2:
+            args = parser.parse_args()
+
+        else:
+            parser.print_help()
+            sys.exit()
 
     # ---------------------------------------------------------------------------------------------------
     # SETUP
-    error_list_cfg, cfg = rdr_setup.read_config_file(args.config_file, 'config')
+    error_list_cfg, cfg = rdr_setup.read_config_file(args.config_file, config_type)
 
     # Input files validated by this helper tool should be located in the scenario input directory
     input_folder = cfg['input_dir']
@@ -91,6 +96,8 @@ def main():
     param_dfs_list = []
     # List of items not included in the CSV
     excluded_list = []
+    # List of link files containing unusually low capacity values
+    low_capacity_files = []
 
     # ---------------------------------------------------------------------------------------------------
     # Model_Parameters.xlsx
@@ -118,24 +125,23 @@ def main():
                            'RecoveryStages' : {'Recovery Stages': str}, 
                            'FrequencyFactors' : {'Event Frequency Factors': str}}
         for t in tabs:
+            required_columns = list(converters_dict[t])
             try:
-                model_params = pd.read_excel(model_params_file, sheet_name = t)
-            except:
-                error_text = "MODEL PARAMETERS FILE ERROR: " + t + " tab could not be found."
+                available_columns = pd.read_excel(model_params_file, sheet_name=t, nrows=0).columns
+            except Exception as exc:
+                error_text = "MODEL PARAMETERS FILE ERROR: {} tab could not be read. Reason: {}".format(t, exc)
                 logger.error(error_text)
                 error_list.append(error_text)
                 has_error_model_params = True
-
-            # XLSX STEP 3: Check it has necessary columns
             else:
-                try:
-                    model_params = pd.read_excel(model_params_file, sheet_name = t,
-                                                 converters = converters_dict[t])
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: " + t + " tab is missing required columns."
+                # XLSX STEP 3: Check it has necessary columns
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("MODEL PARAMETERS FILE ERROR: {} tab has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(t, missing_columns)
                     logger.error(error_text)
                     error_list.append(error_text)
-                    has_error_model_params = True            
+                    has_error_model_params = True
 
         if not(has_error_model_params):
             # Test recovery stages are nonnegative numbers
@@ -230,6 +236,7 @@ def main():
             projgroup = set(projgroup_to_resil['Project Groups'].dropna().tolist())
             recovery = set(recovery['Recovery Stages'].dropna().tolist())
             resil = set(projgroup_to_resil['Resiliency Projects'].dropna().tolist())
+            valid_network_project_ids = rdr_supporting.get_valid_network_project_ids(resil)
 
             elasticity = pd.read_excel(model_params_file, sheet_name='Elasticities',
                                        converters={'Trip Loss Elasticities': float})
@@ -254,7 +261,7 @@ def main():
             if os.path.isfile(f):
                 hazard_file_list.append(filename)
 
-        if has_error_hazards or not os.path.exists(model_params_file):
+        if has_error_model_params or has_error_hazards or not os.path.exists(model_params_file):
             error_text = "EXPOSURE ANALYSIS FILE WARNING: Not validating exposure analysis files, errors with Model_Parameters.xlsx"
             logger.error(error_text)
             error_list.append(error_text)
@@ -268,37 +275,58 @@ def main():
                     error_list.append(error_text)
                 else:
                     # CSV STEP 2: Check file has necessary columns
+                    exposure_file = os.path.join(hazard_folder, h)
+                    required_columns = ['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']]
                     try:
-                        exposures = pd.read_csv(os.path.join(hazard_folder, h), usecols=['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']],
-                                                converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, cfg['exposure_field']: str})
-                    except:
-                        error_text = "EXPOSURE ANALYSIS FILE ERROR: File for hazard {} is missing required columns".format(row['Hazard Event'])
+                        available_columns = pd.read_csv(exposure_file, nrows=0).columns
+                    except Exception as exc:
+                        error_text = ("EXPOSURE ANALYSIS FILE ERROR: File for hazard {} could not be read. " +
+                                      "Reason: {}").format(row['Hazard Event'], exc)
                         logger.error(error_text)
                         error_list.append(error_text)
                     else:
-                        # Test from_node_id can be converted to int
-                        try:
-                            exposures['from_node_id'] = pd.to_numeric(exposures['from_node_id'], downcast='integer')
-                        except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column from_node_id could not be converted to int for hazard {}".format(row['Hazard Event'])
+                        missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                        if missing_columns:
+                            error_text = ("EXPOSURE ANALYSIS FILE ERROR: File for hazard {} has an invalid header. " +
+                                          "Required columns expected but not found: {}").format(
+                                              row['Hazard Event'], missing_columns)
                             logger.error(error_text)
                             error_list.append(error_text)
+                        else:
+                            try:
+                                exposures = pd.read_csv(
+                                    exposure_file,
+                                    usecols=required_columns,
+                                    converters={column: str for column in required_columns})
+                            except Exception as exc:
+                                error_text = ("EXPOSURE ANALYSIS FILE ERROR: File for hazard {} could not be read. " +
+                                              "Reason: {}").format(row['Hazard Event'], exc)
+                                logger.error(error_text)
+                                error_list.append(error_text)
+                            else:
+                                # Test from_node_id can be converted to int
+                                try:
+                                    exposures['from_node_id'] = pd.to_numeric(exposures['from_node_id'], downcast='integer')
+                                except:
+                                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column from_node_id could not be converted to int for hazard {}".format(row['Hazard Event'])
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
 
-                        # Test to_node_id can be converted to int
-                        try:
-                            exposures['to_node_id'] = pd.to_numeric(exposures['to_node_id'], downcast='integer')
-                        except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column to_node_id could not be converted to int for hazard {}".format(row['Hazard Event'])
-                            logger.error(error_text)
-                            error_list.append(error_text)
+                                # Test to_node_id can be converted to int
+                                try:
+                                    exposures['to_node_id'] = pd.to_numeric(exposures['to_node_id'], downcast='integer')
+                                except:
+                                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column to_node_id could not be converted to int for hazard {}".format(row['Hazard Event'])
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
 
-                        # Test cfg['exposure_field'] can be converted to float
-                        try:
-                            exposures[cfg['exposure_field']] = pd.to_numeric(exposures[cfg['exposure_field']], downcast='float')
-                        except:
-                            error_text = "EXPOSURE ANALYSIS FILE ERROR: Column specifying exposure level could not be converted to float for hazard {}".format(row['Hazard Event'])
-                            logger.error(error_text)
-                            error_list.append(error_text)
+                                # Test cfg['exposure_field'] can be converted to float
+                                try:
+                                    exposures[cfg['exposure_field']] = pd.to_numeric(exposures[cfg['exposure_field']], downcast='float')
+                                except:
+                                    error_text = "EXPOSURE ANALYSIS FILE ERROR: Column specifying exposure level could not be converted to float for hazard {}".format(row['Hazard Event'])
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
     else:
         error_text = "EXPOSURE ANALYSIS FOLDER ERROR: Hazards directory for exposure analysis files does not exist"
         logger.error(error_text)
@@ -312,8 +340,9 @@ def main():
     # For each socio and project group listed in Model_Parameters.xlsx:
     # 1) Is there a links CSV file
     # 2) Check that link_id, from_node_id, to_node_id, directed, length, facility_type, capacity, free_speed, lanes, allowed_uses, toll, travel_time exist;
+    #    project_id is optional for legacy network files
     #    from_node_id, to_node_id, directed, lanes must be int, length, capacity, free_speed, toll, travel_time must be float
-    # 3) Check that link_id has no duplicate values
+    # 3) Check that the link_id and project_id combination is unique; for legacy files, check that link_id is unique
     # 4) Check that directed is always 1, allowed_uses is always c
     # 5) If 'nocar' trip table matrix exists, check that toll_nocar, travel_time_nocar exist; both must be float
     networks_folder = os.path.join(input_folder, 'Networks')
@@ -334,55 +363,72 @@ def main():
             node_f_excl = True
         else:
             # CSV STEP 2: Check file has necessary columns
+            required_columns = ['node_id', 'x_coord', 'y_coord', 'node_type']
             try:
-                nodes = pd.read_csv(node_file, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                                    converters={'node_id': str, 'x_coord': str, 'y_coord': str, 'node_type': str})
-            except:
-                error_text = "NETWORK NODE FILE ERROR: Node input file is missing required columns"
+                available_columns = pd.read_csv(node_file, nrows=0).columns
+            except Exception as exc:
+                error_text = "NETWORK NODE FILE ERROR: Node input file could not be read. Reason: {}".format(exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
-                # Test node_id can be converted to int
-                try:
-                    nodes['node_id'] = pd.to_numeric(nodes['node_id'], downcast='integer')
-                except:
-                    error_text = "NETWORK NODE FILE ERROR: Column node_id could not be converted to int"
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("NETWORK NODE FILE ERROR: Node input file has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(missing_columns)
                     logger.error(error_text)
                     error_list.append(error_text)
-
-                # Test node_id is a unique identifier
-                try:
-                    assert(not nodes.duplicated(subset=['node_id']).any())
-                except:
-                    error_text = "NETWORK NODE FILE ERROR: Column node_id is not a unique identifier"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-
-                # Test x_coord can be converted to float
-                try:
-                    nodes['x_coord'] = pd.to_numeric(nodes['x_coord'], downcast='float')
-                except:
-                    error_text = "NETWORK NODE FILE ERROR: Column x_coord could not be converted to float"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-                    x_excl = True
                 else:
-                    # Compute summary statistics on x_coord values
-                    x_coord_stats = summary_info_by_type(df = nodes, ind = 'node_type', val = 'x_coord', file = node_file, notes = "")
-                    param_dfs_list.append(x_coord_stats)                       
+                    try:
+                        nodes = pd.read_csv(
+                            node_file,
+                            usecols=required_columns,
+                            converters={column: str for column in required_columns})
+                    except Exception as exc:
+                        error_text = "NETWORK NODE FILE ERROR: Node input file could not be read. Reason: {}".format(exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+                    else:
+                        # Test node_id can be converted to int
+                        try:
+                            nodes['node_id'] = pd.to_numeric(nodes['node_id'], downcast='integer')
+                        except:
+                            error_text = "NETWORK NODE FILE ERROR: Column node_id could not be converted to int"
+                            logger.error(error_text)
+                            error_list.append(error_text)
 
-                # Test y_coord can be converted to float
-                try:
-                    nodes['y_coord'] = pd.to_numeric(nodes['y_coord'], downcast='float')
-                except:
-                    error_text = "NETWORK NODE FILE ERROR: Column y_coord could not be converted to float"
-                    logger.error(error_text)
-                    error_list.append(error_text)
-                    y_excl = True
-                else:
-                    # Compute summary statistics on y_coord values
-                    y_coord_stats = summary_info_by_type(df = nodes, ind = 'node_type', val = 'y_coord', file = node_file, notes = "") 
-                    param_dfs_list.append(y_coord_stats)   
+                        # Test node_id is a unique identifier
+                        try:
+                            assert(not nodes.duplicated(subset=['node_id']).any())
+                        except:
+                            error_text = "NETWORK NODE FILE ERROR: Column node_id is not a unique identifier"
+                            logger.error(error_text)
+                            error_list.append(error_text)
+
+                        # Test x_coord can be converted to float
+                        try:
+                            nodes['x_coord'] = pd.to_numeric(nodes['x_coord'], downcast='float')
+                        except:
+                            error_text = "NETWORK NODE FILE ERROR: Column x_coord could not be converted to float"
+                            logger.error(error_text)
+                            error_list.append(error_text)
+                            x_excl = True
+                        else:
+                            # Compute summary statistics on x_coord values
+                            x_coord_stats = summary_info_by_type(df = nodes, ind = 'node_type', val = 'x_coord', file = node_file, notes = "")
+                            param_dfs_list.append(x_coord_stats)
+
+                        # Test y_coord can be converted to float
+                        try:
+                            nodes['y_coord'] = pd.to_numeric(nodes['y_coord'], downcast='float')
+                        except:
+                            error_text = "NETWORK NODE FILE ERROR: Column y_coord could not be converted to float"
+                            logger.error(error_text)
+                            error_list.append(error_text)
+                            y_excl = True
+                        else:
+                            # Compute summary statistics on y_coord values
+                            y_coord_stats = summary_info_by_type(df = nodes, ind = 'node_type', val = 'y_coord', file = node_file, notes = "")
+                            param_dfs_list.append(y_coord_stats)
 
         links_file_list = []
         for filename in os.listdir(networks_folder):
@@ -408,23 +454,52 @@ def main():
                         error_list.append(error_text)
                     else:
                         # CSV STEP 2: Check file has necessary columns
+                        link_path = os.path.join(networks_folder, link_file)
+                        required_link_columns = ['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
+                                                 'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time']
+                        link_converters = {'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': str,
+                                           'length': str, 'facility_type': str, 'capacity': str, 'free_speed': str,
+                                           'lanes': str, 'allowed_uses': str, 'toll': str, 'travel_time': str,
+                                           'project_id': str}
                         try:
-                            links = pd.read_csv(os.path.join(networks_folder, link_file),
-                                                usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
-                                                         'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time'],
-                                                converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': str,
-                                                            'length': str, 'facility_type': str, 'capacity': str, 'free_speed': str,
-                                                            'lanes': str, 'allowed_uses': str, 'toll': str, 'travel_time': str})
-                        except:
-                            error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns".format(i, j)
+                            available_columns = pd.read_csv(link_path, nrows=0).columns
+                        except Exception as exc:
+                            error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                          "could not be read. Reason: {}").format(i, j, exc)
+                            logger.error(error_text)
+                            error_list.append(error_text)
+                            continue
+
+                        missing_columns = rdr_supporting.get_missing_columns(
+                            required_link_columns, available_columns)
+                        if missing_columns:
+                            error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                          "has an invalid header. Required columns expected but not found: {}").format(
+                                              i, j, missing_columns)
+                            logger.error(error_text)
+                            error_list.append(error_text)
+                            continue
+
+                        try:
+                            links = rdr_supporting.read_csv_with_optional_columns(
+                                link_path,
+                                required_usecols=required_link_columns,
+                                optional_usecols=['project_id'],
+                                converters=link_converters)
+                        except Exception as exc:
+                            error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                          "could not be read. Reason: {}").format(i, j, exc)
                             logger.error(error_text)
                             error_list.append(error_text)
                         else:
-                            # Test link_id is a unique identifier
-                            try:
-                                assert(not links.duplicated(subset=['link_id']).any())
-                            except:
-                                error_text = "NETWORK LINK FILE ERROR: Column link_id is not a unique identifier for socio {} and project group {}".format(i, j)
+                            error_text = rdr_supporting.build_helper_network_link_uniqueness_error(links, i, j)
+                            if error_text is not None:
+                                logger.error(error_text)
+                                error_list.append(error_text)
+
+                            error_text = rdr_supporting.build_helper_network_project_id_error(
+                                links, i, j, valid_network_project_ids)
+                            if error_text is not None:
                                 logger.error(error_text)
                                 error_list.append(error_text)
 
@@ -494,13 +569,18 @@ def main():
                                 logger.error(error_text)
                                 error_list.append(error_text)
 
-                            # Test travel_time can be converted to float
+                            # Test travel_time can be converted to float and is greater than zero
                             try:
                                 links['travel_time'] = pd.to_numeric(links['travel_time'], downcast='float')
                             except:
                                 error_text = "NETWORK LINK FILE ERROR: Column travel_time could not be converted to float for socio {} and project group {}".format(i, j)
                                 logger.error(error_text)
                                 error_list.append(error_text)
+                            else:
+                                error_text = rdr_supporting.build_helper_travel_time_error(links, i, j)
+                                if error_text is not None:
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
 
                             # Test allowed_uses is always equal to 'c'
                             try:
@@ -529,12 +609,35 @@ def main():
                                     nocar = True
 
                                 if nocar:
+                                    link_path = os.path.join(networks_folder, link_file)
+                                    required_nocar_columns = ['toll_nocar', 'travel_time_nocar']
                                     try:
-                                        links = pd.read_csv(os.path.join(networks_folder, link_file),
-                                                usecols=['toll_nocar', 'travel_time_nocar'],
-                                                converters={'toll': str, 'travel_time': str})
-                                    except:
-                                        error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns corresponding to no car trip table".format(i, j)
+                                        available_columns = pd.read_csv(link_path, nrows=0).columns
+                                    except Exception as exc:
+                                        error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                                      "could not be read. Reason: {}").format(i, j, exc)
+                                        logger.error(error_text)
+                                        error_list.append(error_text)
+                                        continue
+
+                                    missing_columns = rdr_supporting.get_missing_columns(
+                                        required_nocar_columns, available_columns)
+                                    if missing_columns:
+                                        error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                                      "has an invalid no car trip table header. " +
+                                                      "Required columns expected but not found: {}").format(
+                                                          i, j, missing_columns)
+                                        logger.error(error_text)
+                                        error_list.append(error_text)
+                                        continue
+
+                                    try:
+                                        links = pd.read_csv(link_path,
+                                                usecols=required_nocar_columns,
+                                                converters={'toll_nocar': str, 'travel_time_nocar': str})
+                                    except Exception as exc:
+                                        error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                                      "could not be read. Reason: {}").format(i, j, exc)
                                         logger.error(error_text)
                                         error_list.append(error_text)
                                     else:
@@ -568,8 +671,10 @@ def main():
                 param_dfs_list.append(globals()[df_length_name])
 
                 df_capacity_name = f"capacity_stats_{link_file}"
-                globals()[df_capacity_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'capacity', file = os.path.join(networks_folder, link_file), notes = "The units for capacity are vehicles per day per lane.")
-                param_dfs_list.append(globals()[df_capacity_name])                            
+                globals()[df_capacity_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'capacity', file = os.path.join(networks_folder, link_file), notes = "The units for capacity are vehicles per day per lane. Reasonable values are between 5,000 and 30,000 vehicles per day per lane.")
+                param_dfs_list.append(globals()[df_capacity_name])
+                if (globals()[df_capacity_name]['min'] < 2500).any():
+                    low_capacity_files.append(link_file)
 
                 df_speed_name = f"speed_stats_{link_file}"
                 globals()[df_speed_name] = summary_info_by_type(df = links, ind = 'facility_type', val = 'free_speed', file = os.path.join(networks_folder, link_file), notes = "The units for free speed are miles per hour.")
@@ -672,105 +777,97 @@ def main():
         error_list.append(error_text)
 
     # ---------------------------------------------------------------------------------------------------
-    # SQLite database
-    # 1) Is project_database.sqlite present in the AEMaster directory
-    # 2) Check list of tables matches expected list of tables
-    AEMaster_folder = os.path.join(input_folder, 'AEMaster')
-    network_db_file = os.path.join(AEMaster_folder, 'project_database.sqlite')
-
-    if not os.path.exists(network_db_file):
-        error_text = "SQLite DATABASE FILE ERROR: {} could not be found".format(network_db_file)
-        logger.error(error_text)
-        error_list.append(error_text)
-    else:
-        with sqlite3.connect(network_db_file) as db_con:
-            cur = db_con.cursor()
-            cur.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            all_tables = cur.fetchall()
-            nodes_exists = ('nodes',) in all_tables
-            links_exists = ('links',) in all_tables
-
-        if not nodes_exists:
-            error_text = "SQLite DATABASE FILE ERROR: `nodes` table could not be found in {}".format(network_db_file)
-            logger.error(error_text)
-            error_list.append(error_text)
-
-        if not links_exists:
-            error_text = "SQLite DATABASE FILE ERROR: `links` table could not be found in {}".format(network_db_file)
-            logger.error(error_text)
-            error_list.append(error_text)
-
-    # ---------------------------------------------------------------------------------------------------
-    # Base year core model runs file
-    # 1) Is it present for the corresponding SP/RT outputs, Metamodel_scenario_SP_baseyear.csv OR Metamodel_scenario_RT_baseyear.csv
+    # Core model initial year runs file
+    # 1) Is it present for the corresponding SP/RT outputs, Metamodel_scenario_SP_initial_year.csv OR Metamodel_scenario_RT_initial_year.csv
     # 2) Check that hazard, recovery, trips, miles, hours exist; recovery must be int, trips, miles, hours must be float
-    baseyear_option = cfg['aeq_run_type']
-    baseyear_files = []
-    b_y = 'Metamodel_scenarios_' + baseyear_option + '_baseyear.csv'
-    baseyear_files.append(os.path.join(input_folder, b_y))
+    initial_year_option = cfg['aeq_run_type']
+    initial_year_files = []
+    b_y = 'Metamodel_scenarios_' + initial_year_option + '_initial_year.csv'
+    initial_year_files.append(os.path.join(input_folder, b_y))
 
     # CSV STEP 1: Check file exists
-    any_baseyear_error = []
-    for b_y in baseyear_files:
-        any_baseyear_error.append(not os.path.exists(b_y))
+    any_initial_year_error = []
+    for b_y in initial_year_files:
+        any_initial_year_error.append(not os.path.exists(b_y))
 
-    if all(any_baseyear_error):
-        error_text = "BASE YEAR MODEL FILE ERROR: {} could not be found in {}".format(b_y, input_folder)
+    if all(any_initial_year_error):
+        error_text = "CORE MODEL INITIAL YEAR RUNS FILE ERROR: {} could not be found in {}".format(b_y, input_folder)
         logger.error(error_text)
         error_list.append(error_text)
     else:
         # CSV STEP 2: Check file has necessary columns
-        # Read the first base year file available and verify columns
+        # Read the first initial year file available and verify columns
+        initial_year = None
+        required_columns = ['hazard', 'recovery', 'trips', 'miles', 'hours']
         try:
-            baseyear = pd.read_csv(baseyear_files[0], usecols=['hazard', 'recovery', 'trips', 'miles', 'hours'],
-                                   converters={'hazard': str, 'recovery': str, 'trips': str, 'miles': str, 'hours': str})
-        except:
-            error_text = "BASE YEAR MODEL FILE ERROR: Base year core model runs input file is missing required columns"
+            available_columns = pd.read_csv(initial_year_files[0], nrows=0).columns
+        except Exception as exc:
+            error_text = ("CORE MODEL INITIAL YEAR RUNS FILE ERROR: Core model initial year runs input file could not be read. " +
+                          "Reason: {}").format(exc)
             logger.error(error_text)
             error_list.append(error_text)
         else:
+            missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+            if missing_columns:
+                error_text = ("CORE MODEL INITIAL YEAR RUNS FILE ERROR: Core model initial year runs input file has an invalid header. " +
+                              "Required columns expected but not found: {}").format(missing_columns)
+                logger.error(error_text)
+                error_list.append(error_text)
+            else:
+                try:
+                    initial_year = pd.read_csv(
+                        initial_year_files[0],
+                        usecols=required_columns,
+                        converters={column: str for column in required_columns})
+                except Exception as exc:
+                    error_text = ("CORE MODEL INITIAL YEAR RUNS FILE ERROR: Core model initial year runs input file could not be read. " +
+                                  "Reason: {}").format(exc)
+                    logger.error(error_text)
+                    error_list.append(error_text)
+
+        if initial_year is not None:
             # Test recovery stages are nonnegative numbers
             try:
-                recovery_num = pd.to_numeric(baseyear['recovery'], downcast='float')
+                recovery_num = pd.to_numeric(initial_year['recovery'], downcast='float')
                 assert(all(recovery_num >= 0))
             except:
-                error_text = "BASE YEAR MODEL FILE ERROR: Recovery stages are not all nonnegative numbers"
+                error_text = "CORE MODEL INITIAL YEAR RUNS FILE ERROR: Recovery stages are not all nonnegative numbers"
                 logger.error(error_text)
                 error_list.append(error_text)
 
             # Test trips can be converted to float
             try:
-                baseyear['trips'] = pd.to_numeric(baseyear['trips'], downcast='float')
+                initial_year['trips'] = pd.to_numeric(initial_year['trips'], downcast='float')
             except:
-                error_text = "BASE YEAR MODEL FILE ERROR: Column trips could not be converted to float"
+                error_text = "CORE MODEL INITIAL YEAR RUNS FILE ERROR: Column trips could not be converted to float"
                 logger.error(error_text)
                 error_list.append(error_text)
 
             # Test miles can be converted to float
             try:
-                baseyear['miles'] = pd.to_numeric(baseyear['miles'], downcast='float')
+                initial_year['miles'] = pd.to_numeric(initial_year['miles'], downcast='float')
             except:
-                error_text = "BASE YEAR MODEL FILE ERROR: Column miles could not be converted to float"
+                error_text = "CORE MODEL INITIAL YEAR RUNS FILE ERROR: Column miles could not be converted to float"
                 logger.error(error_text)
                 error_list.append(error_text)
 
             # Test hours can be converted to float
             try:
-                baseyear['hours'] = pd.to_numeric(baseyear['hours'], downcast='float')
+                initial_year['hours'] = pd.to_numeric(initial_year['hours'], downcast='float')
             except:
-                error_text = "BASE YEAR MODEL FILE ERROR: Column hours could not be converted to float"
+                error_text = "CORE MODEL INITIAL YEAR RUNS FILE ERROR: Column hours could not be converted to float"
                 logger.error(error_text)
                 error_list.append(error_text)
 
             # Test hazard-recovery pairs can be found for every pair in Model_Parameters.xlsx
             try:
-                hazard_b_y = set(baseyear['hazard'].dropna().tolist())
-                recovery_b_y = set(baseyear['recovery'].dropna().tolist())
+                hazard_b_y = set(initial_year['hazard'].dropna().tolist())
+                recovery_b_y = set(initial_year['recovery'].dropna().tolist())
                 product_m_p = set(list(product(hazard, recovery)))
                 product_b_y = set(list(product(hazard_b_y, recovery_b_y)))
                 assert(product_m_p <= product_b_y)
             except:
-                error_text = "BASE YEAR MODEL FILE ERROR: Base year core model runs input file is missing at least one hazard-recovery combination"
+                error_text = "CORE MODEL INITIAL YEAR RUNS FILE ERROR: Core model initial year runs input file is missing at least one hazard-recovery combination"
                 logger.error(error_text)
                 error_list.append(error_text)
 
@@ -790,34 +887,42 @@ def main():
             error_list.append(error_text)
         else:
             # CSV STEP 2: Check file has necessary columns
+            maintenance = cfg['maintenance']
+            redeployment = cfg['redeployment']
+            required_columns = ['Project ID', 'Project Name', 'Asset', 'Project Cost', 'Project Lifespan']
+            if maintenance:
+                required_columns.append('Annual Maintenance Cost')
+            if redeployment:
+                required_columns.append('Redeployment Cost')
+
+            project_info = None
             try:
-                maintenance = cfg['maintenance']
-                redeployment = cfg['redeployment']
-                if maintenance and redeployment:
-                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
-                                                                           'Project Lifespan', 'Annual Maintenance Cost', 'Redeployment Cost'],
-                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
-                                                           'Project Lifespan': str, 'Annual Maintenance Cost': str, 'Redeployment Cost': str})
-                elif maintenance:
-                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
-                                                                           'Project Lifespan', 'Annual Maintenance Cost'],
-                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
-                                                           'Project Lifespan': str, 'Annual Maintenance Cost': str})
-                elif redeployment:
-                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
-                                                                           'Project Lifespan', 'Redeployment Cost'],
-                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
-                                                           'Project Lifespan': str, 'Redeployment Cost': str})
-                else:
-                    project_info = pd.read_csv(project_info_file, usecols=['Project ID', 'Project Name', 'Asset', 'Project Cost',
-                                                                           'Project Lifespan'],
-                                               converters={'Project ID': str, 'Project Name': str, 'Asset': str, 'Project Cost': str,
-                                                           'Project Lifespan': str})
-            except:
-                error_text = "RESILIENCE PROJECTS FILE ERROR: Project info input file is missing required columns"
+                available_columns = pd.read_csv(project_info_file, nrows=0).columns
+            except Exception as exc:
+                error_text = ("RESILIENCE PROJECTS FILE ERROR: Project info input file could not be read. " +
+                              "Reason: {}").format(exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("RESILIENCE PROJECTS FILE ERROR: Project info input file has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(missing_columns)
+                    logger.error(error_text)
+                    error_list.append(error_text)
+                else:
+                    try:
+                        project_info = pd.read_csv(
+                            project_info_file,
+                            usecols=required_columns,
+                            converters={column: str for column in required_columns})
+                    except Exception as exc:
+                        error_text = ("RESILIENCE PROJECTS FILE ERROR: Project info input file could not be read. " +
+                                      "Reason: {}").format(exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+
+            if project_info is not None:
                 # Test Project Cost can be converted to dollar amount
                 try:
                     project_cost = project_info['Project Cost'].replace('[\$,]', '', regex=True).replace('', '0.0').astype(float)
@@ -878,21 +983,43 @@ def main():
             error_list.append(error_text)
         else:
             # CSV STEP 2: Check file has necessary columns
+            resil_mitigation_approach = cfg['resil_mitigation_approach']
+            required_columns = ['Project ID', 'link_id', 'Category']
+            if resil_mitigation_approach == 'manual':
+                required_columns.append('Exposure Reduction')
+
+            project_table = None
             try:
-                resil_mitigation_approach = cfg['resil_mitigation_approach']
-                if resil_mitigation_approach == 'binary':
-                    project_table = pd.read_csv(project_table_file, usecols=['Project ID', 'link_id', 'Category'],
-                                                converters={'Project ID': str, 'link_id': str, 'Category': str})
-                    # NOTE: use 99999 to create dummy Exposure Reduction column
-                    project_table['Exposure Reduction'] = 99999.0
-                elif resil_mitigation_approach == 'manual':
-                    project_table = pd.read_csv(project_table_file, usecols=['Project ID', 'link_id', 'Category', 'Exposure Reduction'],
-                                                converters={'Project ID': str, 'link_id': str, 'Category': str, 'Exposure Reduction': str})
-            except:
-                error_text = "RESILIENCE PROJECTS FILE ERROR: Project table input file is missing required columns"
+                available_columns = pd.read_csv(project_table_file, nrows=0).columns
+            except Exception as exc:
+                error_text = ("RESILIENCE PROJECTS FILE ERROR: Project table input file could not be read. " +
+                              "Reason: {}").format(exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("RESILIENCE PROJECTS FILE ERROR: Project table input file has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(missing_columns)
+                    logger.error(error_text)
+                    error_list.append(error_text)
+                else:
+                    try:
+                        project_table = pd.read_csv(
+                            project_table_file,
+                            usecols=required_columns,
+                            converters={column: str for column in required_columns})
+                    except Exception as exc:
+                        error_text = ("RESILIENCE PROJECTS FILE ERROR: Project table input file could not be read. " +
+                                      "Reason: {}").format(exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+                    else:
+                        if resil_mitigation_approach == 'binary':
+                            # NOTE: use 99999 to create dummy Exposure Reduction column
+                            project_table['Exposure Reduction'] = 99999.0
+
+            if project_table is not None:
                 # Test Exposure Reduction can be converted to float
                 try:
                     project_table['Exposure Reduction'] = pd.to_numeric(project_table['Exposure Reduction'], downcast='float')
@@ -937,6 +1064,9 @@ def main():
         logger.info("Open it to check whether values are reasonable and match what was entered.")
     if len(excluded_list) > 0:
         warning_text = "Note: There is a problem with one or more link files: {}. As a result, summary statistics will not appear in the CSV file referenced above for the file(s). Consult prior messages in log file to understand the problem(s).".format(excluded_list)
+        logger.warning(warning_text)
+    if len(low_capacity_files) > 0:
+        warning_text = "NETWORK LINK FILE WARNING: The capacity column contains at least one value below 2,500 vehicles per day per lane in the following file(s): {}. Reasonable values are between 5,000 and 30,000 vehicles per day per lane.".format(low_capacity_files)
         logger.warning(warning_text)
     if node_f_excl:
         warning_text = "Note: The node.csv file could not be found so summary statistics will not appear in the CSV file referenced above for x_coord and y_coord (which would have come from the node.csv file)."
