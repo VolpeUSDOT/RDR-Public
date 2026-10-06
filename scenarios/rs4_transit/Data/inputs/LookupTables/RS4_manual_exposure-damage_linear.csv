@@ -1,0 +1,15 @@
+Asset Type,exposure,Damage (%)
+Highway,0,0
+Highway,1.64,0.05
+Highway,4.92,0.2
+Highway,11.48,0.5
+Highway,20,1
+Bridge,-3.28,0
+Bridge,0,0.8
+Bridge,5,1
+Transit,0,0
+Transit,0.5,0.17
+Transit,3,0.48
+Transit,7,0.63
+Transit,15,0.78
+Transit,20,1
