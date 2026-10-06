@@ -11,7 +11,6 @@
 
 import os
 import subprocess
-import re
 import shutil
 import pandas as pd
 
@@ -23,8 +22,12 @@ file_dir_path = os.path.join(
     )
 
 def copy_qs1_generated(source, destination):
-    """
-    Copy over the generated_files directory from QS1 tests as generated_files
+    """Copy the QS1 generated outputs into this example workspace.
+
+    :param source: Source path.
+    :param destination: Destination path.
+    :returns: None. The helper copies and renames files in place.
+    :rtype: None
     """
     # If destination exists, remove completely, then copy over from source again
     if os.path.exists(destination):
@@ -32,13 +35,19 @@ def copy_qs1_generated(source, destination):
 
     shutil.copytree(source, destination)
     # Modify name of metamodel scenarios files
-    os.rename(os.path.join(destination, 'Metamodel_scenarios_SP_futureyear_QS1.csv'),
-              os.path.join(destination, 'Metamodel_scenarios_SP_futureyear_QS2ExC.csv'))
+    os.rename(os.path.join(destination, 'Metamodel_scenarios_SP_future_year_QS1.csv'),
+              os.path.join(destination, 'Metamodel_scenarios_SP_future_year_QS2ExC.csv'))
 
 def call_qs2_bat():
-    is_local = list(filter(lambda x: re.match('^C', x), os.path.abspath(__file__)))
+    """Run the QS2 batch file.
 
-    if 'C' in is_local:
+    :returns: The batch-process return code.
+    :rtype: int
+    """
+    file_path = os.path.abspath(__file__)
+    is_local = file_path.startswith('C:')
+
+    if is_local:
         bat_file = 'run_rdr_analysis.bat'
     else:
         bat_file = 'run_rdr_analysis_gh.bat'
@@ -47,8 +56,12 @@ def call_qs2_bat():
     return returncode
 
 def test_qs2(add_sample = True):
+    """Run the QS2 example integration test.
 
-    # Find output_folder
+    :param add_sample: Legacy test flag kept for compatibility with pytest parameterization.
+    :returns: None. The assertions fail if the QS2-C outputs are wrong.
+    :rtype: None
+    """
     import rdr_setup
     import rdr_supporting
 
@@ -96,9 +109,9 @@ def test_qs2(add_sample = True):
                              ascending=[False], inplace = True)
     tableau_file = tableau_file.reset_index().copy()
 
-    assert tableau_file.ResiliencyProject[0] == 'L2-7'
+    assert tableau_file.ResiliencyProject.iloc[0] == 'L2-7'
     # assert tableau_file.Exposurerecoverypath[0] == '2,2,2,2,2,2,2,2,1,1,1,1'
 
     # Average net benefits
     avg_net_benef = tableau_file.groupby('ResiliencyProject')['NetBenefits_Discounted'].mean().sort_values(ascending = False)
-    assert avg_net_benef[0] > 269000000
+    assert avg_net_benef.iloc[0] > 269000000

@@ -16,7 +16,7 @@
 # 6. Generate summary statistics
 #
 # Filename conventions
-# - socio, e.g., 'base'
+# - socio, e.g., 'standard'
 # - projgroup, e.g., '04'
 # - resil, e.g., 'no' or a project number
 # - elasticity, e.g., -1.0 (elasname encoded as -10 x elasticity, e.g., 10)
@@ -32,27 +32,17 @@ from os.path import join, exists
 import numpy as np
 import pandas as pd
 import openmatrix as omx
-from aequilibrae import Parameters
-from aequilibrae.project import Project
-from aequilibrae.paths import NetworkSkimming
-from aequilibrae.matrix import AequilibraeMatrix
-from aequilibrae.paths import TrafficAssignment, TrafficClass
+from rdr_AERouteCore import build_car_graph, export_assignment_skims, open_project, run_bfw_assignment, \
+    run_shortest_path_skimming, save_assignment_results
+from rdr_supporting import get_project_id_source_label, get_valid_project_ids_from_model_params, \
+    read_csv_with_optional_columns, validate_network_project_ids
 
 def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_folder, cfg, logger):
     fldr = disrupt_run_folder
     mtx_fldr = 'matrices'
     largeval = 99999  # constant used as an upper bound for travel times in disruption analysis
 
-    project = Project()
-    project.open(fldr)
-    proj_name = 'project_database.sqlite'  # the network comes from this sqlite database
-    if not exists(join(fldr, proj_name)):
-        logger.error("SQLITE DATABASE ERROR: {} could not be found".format(join(fldr, proj_name)))
-        raise Exception("SQLITE DATABASE ERROR: {} could not be found".format(join(fldr, proj_name)))
-
-    p = Parameters()
-    p.parameters['system']['logging_directory'] = fldr
-    p.write_back()
+    project = open_project(fldr, logger)
 
     socio = run_params['socio']
     projgroup = run_params['projgroup']
@@ -65,44 +55,12 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
     scenname = basescenname + '_' + resil + '_' + elasname + '_' + hazard + '_' + recovery
     logger.debug("running shortest path skim for {}".format(scenname))
 
-    # We build all graphs
-    project.network.build_graphs()
-    # Warnings that several fields in the project are filled with NaNs
-    # can be ignored, files are not used
-
-    # We grab the graph for cars
-    graph = project.network.graphs['c']
-
-    # Let's say we want to minimize travel time
-    graph.set_graph('free_flow_time')
-
-    # And will skim time and distance while we are at it
-    graph.set_skimming(['free_flow_time', 'distance'])
-
-    # And we will allow paths to be computed going through other centroids/centroid connectors as specified by user
-    # Should be set to False for the Sioux Falls Quick Start network, as all nodes are centroids
-    logger.debug("blocked_centroid_flows parameter set to {}".format(cfg['blocked_centroid_flows']))
-    graph.set_blocked_centroid_flows(cfg['blocked_centroid_flows'])
-
-    # look at the matrices - not essential to workflow
-    proj_matrices = project.matrices
-    proj_matrices.list()
+    graph = build_car_graph(project, cfg, logger)
 
     # SKIMMING
     # ----------------------------------------------------------------
 
-    # And run the skimming
-    skm = NetworkSkimming(graph)
-    skm.execute()
-
-    # The result is an AequilibraEMatrix object
-    skims = skm.results.skims
-
-    # Which we can manipulate directly from its temp file, if we wish
-    skims.matrices
-
-    # We can export to OMX
-    skims.export(join(fldr, mtx_fldr, 'sp_disrupt_' + scenname + '.omx'))
+    run_shortest_path_skimming(graph, join(fldr, mtx_fldr, 'sp_disrupt_' + scenname + '.omx'))
 
     # Adjust demand
     #
@@ -132,108 +90,30 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
     # Output file
     outfile = join(fldr, mtx_fldr, 'new_demand_summed.omx')
 
-    # Read the input demand file
-    f_input = omx.open_file(infile)
-    # Either 'matrix' or 'nocar'
-    m1 = f_input[run_params['matrix_name']]
-    tazs = f_input.mapping('taz')
-    logger.debug("Mappings: {}".format(f_input.list_mappings()))
-    input_demand = np.array(m1)
-    matrix_shape = f_input.shape()
-    logger.debug("Shape: {}".format(matrix_shape))
-    logger.debug("Number of tables: {}".format(len(f_input)))
-    logger.debug("Table names: {}".format(f_input.list_matrices()))
-    logger.debug("Attributes: {}".format(f_input.list_all_attributes()))
-    logger.debug("Sum of trips: {}".format(np.sum(m1)))
-
-    matrix_size = matrix_shape[0]
-    if matrix_shape[0] != matrix_shape[1]:
-        logger.error("Warning - OMX demand file is not a square matrix")
-        raise Exception("AEQUILIBRAE RUN ERROR: input demand omx file is not a square matrix")
-
-    # Set up the output demand array
-    output_demand = np.zeros((matrix_size, matrix_size))
-    f_output = omx.open_file(outfile, 'w')
-    taz_list = list(tazs.keys())
-    f_output.create_mapping('taz', taz_list)
-
-    f_base = omx.open_file(baseskimfile)
-    f_disrupt = omx.open_file(disruptskimfile)
-    t_base = f_base['free_flow_time']
-    t_disrupt = f_disrupt['free_flow_time']
-
-    logger.debug("Base Skim Shape: {}".format(f_base.shape()))
-    logger.debug("Number of tables: {}".format(len(f_base)))
-    logger.debug("Table names: {}".format(f_base.list_matrices()))
-    logger.debug("Attributes: {}".format(f_base.list_all_attributes()))
-    logger.debug("New Skim Shape: {}".format(f_disrupt.shape()))
-    logger.debug("Number of tables: {}".format(len(f_disrupt)))
-    logger.debug("Table names: {}".format(f_disrupt.list_matrices()))
-    logger.debug("Attributes: {}".format(f_disrupt.list_all_attributes()))
-
-    trips_removed = 0.0
-    trips_unchanged = 0.0
-    trips_reduced = 0.0
-    output_trips_reduced = 0.0
-    # the IF statement gets replaced with a series of transformations to the output_demand matrix
-    output_demand_df, (trips_removed, trips_unchanged, trips_reduced, output_trips_reduced) = get_output_demand(
-        t_disrupt, t_base, input_demand, largeval, elasticity)
-    output_demand = output_demand_df.to_numpy()
-
-    logger.debug("removed: {};  unchanged: {};  reduced from {} to {}".format(trips_removed, trips_unchanged,
-                                                                              trips_reduced, output_trips_reduced))
-    circuitous_trips_removed = trips_reduced - output_trips_reduced
-
-    f_output['matrix'] = output_demand
-    f_output.close()
-    f_input.close()
-    f_base.close()
-    f_disrupt.close()
+    circuitous_trips_removed = _write_adjusted_demand(
+        baseskimfile,
+        disruptskimfile,
+        infile,
+        outfile,
+        run_params['matrix_name'],
+        elasticity,
+        logger,
+        non_square_log_level='error',
+        close_base_before_disrupt=True)
 
     # Run routing on the new demand
 
     # TRAFFIC ASSIGNMENT WITH SKIMMING #
     # ----------------------------------------------------------------
 
-    demand = AequilibraeMatrix()
-    demand.load(join(fldr, mtx_fldr, 'new_demand_summed.omx'))
-    demand.computational_view(['matrix'])  # We will only assign one user class stored as 'matrix' inside the OMX file
-
-    assig = TrafficAssignment()
-
-    # Creates the assignment class
-    # Currently restricted to 'car', can be made multimodal later
-    assigclass = TrafficClass(name='car', graph=graph, matrix=demand)
-
-    # The first thing to do is to add at list of traffic classes to be assigned
-    assig.set_classes([assigclass])
-
-    assig.set_vdf("BPR")  # This is not case-sensitive  # Then we set the volume delay function
-
-    assig.set_vdf_parameters({"alpha": "alpha", "beta": "beta"})  # Get parameters from link file
-
-    assig.set_capacity_field("capacity")  # The capacity and travel times as they exist in the graph
-    assig.set_time_field("free_flow_time")
-
-    # And the algorithm we want to use to assign
-    assig.set_algorithm('bfw')
-
-    # config variable is in dollars per hour
-    cent_per_min = (100.0/60.0)*cfg['vot_per_hour']
-    assigclass.set_vot(cent_per_min)
-    assigclass.set_fixed_cost("toll", 1.0)
-
-    # Set the convergence criteria
-    assig.max_iter = cfg['aeq_max_iter']  # default is 100
-    assig.rgap_target = cfg['aeq_rgap_target']  # default is 0.01
-
-    assig.execute()  # We then execute the assignment
+    demand, assig, assigclass = run_bfw_assignment(
+        graph,
+        join(fldr, mtx_fldr, 'new_demand_summed.omx'),
+        'matrix',
+        cfg)
 
     # The blended skims are here
-    avg_skims = assigclass.results.skims
-
-    # Export to OMX
-    avg_skims.export(join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
+    avg_skims = export_assignment_skims(assigclass, join(fldr, mtx_fldr, 'rt_disrupt_' + scenname + '.omx'))
     demand.close()
 
     # MINI-EQUILIBRIUM #
@@ -270,99 +150,25 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
         # Output file
         outfile = join(fldr, mtx_fldr, 'new_demand_summed.omx')
 
-        # Read the input demand file
-        f_input = omx.open_file(infile)
-        # Either 'matrix' or 'nocar'
-        m1 = f_input[run_params['matrix_name']]
-        tazs = f_input.mapping('taz')
-        logger.debug("Mappings: {}".format(f_input.list_mappings()))
-        input_demand = np.array(m1)
-        matrix_shape = f_input.shape()
-        logger.debug("Shape: {}".format(matrix_shape))
-        logger.debug("Number of tables: {}".format(len(f_input)))
-        logger.debug("Table names: {}".format(f_input.list_matrices()))
-        logger.debug("Attributes: {}".format(f_input.list_all_attributes()))
-        logger.debug("Sum of trips: {}".format(np.sum(m1)))
-
-        matrix_size = matrix_shape[0]
-        if matrix_shape[0] != matrix_shape[1]:
-            logger.warning("Warning - OMX demand file is not a square matrix")
-            raise Exception("AEQUILIBRAE RUN ERROR: input demand omx file is not a square matrix")
-
-        # Set up the output demand array
-        output_demand = np.zeros((matrix_size, matrix_size))
-        f_output = omx.open_file(outfile, 'w')
-        taz_list = list(tazs.keys())
-        f_output.create_mapping('taz', taz_list)
-
-        f_base = omx.open_file(baseskimfile)
-        f_disrupt = omx.open_file(disruptskimfile)
-        t_base = f_base['free_flow_time']
-        t_disrupt = f_disrupt['free_flow_time']
-        logger.debug("Base Skim Shape: {}".format(f_base.shape()))
-        logger.debug("Number of tables: {}".format(len(f_base)))
-        logger.debug("Table names: {}".format(f_base.list_matrices()))
-        logger.debug("Attributes: {}".format(f_base.list_all_attributes()))
-        logger.debug("New Skim Shape: {}".format(f_disrupt.shape()))
-        logger.debug("Number of tables: {}".format(len(f_disrupt)))
-        logger.debug("Table names: {}".format(f_disrupt.list_matrices()))
-        logger.debug("Attributes: {}".format(f_disrupt.list_all_attributes()))
-
-        trips_removed = 0.0
-        trips_unchanged = 0.0
-        trips_reduced = 0.0
-        output_trips_reduced = 0.0
-        output_demand_df, (trips_removed, trips_unchanged, trips_reduced, output_trips_reduced) = get_output_demand(
-            t_disrupt, t_base, input_demand, largeval, 0.5 * elasticity)
-        output_demand = output_demand_df.to_numpy()
-
-        logger.debug("removed: {};  unchanged: {};  reduced from {} to {}".format(trips_removed, trips_unchanged,
-                                                                                  trips_reduced, output_trips_reduced))
-        circuitous_trips_removed = trips_reduced - output_trips_reduced
-
-        f_output['matrix'] = output_demand
-        f_output.close()
-        f_input.close()
-        f_disrupt.close()
-        f_base.close()
+        circuitous_trips_removed = _write_adjusted_demand(
+            baseskimfile,
+            disruptskimfile,
+            infile,
+            outfile,
+            run_params['matrix_name'],
+            0.5 * elasticity,
+            logger,
+            non_square_log_level='warning',
+            close_base_before_disrupt=False)
 
         # TRAFFIC ASSIGNMENT WITH SKIMMING #
         # ----------------------------------------------------------------
 
-        demand = AequilibraeMatrix()
-        demand.load(join(fldr, mtx_fldr, 'new_demand_summed.omx'))
-        # We will only assign one user class stored as 'matrix' inside the OMX file
-        demand.computational_view(['matrix'])
-
-        assig = TrafficAssignment()
-
-        # Creates the assignment class
-        # Currently restricted to 'car', can be made multimodal later
-        assigclass = TrafficClass(name='car', graph=graph, matrix=demand)
-
-        # The first thing to do is to add at list of traffic classes to be assigned
-        assig.set_classes([assigclass])
-
-        assig.set_vdf("BPR")  # This is not case-sensitive  # Then we set the volume delay function
-
-        assig.set_vdf_parameters({"alpha": "alpha", "beta": "beta"})  # Get parameters from link file
-
-        assig.set_capacity_field("capacity")  # The capacity and travel times as they exist in the graph
-        assig.set_time_field("free_flow_time")
-
-        # And the algorithm we want to use to assign
-        assig.set_algorithm('bfw')
-
-        # config variable is in dollars per hour
-        cent_per_min = (100.0/60.0)*cfg['vot_per_hour']
-        assigclass.set_vot(cent_per_min)
-        assigclass.set_fixed_cost("toll", 1.0)
-
-        # Set the convergence criteria
-        assig.max_iter = cfg['aeq_max_iter']  # default is 100
-        assig.rgap_target = cfg['aeq_rgap_target']  # default is 0.01
-
-        assig.execute()  # We then execute the assignment
+        demand, assig, assigclass = run_bfw_assignment(
+            graph,
+            join(fldr, mtx_fldr, 'new_demand_summed.omx'),
+            'matrix',
+            cfg)
 
         # The blended skims are here
         avg_skims = assigclass.results.skims
@@ -377,9 +183,7 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
     # Save link flows
     # The link flows are easy to export. This code is compatible with AequilibraE 1.4.2
     # We do so for csv and AequilibraEData
-    assig.save_results(join('link_flow_adjdem_', scenname))  # put results in the results database
-    results_df = assig.results()  # also put results in a dataframe, then save to disk
-    results_df.to_csv(join(fldr, 'link_flow_adjdem_' + scenname + '.csv'))
+    save_assignment_results(assig, join('link_flow_adjdem_', scenname), join(fldr, 'link_flow_adjdem_' + scenname + '.csv'))  # put results in the results database
     # assigclass.results.save_to_disk(join(fldr, 'link_flow_adjdem_' + scenname + '.csv'), output="loads")  # changes for each run. Per AequilibraE 1.1.4, this code is deprecated
 
 	# Calculate summary statistics
@@ -514,15 +318,30 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
             raise Exception("NETWORK FILE ERROR: {} could not be found".format(network_file))
 
         if run_params['matrix_name'] == 'matrix':
-            network = pd.read_csv(network_file, usecols=['link_id', 'length', 'facility_type', 'toll', 'travel_time'],
-                                  converters={'link_id': str, 'length': float, 'facility_type': str, 'toll': float, 'travel_time': float})
+            network = read_csv_with_optional_columns(
+                network_file,
+                required_usecols=['link_id', 'length', 'facility_type', 'toll', 'travel_time', 'capacity'],
+                optional_usecols=['project_id'],
+                converters={'link_id': str, 'project_id': str, 'length': float, 'facility_type': str, 'toll': float, 'travel_time': float, 'capacity': float})
         elif run_params['matrix_name'] == 'nocar':
-            network = pd.read_csv(network_file, usecols=['link_id', 'length', 'facility_type', 'toll_nocar', 'travel_time_nocar'],
-                                  converters={'link_id': str, 'length': float, 'facility_type': str, 'toll_nocar': float, 'travel_time_nocar': float})
+            network = read_csv_with_optional_columns(
+                network_file,
+                required_usecols=['link_id', 'length', 'facility_type', 'toll_nocar', 'travel_time_nocar', 'capacity'],
+                optional_usecols=['project_id'],
+                converters={'link_id': str, 'project_id': str, 'length': float, 'facility_type': str, 'toll_nocar': float, 'travel_time_nocar': float, 'capacity': float})
             network.rename({'toll_nocar': 'toll', 'travel_time_nocar': 'travel_time'}, axis='columns', inplace=True)
         else:
             logger.error("AEquilibraE disrupt run requires 'matrix' or 'nocar' for matrix_name variable in run_params.")
             raise Exception("Invalid option for variable matrix_name in run_params in AEquilibraE disrupt run.")
+
+        validate_network_project_ids(
+            network,
+            network_file,
+            get_valid_project_ids_from_model_params(cfg['input_dir']),
+            logger,
+            get_project_id_source_label())
+        network = filter_network_links(network, run_params['resil'], logger)
+        network.drop(labels=['capacity'], axis=1, inplace=True)
 
         # Read in link flows file
         link_flow_file = join(fldr, 'link_flow_adjdem_' + scenname + '.csv')
@@ -648,6 +467,80 @@ def run_aeq_disrupt_miniequilibrium(run_params, base_run_folder, disrupt_run_fol
 # ==============================================================================
 
 
+def _write_adjusted_demand(baseskimfile, disruptskimfile, infile, outfile, matrix_name, power_factor, logger,
+                           non_square_log_level='error', close_base_before_disrupt=True):
+    largeval = 99999  # constant used as an upper bound for travel times in disruption analysis
+
+    # Read the input demand file
+    f_input = omx.open_file(infile)
+    # Either 'matrix' or 'nocar'
+    m1 = f_input[matrix_name]
+    tazs = f_input.mapping('taz')
+    logger.debug("Mappings: {}".format(f_input.list_mappings()))
+    input_demand = np.array(m1)
+    matrix_shape = f_input.shape()
+    logger.debug("Shape: {}".format(matrix_shape))
+    logger.debug("Number of tables: {}".format(len(f_input)))
+    logger.debug("Table names: {}".format(f_input.list_matrices()))
+    logger.debug("Attributes: {}".format(f_input.list_all_attributes()))
+    logger.debug("Sum of trips: {}".format(np.sum(m1)))
+
+    matrix_size = matrix_shape[0]
+    if matrix_shape[0] != matrix_shape[1]:
+        if non_square_log_level == 'warning':
+            logger.warning("Warning - OMX demand file is not a square matrix")
+        else:
+            logger.error("Warning - OMX demand file is not a square matrix")
+        raise Exception("AEQUILIBRAE RUN ERROR: input demand omx file is not a square matrix")
+
+    # Set up the output demand array
+    output_demand = np.zeros((matrix_size, matrix_size))
+    f_output = omx.open_file(outfile, 'w')
+    taz_list = list(tazs.keys())
+    f_output.create_mapping('taz', taz_list)
+
+    f_base = omx.open_file(baseskimfile)
+    f_disrupt = omx.open_file(disruptskimfile)
+    t_base = f_base['free_flow_time']
+    t_disrupt = f_disrupt['free_flow_time']
+
+    logger.debug("Base Skim Shape: {}".format(f_base.shape()))
+    logger.debug("Number of tables: {}".format(len(f_base)))
+    logger.debug("Table names: {}".format(f_base.list_matrices()))
+    logger.debug("Attributes: {}".format(f_base.list_all_attributes()))
+    logger.debug("New Skim Shape: {}".format(f_disrupt.shape()))
+    logger.debug("Number of tables: {}".format(len(f_disrupt)))
+    logger.debug("Table names: {}".format(f_disrupt.list_matrices()))
+    logger.debug("Attributes: {}".format(f_disrupt.list_all_attributes()))
+
+    trips_removed = 0.0
+    trips_unchanged = 0.0
+    trips_reduced = 0.0
+    output_trips_reduced = 0.0
+    output_demand_df, (trips_removed, trips_unchanged, trips_reduced, output_trips_reduced) = get_output_demand(
+        t_disrupt, t_base, input_demand, largeval, power_factor)
+    output_demand = output_demand_df.to_numpy()
+
+    logger.debug("removed: {};  unchanged: {};  reduced from {} to {}".format(trips_removed, trips_unchanged,
+                                                                              trips_reduced, output_trips_reduced))
+    circuitous_trips_removed = trips_reduced - output_trips_reduced
+
+    f_output['matrix'] = output_demand
+    f_output.close()
+    f_input.close()
+    if close_base_before_disrupt:
+        f_base.close()
+        f_disrupt.close()
+    else:
+        f_disrupt.close()
+        f_base.close()
+
+    return circuitous_trips_removed
+
+
+# ==============================================================================
+
+
 def get_output_demand(t_disrupt, t_base, input_demand, large_value, power_factor):
     base_df = pd.DataFrame(data=t_base)
     disrupt_df = pd.DataFrame(data=t_disrupt)
@@ -673,3 +566,57 @@ def get_output_demand(t_disrupt, t_base, input_demand, large_value, power_factor
     output_df = draft_output_df + (input_demand_df*bool_trips_to_keep_df)
 
     return output_df, (trips_removed, trips_unchanged, trips_reduced, output_trips_reduced)
+
+
+# ==============================================================================
+
+
+# create a subset network given a project ID (or no-build baseline) and set of network links
+# required columns in network_links are link_id and capacity if project_id is present and project-based filtering is applied
+def filter_network_links(network_links, project_id, logger):
+    logger.debug("start: filter network links for project {}".format(project_id))
+
+    if 'project_id' not in network_links.columns:
+        network_links['project_id'] = ''
+        logger.info(("No project_id column found in network links; skipping project-based network " +
+                     "filtering for project {}.").format(project_id))
+        return network_links
+
+    # Standardize nulls so we can easily check for them
+    network_links['project_id'] = network_links['project_id'].fillna('').replace('nan', '')
+    
+    if project_id == 'no':
+        network_links = network_links.loc[network_links.project_id == '', :]
+    else:
+        # keep only links relevant to current project
+        proj_links = network_links.loc[network_links.project_id == project_id, :]
+        base_links = network_links.loc[network_links.project_id == '', :]
+        proj_links = proj_links.set_index('link_id')
+        base_links = base_links.set_index('link_id')
+        # check if the set difference returns a non-empty set (e.g., proj_links has new link_ids)
+        if set(proj_links.index).difference(set(base_links.index)):
+            # in the case they are different, check for intersection
+            if set(proj_links.index).intersection(set(base_links.index)):
+                # set the intersecting values based on index
+                intx = list(set(proj_links.index).intersection(set(base_links.index)))
+                base_links.loc[intx, :] = proj_links.loc[intx, :]
+            # append the set difference to base_links
+            diff = list(set(proj_links.index).difference(set(base_links.index)))
+            base_links = pd.concat([base_links, proj_links.loc[diff, :]])
+        # if there are no new link_ids in proj_links, assign the project values for links that are in a project
+        else:
+            base_links.loc[proj_links.index.to_list(), :] = proj_links
+
+        network_links = base_links.reset_index()
+        # drop links deleted by a project
+        network_links = network_links.loc[network_links.capacity > 0, :]
+
+    # check to make sure project links are unique and throw an error if they aren't
+    if network_links.duplicated(subset=['link_id']).any():
+        logger.error("Filtering network links for project {} resulted in duplicate link IDs".format(project_id))
+        raise Exception("Filtering network links for project {} resulted in duplicate link IDs".format(project_id))
+
+    logger.debug("finished: filter network links for project {}".format(project_id))
+
+    return network_links
+

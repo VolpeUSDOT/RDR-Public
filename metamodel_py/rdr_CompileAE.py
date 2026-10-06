@@ -12,13 +12,23 @@ import os
 import pandas as pd
 
 
-def main(input_folder, output_folder, cfg, logger, base_year):
+def main(input_folder, output_folder, cfg, logger, initial_year):
+    """Compile per-run AequilibraE outputs into the regression input dataset.
+
+    :param input_folder: Path to the RDR input directory.
+    :param output_folder: Output directory for generated files.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :param base_year: Base year used by the AequilibraE compilation step.
+    :returns: None. The function writes the compiled outputs to disk.
+    :rtype: None
+    """
     logger.info("Start: AequilibraE compile module")
 
     # to avoid issues with a set of runs going past midnight, using cfg['run_id'] in folder name instead of date
     # make list of completed runs
-    if base_year is True:
-        aeq_runs_folder = os.path.join(output_folder, 'aeq_runs_base_year', 'disrupt', str(cfg['run_id']))
+    if initial_year is True:
+        aeq_runs_folder = os.path.join(output_folder, 'aeq_runs_initial_year', 'disrupt', str(cfg['run_id']))
     else:
         aeq_runs_folder = os.path.join(output_folder, 'aeq_runs', 'disrupt', str(cfg['run_id']))
     if not os.path.exists(aeq_runs_folder):
@@ -60,9 +70,9 @@ def main(input_folder, output_folder, cfg, logger, base_year):
     else:
         compiled_results = pd.concat(compiled_results)
 
-    if base_year is True:
+    if initial_year is True:
         # write out the compiled results as a csv in the input folder
-        compiled_results.to_csv(os.path.join(input_folder, 'Metamodel_scenarios_baseyear.csv'), index=False)
+        compiled_results.to_csv(os.path.join(input_folder, 'Metamodel_scenarios_initial_year.csv'), index=False)
     else:
         # write out the compiled results as an xlsx in the output folder
         compiled_results.to_excel(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_' + str(cfg['run_id']) + '.xlsx'),

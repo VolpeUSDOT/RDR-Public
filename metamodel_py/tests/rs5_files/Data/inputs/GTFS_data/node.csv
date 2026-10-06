@@ -1,0 +1,13 @@
+name,node_id,physical_node_id,x_coord,y_coord,route_type,route_id,node_type,directed_route_id,directed_service_id,zone_id,agency_name,geometry,terminal_flag,ctrl_type,agent_type
+22,1000001,1000001,-70.03343,40.01704,3,Bus1,stop,,,,QuickStart,POINT (-70.03343 40.01704),1,,
+23,1000002,1000002,-70.03261,40.01558,1,Subway,metro_station,,,,QuickStart,POINT (-70.03261 40.01558),1,,
+24,1000003,1000003,-70.0235,40.01663,3,Bus2,stop,,,,QuickStart,POINT (-70.0235 40.01663),1,,
+25,1000004,1000004,-70.0235,40.00831,3,Bus2,stop,,,,QuickStart,POINT (-70.0235 40.00831),1,,
+26,1000005,1000005,-70.02267,40.01704,3,Bus1,stop,,,,QuickStart,POINT (-70.02267 40.01704),1,,
+27,1000006,1000006,-70.02234,40.01558,1,Subway,metro_station,,,,QuickStart,POINT (-70.02234 40.01558),1,,
+Bus1.2.22:1;2,1500001,1000001,-70.03353,40.01694,3,Bus1,bus_service_node,Bus1.2,Bus1.2:1;2,,QuickStart,POINT (-70.03353 40.01694),1,,
+Bus1.2.26:1;2,1500002,1000005,-70.02277000000001,40.01694,3,Bus1,bus_service_node,Bus1.2,Bus1.2:1;2,,QuickStart,POINT (-70.02277000000001 40.01694),1,,
+Bus2.2.24:1;2,1500003,1000003,-70.0236,40.016529999999996,3,Bus2,bus_service_node,Bus2.2,Bus2.2:1;2,,QuickStart,POINT (-70.0236 40.016529999999996),1,,
+Bus2.2.25:1;2,1500004,1000004,-70.0236,40.00821,3,Bus2,bus_service_node,Bus2.2,Bus2.2:1;2,,QuickStart,POINT (-70.0236 40.00821),1,,
+Subway.2.23:1;2,1500005,1000002,-70.03271000000001,40.01548,1,Subway,metro_service_node,Subway.2,Subway.2:1;2,,QuickStart,POINT (-70.03271000000001 40.01548),1,,
+Subway.2.27:1;2,1500006,1000006,-70.02244,40.01548,1,Subway,metro_service_node,Subway.2,Subway.2:1;2,,QuickStart,POINT (-70.02244 40.01548),1,,

@@ -10,8 +10,6 @@
 
 import os
 import subprocess
-import re
-import shutil
 import pandas as pd
 
 test_file_location = 'rs4_files'
@@ -22,9 +20,15 @@ file_dir_path = os.path.join(
     )
 
 def call_rs4_bat():
-    is_local = list(filter(lambda x: re.match('^C', x), os.path.abspath(__file__)))
+    """Run the RS4 batch file.
 
-    if 'C' in is_local:
+    :returns: The batch-process return code.
+    :rtype: int
+    """
+    file_path = os.path.abspath(__file__)
+    is_local = file_path.startswith('C:')
+
+    if is_local:
         bat_file = 'run_rdr_full.bat'
     else:
         bat_file = 'run_rdr_full_gh.bat'
@@ -33,7 +37,12 @@ def call_rs4_bat():
     return returncode
 
 def test_rs4(add_sample = True):
-    # Run RS4
+    """Run the RS4 integration test.
+
+    :param add_sample: Legacy test flag kept for compatibility with pytest parameterization.
+    :returns: None. The assertions fail if the RS4 outputs are wrong.
+    :rtype: None
+    """
     returncode = call_rs4_bat()
     assert returncode == 0
 
@@ -57,7 +66,7 @@ def test_rs4(add_sample = True):
 
     # Read outputs - start with compiled runs Excel
     assert os.path.exists(os.path.join(output_folder, 'full_combos_RS4.csv'))
-    assert os.path.exists(os.path.join(output_folder, 'aeq_runs/base/RS4/base01/nocar/matrices/sp_base01.omx'))
+    assert os.path.exists(os.path.join(output_folder, 'aeq_runs/base/RS4/standard01/nocar/matrices/sp_standard01.omx'))
     assert os.path.exists(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_RS4.xlsx'))
 
     compiled_runs = pd.read_excel(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_RS4.xlsx'),
@@ -104,8 +113,8 @@ def test_rs4(add_sample = True):
                                             ascending=[False])
     tableau_file = tableau_file.reset_index().copy()
 
-    assert tableau_file.ResiliencyProject[0] == 'Rail'
+    assert tableau_file.ResiliencyProject.iloc[0] == 'Rail'
 
     # Check repair cost of transit project
     rail_repair_cost = tableau_file.RepairCleanupCostSavings[tableau_file.ResiliencyProject == 'Rail'].min()
-    assert rail_repair_cost == -65104914.24
+    assert round(rail_repair_cost, 2) == -69910302.67

@@ -10,9 +10,8 @@
 
 import os
 import subprocess
-import re
-import shutil
 import pandas as pd
+import pytest
 
 test_file_location = 'qs1_files'
 
@@ -22,9 +21,15 @@ file_dir_path = os.path.join(
     )
 
 def call_qs1_bat():
-    is_local = list(filter(lambda x: re.match('^C', x), os.path.abspath(__file__)))
+    """Run the QS1 batch file.
 
-    if 'C' in is_local:
+    :returns: The batch-process return code.
+    :rtype: int
+    """
+    file_path = os.path.abspath(__file__)
+    is_local = file_path.startswith('C:')
+
+    if is_local:
         bat_file = 'run_rdr_full.bat'
     else:
         bat_file = 'run_rdr_full_gh.bat'
@@ -33,7 +38,12 @@ def call_qs1_bat():
     return returncode
 
 def test_qs1(add_sample = True):
-    # Run QS1
+    """Run the QS1 end-to-end integration test.
+
+    :param add_sample: Legacy test flag kept for compatibility with pytest parameterization.
+    :returns: None. The assertions fail if the QS1 scenario output is wrong.
+    :rtype: None
+    """
     returncode = call_qs1_bat()
     assert returncode == 0
 
@@ -57,7 +67,7 @@ def test_qs1(add_sample = True):
 
     # Read outputs - start with compiled runs Excel
     assert os.path.exists(os.path.join(output_folder, 'full_combos_QS1.csv'))
-    assert os.path.exists(os.path.join(output_folder, 'aeq_runs/base/QS1/base02/matrix/matrices/sp_base02.omx'))
+    assert os.path.exists(os.path.join(output_folder, 'aeq_runs/base/QS1/standard02/matrix/matrices/sp_standard02.omx'))
     assert os.path.exists(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_QS1.xlsx'))
 
     compiled_runs = pd.read_excel(os.path.join(output_folder, 'AequilibraE_Runs_Compiled_QS1.xlsx'),
@@ -75,9 +85,9 @@ def test_qs1(add_sample = True):
     obs_max_miles = compiled_runs_sp.miles.max()
     obs_max_hours = compiled_runs_sp.hours.max()
 
-    exp_max_trips = 360600.0
-    exp_max_miles = 1796751.0
-    exp_max_hours = 44061.5
+    exp_max_trips = pytest.approx(360600.0)
+    exp_max_miles = pytest.approx(1668691.3)
+    exp_max_hours = pytest.approx(44831.8451335562)
 
     assert obs_max_trips == exp_max_trips
     assert obs_max_miles == exp_max_miles

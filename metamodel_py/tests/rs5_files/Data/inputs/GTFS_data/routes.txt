@@ -1,0 +1,4 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color,route_sort_order,route_fare_class,line_id,listed_route
+Subway,1,,Subway,Rapid Transit,1,https://volpeusdot.github.io/RDR-Public/,DA291C,FFFFFF,10010,Rapid Transit,line-subway,
+Bus1,1,1,East-West Bus,Local Bus,3,https://volpeusdot.github.io/RDR-Public/,FFC72C,0,50770,Local Bus,line-bus1,
+Bus2,1,2,North-South Bus,Local Bus,3,https://volpeusdot.github.io/RDR-Public/,FFC72C,0,50870,Local Bus,line-bus2,
