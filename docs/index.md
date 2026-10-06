@@ -8,11 +8,9 @@ The RDR Tool Suite enables transportation agencies to assess transportation resi
 ## Installation and Usage:
 The RDR Tool Suite is a Python based tool.
 
-The RDR Exposure Analysis Tool and some helper tools also depend on ESRI ArcGIS Pro.
-
 Installation instructions are provided in the [RDR Quick Start Guide documentation](https://github.com/VolpeUSDOT/RDR-Public/blob/main/documentation/RDR_GettingStarted_final.pdf). A [video tutorial](#installing-rdr) on how to install RDR is also available.
-* Install the required dependencies (including ESRI ArcGIS Pro if using the RDR Exposure Analysis Tool or dependent helper tools).
-* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/releases/tag/v2025.1.1) Alternatively, the GitHub code repository is available [here](https://github.com/VolpeUSDOT/RDR-Public). Extract the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-main_.)
+* Install the required dependencies.
+* Clone or download the repository. [Click here to download the most recent release.](https://github.com/VolpeUSDOT/RDR-Public/releases/tag/v2026.1) Alternatively, the GitHub code repository is available [here](https://github.com/VolpeUSDOT/RDR-Public). Extract the contents into the following directory on your local machine: C:\GitHub\RDR. (Note: _On some systems the RDR directory may need to be renamed from RDR-Public-main_.)
 * The documentation and example scenario files are included with the code release.
 
 ### Using this code
@@ -58,6 +56,8 @@ Add bugs and feature requests to the Issues tab in the [RDR-Public GitHub reposi
 * Daniel Flynn, PhD (Volpe)
 * Olivia Gillham (Volpe)
 * Michelle Gilmore (Volpe)
+* David Lamb (Volpe)
+* Kirby Ledvina (Volpe)
 * Tess Perrone (Volpe)
 * Gretchen Reese (Volpe)
 * Scott Smith, PhD (Volpe)
