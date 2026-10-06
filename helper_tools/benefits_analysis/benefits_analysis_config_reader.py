@@ -80,7 +80,7 @@ def read_benefits_analysis_config_file(cfg_file):
     cfg_dict['projgroup'] = read_config_file_helper(cfg, 'benefits_analysis', 'projgroup', 'REQUIRED')
     cfg_dict['socio'] = read_config_file_helper(cfg, 'benefits_analysis', 'socio', 'REQUIRED')
     cfg_dict['elasticity'] = float(read_config_file_helper(cfg, 'benefits_analysis', 'elasticity', 'REQUIRED'))
-    cfg_dict['baseline'] = read_config_file_helper(cfg, 'benefits_analysis', 'baseline', 'REQUIRED')
+    cfg_dict['baseline'] = read_config_file_helper(cfg, 'benefits_analysis', 'no_project_baseline', 'REQUIRED')
     cfg_dict['recovery'] = read_config_file_helper(cfg, 'benefits_analysis', 'recovery', 'REQUIRED')
 
     run_minieq = read_config_file_helper(cfg, 'benefits_analysis', 'run_minieq', 'OPTIONAL')

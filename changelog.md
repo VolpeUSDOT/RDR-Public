@@ -1,5 +1,46 @@
 # RDR Changelog
 
+## v2026_1
+
+The RDR 2026.1 public release includes updates to the user interface, Tableau visualizations, configurable input data, and default parameter values for the resilience return on investment (ROI). Starting with this release, no components of the RDR Tool Suite require an ArcGIS license, instead using open-source geoprocessing tools. Other updates to the RDR conda environment have been made, including an updated version of AequilibraE from 1.4.2 to 1.6.2 to include the latest performance improvements and bug fixes. Reference scenarios and helper tools have been refreshed to align with new features in the tool suite. Finally, default values in the ROI Analysis Tool have been updated to align with the latest USDOT BCA guidance from December 2025.
+
+**RDR Graphical User Interface (GUI)**
+
+- A new graphical user interface built in Streamlit is now available. The GUI launches in a browser window and walks the user through the main RDR workflow, from defining their scenario to setting up input files to running the RDR ROI Analysis Tool to generate resilience return on investment metrics and corresponding Tableau visualizations.
+- The user can set up the required RDR input files piece-by-piece in the GUI, saving their work at any time and loading previous save files. The GUI also runs the input validation helper tool to confirm input data are correctly set up before executing an RDR run.
+
+**RDR Exposure Analysis Tool**
+
+- Removed past dependency on an ArcGIS software installation and license. The Exposure Analysis Tool now uses open-source geospatial Python packages to conduct the overlay of hazard exposure data with the user’s network.
+- Added Reference Scenario 7 to the scenario examples, walking the user through the process of running the Exposure Analysis Tool to generate RDR-compatible hazard exposure files.
+
+**RDR Return on Investment (ROI) Analysis Tool**
+
+- Made significant updates to the Tableau workbook, streamlining visualizations and improving usability and interpretability of results. Added an Overview dashboard for user guidance.
+- Enabled the use of a "Project ID" column in the user's network link files in order to allow users to define project-specific assets for use in the core model. The optional column allows users to indicate changes in link attributes or newly built links specific to a resilience project.
+- Added an option for users to specify a piecewise linear function for their exposure-damage relationship.
+- Updated default values used by the ROI module to align with latest USDOT BCA guidance from December 2025. Updated default values for bus, light rail, and heavy rail to align with the 2024 FTA National Transit Summaries and Trends.
+- Refactored codebase and example scenarios for clearer usage of "base" terminology. Shifted towards less repetitive language across tools in the RDR Tool Suite to improve user friendliness.
+- Refactored the core model module of the RDR Metamodel to be more efficient, reducing duplicative code.
+
+**RDR Benefits Analysis Tool**
+
+- Enabled use of string values for traffic analysis zone categories in the Benefits Analysis Tool.
+
+**Additional Improvements**
+
+- Refactored all batch files across the RDR Tool Suite to work with the majority of users' default Anaconda and Python installations.
+- Updated the input validation helper tool with new validation checks.
+- Renamed the Base Year Helper Tool to the Core Model Initial Year Run Helper Tool.
+- Updated the Gravity Model Jupyter notebook in the Format Demand helper tools.
+- Removed the ArcGIS dependency for all Format Network helper tools.
+- Fixed a bug related to processing of trip table matrices for "no car" populations.
+- Added a correction for units conversion of network link capacity from vehicles to persons to align with use of person trip tables.
+
+**Note:** When updating older RDR scenario files to be compatible with RDR 2026.1, the following items must be changed: (1) all filenames referencing "baseyear" must be replaced with "initial_year", (2) four configuration parameters need to be renamed ("start_year" is now "analysis_period_start_year", "end_year" is now "analysis_period_end_year", "base_year" is now "core_model_run_initial_year", "future_year" is now "core_model_run_future_year"), (3) options for user-defined exposure-damage approaches are now "Manual_Bins" and "Manual_Linear", (4) the project_database.sqlite file should be deleted from the inputs/AEMaster subfolder in order to be replaced by a version with the newest schema.
+
+See documentation files for additional details.
+
 ## v2025_1
 
 The RDR 2025.1 public release includes updates related to trip demand input files, the AequilibraE core model, and default parameter values for the resilience return on investment (ROI) module. Starting with the 2025.1 release, users are able to provide trip tables for an RDR analysis in either Open Matrix (OMX) or comma-separated values (CSV) format. The version of AequilibraE used by the RDR Tool Suite has been updated from 1.0.0 to 1.4.2 to include the latest performance improvements and bug fixes. The RDR Metamodel has been updated to work with the new version of AequilibraE more efficiently. Finally, default values in the ROI module have been updated to align with the latest USDOT BCA guidance from May 2025.

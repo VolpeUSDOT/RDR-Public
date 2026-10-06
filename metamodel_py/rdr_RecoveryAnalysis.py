@@ -10,6 +10,7 @@
 #
 # ---------------------------------------------------------------------------------------------------
 import os
+from pathlib import Path
 import copy
 import shutil
 import datetime
@@ -22,20 +23,30 @@ from rdr_supporting import check_file_exists, check_left_merge
 
 
 def main(input_folder, output_folder, cfg, logger):
+    """Aggregate metamodel outputs into ROI metrics and Tableau assets.
+
+    :param input_folder: Path to the RDR input directory.
+    :param output_folder: Output directory for generated files.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: None. The function writes the analysis workbook and Tableau bundle.
+    :rtype: None
+    """
     logger.info("Start: recovery analysis module")
 
     logger.debug("Reading in parameters for ROI analysis")
     roi_analysis_type = cfg['roi_analysis_type']
 
-    start_year = cfg['start_year']
-    end_year = cfg['end_year']
-    base_year = cfg['base_year']
-    future_year = cfg['future_year']
+    start_year = cfg['analysis_period_start_year']
+    end_year = cfg['analysis_period_end_year']
+    initial_year = cfg['core_model_run_initial_year']
+    future_year = cfg['core_model_run_future_year']
 
     # cost inputs and outputs are reported in dollar_year units
     dollar_year = cfg['dollar_year']
     discount_factor = cfg['discount_factor']
-    co2_discount_factor = cfg['co2_discount_factor']
+    # deprecated user-facing parameter
+    co2_discount_factor = 0.07
 
     # vehicle occupancy rates
     vehicle_occupancy = cfg['vehicle_occupancy']
@@ -65,20 +76,23 @@ def main(input_folder, output_folder, cfg, logger):
     safety_cost = cfg['safety_cost']
     noise_cost = cfg['noise_cost']
     non_co2_cost = cfg['non_co2_cost']
-    co2_cost = cfg['co2_cost']
+    # deprecated user-facing parameter
+    co2_cost = 0
     if cfg['calc_transit_metrics']:
         safety_cost_b = cfg['safety_cost_bus']
         noise_cost_b = cfg['noise_cost_bus']
         non_co2_cost_b = cfg['non_co2_cost_bus']
-        co2_cost_b = cfg['co2_cost_bus']
+        # deprecated user-facing parameter
+        co2_cost_b = 0
 
     logger.config("ReportingParameters: ROI analysis type is {}".format(roi_analysis_type))
     logger.config("ReportingParameters: period of analysis is {} to {}".format(str(start_year), str(end_year)))
-    logger.config(("ReportingParameters: base year runs are for year {}, ".format(str(base_year)) +
-                   "future year runs are for year {}".format(str(future_year))))
+    logger.config(("ReportingParameters: initial year core model runs are for year {}, ".format(str(initial_year)) +
+                   "future year core model runs are for year {}".format(str(future_year))))
     logger.config("ReportingParameters: monetary values are in units of year {} dollars".format(str(dollar_year)))
-    logger.config(("ReportingParameters: general discounting factor = {}, ".format(str(discount_factor)) +
-                   "CO2 discounting factor = {}".format(str(co2_discount_factor))))
+    logger.config(("ReportingParameters: discounting factor = {}, ".format(str(discount_factor))))
+    # deprecated user-facing parameter
+    # logger.config(("ReportingParameters: CO2 discounting factor = {}".format(str(co2_discount_factor))))
     logger.config("ReportingParameters: average vehicle occupancy = {}".format(str(vehicle_occupancy)))
     if cfg['calc_transit_metrics']:
         logger.config("ReportingParameters: transit vehicle occupancies for bus = {}, light rail = {}, heavy rail = {}".format(str(vehicle_occupancy_b),
@@ -95,11 +109,15 @@ def main(input_folder, output_folder, cfg, logger):
     logger.config("ReportingParameters: maintenance cost toggle set to {}, redeployment cost toggle set to {}".format(str(maintenance),
                                                                                                                       str(redeployment)))
     logger.config("ReportingParameters: safety cost = {}, noise cost = {}".format(str(safety_cost), str(noise_cost)))
-    logger.config("ReportingParameters: co2 cost = {}, non co2 cost = {}".format(str(co2_cost), str(non_co2_cost)))
+    # deprecated user-facing parameter
+    # logger.config("ReportingParameters: co2 cost = {}".format(str(co2_cost)))
+    logger.config("ReportingParameters: non co2 cost = {}".format(str(non_co2_cost)))
 
     if cfg['calc_transit_metrics']:
         logger.config("ReportingParameters: bus safety cost = {}, bus noise cost = {}".format(str(safety_cost_b), str(noise_cost_b)))
-        logger.config("ReportingParameters: bus co2 cost = {}, bus non co2 cost = {}".format(str(co2_cost_b), str(non_co2_cost_b)))
+        # deprecated user-facing parameter
+        # logger.config("ReportingParameters: bus co2 cost = {}".format(str(co2_cost_b)))
+        logger.config("ReportingParameters: bus non co2 cost = {}".format(str(non_co2_cost_b)))
 
     # uncertainty scenario information, regression outputs, repair costs and times
     logger.debug("reading in output files from previous modules")
@@ -109,13 +127,13 @@ def main(input_folder, output_folder, cfg, logger):
 
     # SP or RT run type specified in config file
     # NOTE: do not currently use lost trips, extra miles, extra hours, circuitous_trips_removed fields
-    # NOTE: cfg['run_id'] not used in filename for base year metrics
+    # NOTE: cfg['run_id'] not used in filename for core model initial year metrics
     base_regression_table = check_file_exists(os.path.join(input_folder,
-                                                           'Metamodel_scenarios_' + cfg['aeq_run_type'] + '_baseyear.csv'),
+                                                           'Metamodel_scenarios_' + cfg['aeq_run_type'] + '_initial_year.csv'),
                                               logger)
     future_regression_table = check_file_exists(os.path.join(output_folder,
                                                              'Metamodel_scenarios_' + cfg['aeq_run_type'] +
-                                                             '_futureyear_' + str(cfg['run_id']) + '.csv'),
+                                                             '_future_year_' + str(cfg['run_id']) + '.csv'),
                                                 logger)
 
     master_table = pd.read_csv(scenarios_table, converters = {'Economic': str, 'Project Group': str,
@@ -136,21 +154,21 @@ def main(input_folder, output_folder, cfg, logger):
 
     logger.debug("Size of uncertainty scenario table: {}".format(master_table.shape))
     logger.debug("Size of extended scenario table: {}".format(extended_scenarios.shape))
-    logger.debug("Size of regression outputs table for base year: {}".format(base_regression_output.shape))
-    logger.debug("Size of regression outputs table for future year: {}".format(future_regression_output.shape))
+    logger.debug("Size of regression outputs table for initial year core model runs: {}".format(base_regression_output.shape))
+    logger.debug("Size of regression outputs table for future year core model runs: {}".format(future_regression_output.shape))
     logger.debug("Size of repair costs and times table: {}".format(repair_data.shape))
 
     # auxiliary inputs - hazard level information, resilience project information
-    if cfg['cfg_type'] == 'config':
-        model_params_file = check_file_exists(os.path.join(input_folder, 'Model_Parameters.xlsx'), logger)
-        hazard_levels = make_hazard_levels(model_params_file, 'config', logger)
-        projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
-                                           converters={'Project Groups': str, 'Project ID': str})
-        projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
-    else:  # cfg_type = 'json'
-        hazard_levels = make_hazard_levels(cfg, 'json', logger)
-        projgroup_to_resil = cfg['projects']
-        projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
+    # if cfg['cfg_type'] == 'config':
+    model_params_file = check_file_exists(os.path.join(input_folder, 'Model_Parameters.xlsx'), logger)
+    hazard_levels = make_hazard_levels(model_params_file, 'config', logger)
+    projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
+                                        converters={'Project Groups': str, 'Project ID': str})
+    projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
+    # else:  # cfg_type = 'json'
+    #     hazard_levels = make_hazard_levels(cfg, 'json', logger)
+    #     projgroup_to_resil = cfg['projects']
+    #     projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
 
     projgroup_to_resil = projgroup_to_resil.loc[:, ['Project Groups',
                                                     'Resiliency Projects']].drop_duplicates(ignore_index=True)
@@ -186,7 +204,7 @@ def main(input_folder, output_folder, cfg, logger):
 
     # create table of unique project-asset rows
     project_list = projects.drop_duplicates(ignore_index=True)
-    # row in project table is created for baseline 'no' case with Estimated Project Cost = 0
+    # row in project table is created for "no action" baseline 'no' case with Estimated Project Cost = 0
     temp_row = {'Project ID': 'no', 'Project Name': 'No Vulnerability Projects', 'Asset': 'No Asset',
                 'Estimated Project Cost': 0.0, 'Project Lifespan': end_year - start_year + 1,
                 'Estimated Maintenance Cost': 0.0,
@@ -215,8 +233,8 @@ def main(input_folder, output_folder, cfg, logger):
                                "future year regression", logger, "Re-run metamodel module.")
 
     # merge with base_regression_output in left outer merge on 'Hazard Event' = 'hazard', 'Recovery' = 'recovery'
-    # NOTE: merge with base year regression outputs is only based on hazard and recovery
-    logger.warning("variation in base year regression outputs is solely due to hazard event and recovery parameters")
+    # NOTE: merge with initial year regression outputs is only based on hazard and recovery
+    logger.warning("variation in core model initial year regression outputs is solely due to hazard event and recovery parameters")
     if cfg['calc_transit_metrics']:
         ext_reg = pd.merge(ext_reg, base_regression_output.loc[:, ['hazard', 'recovery', 'trips', 'miles', 'hours',
                                                                    'lr_trips', 'hr_trips', 'bus_trips', 'car_trips',
@@ -231,7 +249,7 @@ def main(input_folder, output_folder, cfg, logger):
                            how='left', left_on=['Hazard Event', 'Recovery'], right_on=['hazard', 'recovery'],
                            suffixes=(None, "_baseyr"), indicator=True)
     ext_reg = check_left_merge(ext_reg, "any", "extended scenarios with hazards",
-                               "base year regression", logger)
+                               "initial year regression", logger)
     ext_reg = ext_reg.drop(labels=['hazard_baseyr', 'recovery_baseyr'], axis=1)
 
     # calculate new columns 'initTripslevels'/'initVMTlevels'/'initPHTlevels' as
@@ -1255,15 +1273,15 @@ def main(input_folder, output_folder, cfg, logger):
                                                         'damSafetyvsBase_baseyr', 'damNoisevsBase_baseyr', 'damNonCO2vsBase_baseyr', 'damCO2vsBase_baseyr', 'damVMTvsBase_baseyr',
                                                         'initSafetyvsBase_baseyr', 'initNoisevsBase_baseyr', 'initNonCO2vsBase_baseyr', 'initCO2vsBase_baseyr', 'initVMTvsBase_baseyr']] = 0
 
-    logger.debug("interpolating base year and future year runs to calculate metrics across entire analysis period")
+    logger.debug("interpolating initial year and future year runs to calculate metrics across entire analysis period")
     final_table = pd.DataFrame()
 
-    # NOTE: event probability is assumed to be specified for start_year not base_year
-    logger.debug("Event Probability assumed to specify probability in start year of period of analysis, not base year")
+    # NOTE: event probability is assumed to be specified for start_year not initial_year
+    logger.debug("Event Probability assumed to specify probability in start year of period of analysis, not initial year of core model runs")
 
     for index, row in df_base.iterrows():
-        start_frac = (start_year - base_year) / (future_year - base_year)
-        end_frac = (end_year - base_year) / (future_year - base_year)
+        start_frac = (start_year - initial_year) / (future_year - initial_year)
+        end_frac = (end_year - initial_year) / (future_year - initial_year)
 
         temp_stage = copy.deepcopy(row)
 
@@ -1535,6 +1553,36 @@ def main(input_folder, output_folder, cfg, logger):
     final_table = pd.merge(final_table, BCAbyAsset.loc[:, ['ID-Uncertainty Scenario', 'Asset', 'Resiliency Project',
                                                            'RegretAsset']],
                            how='left', on=['ID-Uncertainty Scenario', 'Asset', 'Resiliency Project'])
+    
+    # Same metrics for BCR
+    BCRmean = final_table.loc[:, ['Resiliency Project', 'BCR_Discounted']].groupby('Resiliency Project',
+                                                                                           as_index=False,
+                                                                                           sort=False).mean()
+    BCRmean['BCRAll'] = BCRmean['BCR_Discounted'].rank(method='dense', ascending=False, na_option='bottom')
+    final_table = pd.merge(final_table, BCRmean.loc[:, ['Resiliency Project', 'BCRAll']],
+                           how='left', on='Resiliency Project')
+    # create column 'BCRScenario' as ranking of 'BCR_Discounted'
+    # for resiliency projects grouped by uncertainty scenario (across project groups)
+    BCRbyScenario = final_table.loc[:, ['ID-Uncertainty Scenario', 'Resiliency Project',
+                                        'BCR_Discounted']].groupby(['ID-Uncertainty Scenario',
+                                                                                 'Resiliency Project'],
+                                                                                as_index=False, sort=False).mean()
+    BCRbyScenario['BCRScenario'] = BCRbyScenario.groupby('ID-Uncertainty Scenario')['BCR_Discounted'].rank(
+        method='dense', ascending=False, na_option='bottom')
+    final_table = pd.merge(final_table, BCRbyScenario.loc[:, ['ID-Uncertainty Scenario', 'Resiliency Project',
+                                                              'BCRScenario']],
+                           how='left', on=['ID-Uncertainty Scenario', 'Resiliency Project'])
+    # create column 'BCRAsset' as ranking of 'BCR_Discounted'
+    # for resiliency projects grouped by uncertainty scenario and asset
+    BCRbyAsset = final_table.loc[:, ['ID-Uncertainty Scenario', 'Asset', 'Resiliency Project',
+                                     'BCR_Discounted']].groupby(['ID-Uncertainty Scenario', 'Asset',
+                                                                              'Resiliency Project'],
+                                                                             as_index=False, sort=False).mean()
+    BCRbyAsset['BCRAsset'] = BCRbyAsset.groupby(['ID-Uncertainty Scenario', 'Asset'])['BCR_Discounted'].rank(
+        method='dense', ascending=False, na_option='bottom')
+    final_table = pd.merge(final_table, BCRbyAsset.loc[:, ['ID-Uncertainty Scenario', 'Asset', 'Resiliency Project',
+                                                           'BCRAsset']],
+                           how='left', on=['ID-Uncertainty Scenario', 'Asset', 'Resiliency Project'])
 
     final_table = final_table.drop(labels=['ID-Resiliency-Scenario-Baseline', 'total_repair', 'Damage (%)',
                                            'ID-Resiliency-Scenario_base', 'initTripslevels_base', 'initVMTlevels_base',
@@ -1603,8 +1651,8 @@ def main(input_folder, output_folder, cfg, logger):
                    'damSafety_Discounted', 'initNoise_Discounted', 'expNoise_Discounted', 'damNoise_Discounted', 'initEmissions_Discounted',
                    'expEmissions_Discounted', 'damEmissions_Discounted', 'ProjectCosts_Discounted', 'TotalResidual_Discounted',
                    'TotalMaintenanceCosts_Discounted', 'Benefits_Discounted', 'ExpBenefits_Discounted', 'RepairCleanupCostSavings_Discounted',
-                   'DamBenefits_Discounted', 'NetBenefits_Discounted', 'BCR_Discounted', 'TotalNetBenefits_Discounted', 'RegretAll',
-                   'RegretScenario', 'RegretAsset']
+                   'DamBenefits_Discounted', 'NetBenefits_Discounted', 'BCR_Discounted', 'BCRAll', 'BCRScenario', 'BCRAsset', 
+                   'TotalNetBenefits_Discounted', 'RegretAll', 'RegretScenario', 'RegretAsset']
 
     # print out output file with all baseline scenarios for records
     all_baselines_file = os.path.join(output_folder, 'bca_metrics_' + str(cfg['run_id']) + '.csv')
@@ -1642,7 +1690,7 @@ def main(input_folder, output_folder, cfg, logger):
 
     # create a Parameters table for Tableau based on CSV file in config file with cfg values joined in
     parameters_table = check_file_exists(os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)),
-                                                      'config',
+                                                      cfg['template_dir'],
                                                       'parameters_lookup.csv'), logger)
     logger.config("Reading in parameters file: {}".format(parameters_table))
     parameters = pd.read_csv(parameters_table,
@@ -1670,7 +1718,7 @@ def main(input_folder, output_folder, cfg, logger):
     # create a BCA table for Tableau summarizing benefits and costs when roi_analysis_type = 'BCA'
     bca_table_agg = final_table.loc[:, ['ProjectName', 'IDScenarioNoHazard',
                                         'Hazard Event', 'Benefits_Discounted',
-                                        'BCR_Discounted']].groupby(['ProjectName', 'IDScenarioNoHazard',
+                                        'BCR_Discounted', 'BCRAll']].groupby(['ProjectName', 'IDScenarioNoHazard',
                                                                     'Hazard Event'],
                                                                     as_index=False, sort=False).mean()
     bca_table_agg = bca_table_agg.drop(['IDScenarioNoHazard'], axis=1).groupby(['ProjectName', 'Hazard Event'],
@@ -1693,10 +1741,14 @@ def main(input_folder, output_folder, cfg, logger):
     bca_table_3 = bca_table_agg.drop(['Hazard Event'], axis=1).groupby('ProjectName', as_index=False,
                                                                        sort=False).sum()
     bca_table_3 = pd.melt(bca_table_3, id_vars=['ProjectName'], value_vars=['Benefits_Discounted',
-                                                                            'BCR_Discounted'])
+                                                                            'BCR_Discounted', 
+                                                                            'BCRAll'])
     bca_table_3 = bca_table_3.rename({'variable': 'Attribute', 'value': 'Value'}, axis='columns')
     bca_table_3['Hazard'] = ''
 
+    # divide the melted BCRAll rank by the number of hazards, because they have been summed as many times as there are hazards during instantiation of bca_table_3
+    bca_table_3.loc[bca_table_3['Attribute'] == 'BCRAll', 'Value'] = bca_table_3.loc[bca_table_3['Attribute'] == 'BCRAll', 'Value'] / bca_table_agg['Hazard Event'].nunique()
+    
     bca_table = pd.concat([bca_table_1, bca_table_2, bca_table_3], ignore_index=True)
 
     # if regret analysis, zero out BCA values
@@ -1708,6 +1760,8 @@ def main(input_folder, output_folder, cfg, logger):
 
     if os.path.exists(true_shape_file):
         geom_table = geom_process(true_shape_file, cfg['crs'], logger)
+        
+        linkid_notconnectors = []
 
         # group tableau_table by ResiliencyProject
         tableau_table_agg = tableau_table.loc[:, ['ResiliencyProject', 'RegretAll', 'RepairCleanupCostSavings_Discounted',
@@ -1741,9 +1795,39 @@ def main(input_folder, output_folder, cfg, logger):
         visualization_table = pd.merge(left = visualization_table, right = depths_agg, how = 'left',
                                        on = 'link_id')
 
+        # check for the networks folder and create a copy of the extended scenarios file
+        networks_path = Path(input_folder) / "Networks"
+        scenarios_for_network_pth = Path(output_folder) / f"extended_scenarios_{str(cfg['run_id'])}.csv"
+        if scenarios_for_network_pth.exists():
+            # use the extended scenarios CSV file to locate the network files
+            scenarios_for_network = pd.read_csv(scenarios_for_network_pth, dtype={"Economic": "string", "Project Group": "string"})
+            stage_one = scenarios_for_network[scenarios_for_network['Stage Number'] == 1]
+            stage_one = stage_one[stage_one['Resiliency Project'] != 'no']
+            networks_list = stage_one.loc[:, ['Project Group', 'Economic']].drop_duplicates(ignore_index=True)
+            networks_list['Filename'] = networks_list['Economic'] + networks_list['Project Group'] + '.csv'
+
+            # loop through the list of network related files
+            for filename in networks_list['Filename'].values:
+                csv_file = networks_path / filename
+                if csv_file.exists():
+                    current_df = pd.read_csv(csv_file)
+                    # if the file has a link_id and facility_type field, add these to the list of link IDs to keep
+                    if "link_id" in current_df.columns and "facility_type" in current_df.columns:
+                        # centroid connectors are 901/902/903 in default RDR facility types, check for either string or Int and keep all other facility types
+                        linkid_notconnectors += list(current_df[~(current_df["facility_type"].isin([901, 902, 903, '901', '902', '903']))]["link_id"])
+                        linkid_notconnectors += [str(x) for x in linkid_notconnectors]
+            if len(linkid_notconnectors) > 0:
+                # quick check to remove any duplicate link IDs
+                linkid_notconnectors = list(set(linkid_notconnectors))
+
+        if len(linkid_notconnectors) > 0:
+            # filter out all the facility_types that are 901/902/903 and keep the rest
+            visualization_table = visualization_table[visualization_table["link_id"].isin(linkid_notconnectors)].copy()
+
         visualization_table = gpd.GeoDataFrame(
             visualization_table, crs = cfg['crs'], geometry = 'geometry')
         visualization_table = visualization_table.to_crs('EPSG:4326')
+            
     else:
         visualization_table = pd.DataFrame(columns = ['link_id', 'WKT', 'Project ID', 'Category', 'Exposure Reduction',
                                                       'Overall Regret', 'Average Project Repair Savings',
@@ -1762,8 +1846,8 @@ def main(input_folder, output_folder, cfg, logger):
                                         'ProjectName', 'Asset', 'ResiliencyProjectAsset', 'ProjectCosts_Discounted',
                                         'TotalNetBenefits_Discounted', 'NetBenefits_Discounted', 'Benefits_Discounted',
                                         'ExpBenefits_Discounted', 'RepairCleanupCostSavings_Discounted',
-                                        'DamBenefits_Discounted', 'BCR_Discounted', 'RegretAll', 'RegretScenario',
-                                        'RegretAsset', 'initTripslevels', 'initTripsvsBase',
+                                        'DamBenefits_Discounted', 'BCR_Discounted', 'BCRAll', 'BCRScenario', 'BCRAsset',
+                                        'RegretAll', 'RegretScenario', 'RegretAsset', 'initTripslevels', 'initTripsvsBase',
                                         'initTripsvsBase_dollar', 'initVMTlevels', 'initVMTlevel_dollar', 'initVMTvsBase',
                                         'initVMTvsBase_dollar', 'initSafetyvsBase', 'initNoisevsBase', 'initNonCO2vsBase',
                                         'initCO2vsBase', 'initPHTlevels', 'initPHTlevel_dollar', 'initPHTvsBase',
@@ -1799,6 +1883,17 @@ def main(input_folder, output_folder, cfg, logger):
 
 # helper function to create an annualized stream of metric stored as var_name
 def create_annual_stream(row, var_name, start_year, end_year, start_frac, end_frac):
+    """Interpolate annual values between base-year and end-year values.
+
+    :param row: Input row used to derive an annual stream.
+    :param var_name: Base column name for the annualized metric.
+    :param start_year: First year in the annual stream.
+    :param end_year: Last year in the annual stream.
+    :param start_frac: Fraction of the base-year delta used at the start year.
+    :param end_frac: Fraction of the base-year delta used at the end year.
+    :returns: A NumPy array of annualized values.
+    :rtype: numpy.ndarray
+    """
     var_startyr = (row[var_name + '_baseyr'] + 
                    start_frac * (row[var_name] - row[var_name + '_baseyr']))
     var_endyr = (row[var_name + '_baseyr'] +
@@ -1811,16 +1906,24 @@ def create_annual_stream(row, var_name, start_year, end_year, start_frac, end_fr
 
 # check ROI inputs based on ROI Analysis Type parameter
 def check_roi_required_inputs(input_folder, cfg, logger):
+    """Validate that the ROI inputs match the selected analysis mode.
+
+    :param input_folder: Path to the RDR input directory.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: 1 when the ROI inputs are valid, otherwise 0.
+    :rtype: int
+    """
     logger.info("Start: check_roi_required_inputs")
     is_covered = 1
 
-    if cfg['cfg_type'] == 'config':
-        model_params_file = check_file_exists(os.path.join(input_folder, 'Model_Parameters.xlsx'), logger)
-        model_params = pd.read_excel(model_params_file, sheet_name='Hazards',
-                                     usecols=['Hazard Event', 'Event Probability in Start Year'],
-                                     converters={'Hazard Event': str, 'Event Probability in Start Year': float})
-    else:  # cfg_type = 'json'
-        model_params = cfg['hazards']
+    # if cfg['cfg_type'] == 'config':
+    model_params_file = check_file_exists(os.path.join(input_folder, 'Model_Parameters.xlsx'), logger)
+    model_params = pd.read_excel(model_params_file, sheet_name='Hazards',
+                                    usecols=['Hazard Event', 'Event Probability in Start Year'],
+                                    converters={'Hazard Event': str, 'Event Probability in Start Year': float})
+    # else:  # cfg_type = 'json'
+    #     model_params = cfg['hazards']
 
     # check 'Event Probability in Start Year' for non-negative values
     if (model_params['Event Probability in Start Year'] < 0).any():
@@ -1869,6 +1972,15 @@ def check_roi_required_inputs(input_folder, cfg, logger):
 
 # create a Tableau dashboard from templates in the config folder and the results XLSX file
 def prepare_tableau_assets(report_file, output_folder, cfg, logger):
+    """Package the Tableau workbook, images, and input spreadsheet.
+
+    :param report_file: Path to the Tableau-ready report workbook.
+    :param output_folder: Output directory for generated files.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: The Tableau report directory path.
+    :rtype: str
+    """
     logger.info("Start: prepare_tableau_assets")
     tab_dir_name = 'tableau_report_' + str(cfg['run_id']) + '_' + datetime.datetime.now().strftime("%Y_%m_%d_%H-%M-%S")
     tableau_directory = os.path.join(output_folder, 'Reports', tab_dir_name)
@@ -1877,7 +1989,7 @@ def prepare_tableau_assets(report_file, output_folder, cfg, logger):
 
     # copy the relative path tableau TWB file from the config directory to the tableau report directory
     logger.debug("copying the twb file from config folder to the tableau report folder")
-    config_directory = os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)), 'config')
+    config_directory = os.path.join(os.path.abspath(os.path.join(os.getcwd(), os.pardir)), cfg['template_dir'])
     root_twb_location = os.path.join(config_directory, 'template_dashboard.twb')
     if not os.path.exists(root_twb_location):
         logger.error("TABLEAU REPORT INPUT FILE ERROR: {} could not be found".format(root_twb_location))
@@ -1943,8 +2055,14 @@ def prepare_tableau_assets(report_file, output_folder, cfg, logger):
 
 
 def geom_process(true_shape_file: str, crs: str, logger) -> gpd.GeoDataFrame:
-    """geom_process will take the TrueShape.csv and create a geopandas
-    geodataframe."""
+    """Build a GeoDataFrame of project geometries from the true-shape table.
+
+    :param true_shape_file: Path to the TrueShape.csv lookup table.
+    :param crs: Coordinate reference system used for geometry creation.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: The processed GeoDataFrame.
+    :rtype: geopandas.GeoDataFrame
+    """
 
     true_shape_table = pd.read_csv(true_shape_file, usecols=['link_id', 'WKT'],
                                    converters={'link_id': str, 'WKT': str})

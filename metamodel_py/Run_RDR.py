@@ -17,8 +17,8 @@ import traceback
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2025.1"
-VERSION_DATE = "6/20/2025"
+VERSION_NUMBER = "2026.1"
+VERSION_DATE = "9/30/2026"
 
 # ===================================================================================================
 # set up config file and logger
@@ -33,7 +33,11 @@ VERSION_DATE = "6/20/2025"
 
 
 def main():
+    """Parse arguments and launch the full RDR pipeline.
 
+    :returns: None. The function dispatches the selected RDR modules.
+    :rtype: None
+    """
     start_time = datetime.datetime.now()
 
     # PARSE ARGS
@@ -115,8 +119,10 @@ def main():
     # ----------------------------------------------------------------------------------------------
     input_folder = cfg['input_dir']
     output_folder = cfg['output_dir']
+    template_folder = cfg['template_dir']
     print("Input folder: {}".format(input_folder))
     print("Output folder: {}".format(output_folder))
+    print("Template folder: {}".format(template_folder))
     print("Run ID: {}".format(cfg['run_id']))
 
     # set up logging, report input/config errors, and report run start time
@@ -199,7 +205,7 @@ def main():
             # Test any method currently under development
             logger.info("Testing network prep module and validating AequilibraE results in 'test' task")
             run_params = {}
-            run_params['socio'] = 'baseyear'  # examples: 'base', 'urban', 'suburban', 'water', 'baseyear'
+            run_params['socio'] = 'initial_year'  # examples: 'standard', 'urban', 'suburban', 'water', 'initial_year'
             run_params['projgroup'] = '00'  # examples: strings like '00', '02'
             run_params['resil'] = 'no'  # examples: 'no', or strings like 'LXX-XX'
             run_params['elasticity'] = -1  # format: negative float or 0

@@ -12,7 +12,7 @@ params:
   input_dir: 'C:/GitHub/RDR/Data/SampleRun/inputs'
   output_dir: 'C:/GitHub/RDR/Data/SampleRun/generated_files'
   run_id: 'SampleRun'
-  method: 'multitarget'  # options are 'base', 'interact', 'projgroupLM', 'multitarget' (default), 'mixedeffects'
+  method: 'multitarget'  # options are 'linear', 'interact', 'projgroupLM', 'multitarget' (default), 'mixedeffects'
   run_disaggregate: 'no'
   testing: false
 
@@ -191,7 +191,7 @@ max_avail_combos <- d_in %>%
 
 ```{r test_Gaussian, message=FALSE, echo=FALSE, results = 'hide'}
 # If starting with multitarget as method, need to ensure both SP and RT will be able to be fit
-# If not, go back to base
+# If not, go back to linear
 
 # Pull out the SP and RT data frames from the compiled Aeq runs
 d_sp <- d_in %>% filter(SP.RT == "SP")
@@ -247,11 +247,11 @@ if(params$method == 'multitarget'){
   # If both pass, they will have class gp.list
   use_method = ifelse(class(spfit) == 'gp.list' & class(rtfit) == 'gp.list',
                            "multitarget",
-                           "base")
+                           "linear")
   
-  if(use_method == 'base' & params$method == 'multitarget'){
+  if(use_method == 'linear' & params$method == 'multitarget'){
     # If the method has changed, generate a warning. Log that warning as well.
-    warn_change_method = 'The method `multitarget` was selected, but the Gaussian mulitarget regression could not be completed for both shortest path and routing methods. This is likely a result of too few samples being selected in the LHS. The regression method `base` is being used as a fallback.'
+    warn_change_method = 'The method `multitarget` was selected, but the Gaussian mulitarget regression could not be completed for both shortest path and routing methods. This is likely a result of too few samples being selected in the LHS. The regression method `linear` is being used as a fallback.'
     warning(warn_change_method)
     
     # Write out a small file to trigger a log file entry
@@ -267,7 +267,7 @@ if(params$method == 'multitarget'){
 
 There are **`r nrow(full_combos)`** combinations possible with these provided inputs for each of `r nrow(full_groups)` groups of models. Of these, **`r as.numeric(max_avail_combos)`** combinations have been run in AequilibraE; these provide the input for the metamodel.
 
-```{r, echo=FALSE, results='asis', eval= use_method == 'base' & params$method == 'multitarget'}
+```{r, echo=FALSE, results='asis', eval= use_method == 'linear' & params$method == 'multitarget'}
 # Print an additional paragraph if the method changed
 cat("**Note:** ")
 cat(warn_change_method)
@@ -292,7 +292,7 @@ Use_Names <- data.frame(
 use_pred_Names <- Use_Names[match(use_pred_vars, Use_Names$short), "Name"]
 len_pred <- 1:length(use_pred_vars)
 
-if (use_method == "base") {
+if (use_method == "linear") {
   formula_text <- paste0("EstimatedTrips = \\beta_0 + ",
                          paste(paste0("\\beta_", len_pred, " ", use_pred_Names), collapse = " + "),
                          " + \\epsilon")
@@ -322,7 +322,7 @@ if (use_method == "projgroupLM") {
   }
 
   # Make nested term for resil within projgroup if these exist
-  # TODO: In this case, 'projgroupLM' is identical to either 'base' or 'interact'
+  # TODO: In this case, 'projgroupLM' is identical to either 'linear' or 'interact'
   if ("projgroup" %in% use_pred_vars) {
     use_pred_Names <- use_pred_Names[!use_pred_Names %in% c("ProjectGroup")]
   }
@@ -443,7 +443,7 @@ use_add_vars <- if (length(add_vars) > 0) {
   paste(use_add_vars, "+")
 }
 
-if (use_method == "base") {
+if (use_method == "linear") {
   mTrip <- lm(as.formula(paste0("trips ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_sp
   )
@@ -469,7 +469,7 @@ if (use_method == "base") {
 }
 
 if (params$testing) {
-  if (use_method == "base" || use_method == "interact") {
+  if (use_method == "linear" || use_method == "interact") {
     coef(mTrip)
     AIC_trips_sp <- AIC(mTrip)
     sjPlot::tab_model(mTrip)
@@ -484,9 +484,9 @@ if (params$testing) {
   }
 }
 
-if (use_method == "base" || use_method == "interact") {
+if (use_method == "linear" || use_method == "interact") {
   if (sd(d_sp$trips) != 0) {
-    if (use_method == "base") {
+    if (use_method == "linear") {
       mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_sp
       )
@@ -507,7 +507,7 @@ if (use_method == "base" || use_method == "interact") {
 ### `miles` model
 
 ```{r modelMiles}
-if (use_method == "base") {
+if (use_method == "linear") {
   mMiles <- lm(as.formula(paste0("miles ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_sp
   )
@@ -533,7 +533,7 @@ if (use_method == "base") {
 }
 
 if (params$testing) {
-  if (use_method == "base" || use_method == "interact") {
+  if (use_method == "linear" || use_method == "interact") {
     coef(mMiles)
     AIC_miles_sp <- AIC(mMiles)
     sjPlot::tab_model(mMiles)
@@ -548,9 +548,9 @@ if (params$testing) {
   }
 }
 
-if (use_method == "base" || use_method == "interact") {
+if (use_method == "linear" || use_method == "interact") {
   if (sd(d_sp$miles) != 0) {
-    if (use_method == "base") {
+    if (use_method == "linear") {
       mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ",
                                             paste(use_pred_vars, collapse = " + "))),
                           data = d_sp
@@ -572,7 +572,7 @@ if (use_method == "base" || use_method == "interact") {
 ### `hours` model
 
 ```{r modelHours}
-if (use_method == "base") {
+if (use_method == "linear") {
   mHours <- lm(as.formula(paste0("hours ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_sp
   )
@@ -598,7 +598,7 @@ if (use_method == "base") {
 }
 
 if (params$testing) {
-  if (use_method == "base" || use_method == "interact") {
+  if (use_method == "linear" || use_method == "interact") {
     coef(mHours)
     AIC_hours_sp <- AIC(mHours)
     sjPlot::tab_model(mHours)
@@ -613,9 +613,9 @@ if (params$testing) {
   }
 }
 
-if (use_method == "base" || use_method == "interact") {
+if (use_method == "linear" || use_method == "interact") {
   if (sd(d_sp$hours) != 0) {
-    if (use_method == "base") {
+    if (use_method == "linear") {
       mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_sp
       )
@@ -683,7 +683,7 @@ if (!dir.exists(output_dir)) {
 }
 
 write.csv(preds,
-  file = file.path(output_dir, paste0("Metamodel_scenarios_SP_futureyear_", run_id, ".csv")),
+  file = file.path(output_dir, paste0("Metamodel_scenarios_SP_future_year_", run_id, ".csv")),
   row.names = FALSE
 )
 ```
@@ -744,7 +744,7 @@ if (use_method == "multitarget") {
 ### `trips` model
 
 ```{r modelTrip_rt}
-if (use_method == "base") {
+if (use_method == "linear") {
   mTrip <- lm(as.formula(paste0("trips ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_rt
   )
@@ -770,7 +770,7 @@ if (use_method == "base") {
 }
 
 if (params$testing) {
-  if (use_method == "base" || use_method == "interact") {
+  if (use_method == "linear" || use_method == "interact") {
     coef(mTrip)
     AIC_trips_rt <- AIC(mTrip)
     sjPlot::tab_model(mTrip)
@@ -785,9 +785,9 @@ if (params$testing) {
   }
 }
 
-if (use_method == "base" || use_method == "interact") {
+if (use_method == "linear" || use_method == "interact") {
   if (sd(d_rt$trips) != 0) {
-    if (use_method == "base") {
+    if (use_method == "linear") {
       mTrip_scaled <- lm(as.formula(paste0("scale(trips) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_rt
       )
@@ -808,7 +808,7 @@ if (use_method == "base" || use_method == "interact") {
 ### `miles` model
 
 ```{r modelMiles_rt}
-if (use_method == "base") {
+if (use_method == "linear") {
   mMiles <- lm(as.formula(paste0("miles ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_rt
   )
@@ -834,7 +834,7 @@ if (use_method == "base") {
 }
 
 if (params$testing) {
-  if (use_method == "base" || use_method == "interact") {
+  if (use_method == "linear" || use_method == "interact") {
     coef(mMiles)
     AIC_miles_rt <- AIC(mMiles)
     sjPlot::tab_model(mMiles)
@@ -849,9 +849,9 @@ if (params$testing) {
   }
 }
 
-if (use_method == "base" || use_method == "interact") {
+if (use_method == "linear" || use_method == "interact") {
   if (sd(d_rt$miles) != 0) {
-    if (use_method == "base") {
+    if (use_method == "linear") {
       mMiles_scaled <- lm(as.formula(paste0("scale(miles) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_rt
       )
@@ -872,7 +872,7 @@ if (use_method == "base" || use_method == "interact") {
 ### `hours` model
 
 ```{r modelHours_rt}
-if (use_method == "base") {
+if (use_method == "linear") {
   mHours <- lm(as.formula(paste0("hours ~ ", paste(use_pred_vars, collapse = " + "))),
     data = d_rt
   )
@@ -898,7 +898,7 @@ if (use_method == "base") {
 }
 
 if (params$testing) {
-  if (use_method == "base" || use_method == "interact") {
+  if (use_method == "linear" || use_method == "interact") {
     coef(mHours)
     AIC_hours_rt <- AIC(mHours)
     sjPlot::tab_model(mHours)
@@ -913,9 +913,9 @@ if (params$testing) {
   }
 }
 
-if (use_method == "base" || use_method == "interact") {
+if (use_method == "linear" || use_method == "interact") {
   if (sd(d_rt$hours) != 0) {
-    if (use_method == "base") {
+    if (use_method == "linear") {
       mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
         data = d_rt
       )
@@ -937,7 +937,7 @@ if (use_method == "base" || use_method == "interact") {
 
 ```{r modelOthers_rt}
 if(run_disaggregate == 'yes'){
-  if (use_method == "base") {
+  if (use_method == "linear") {
     mTrip_lr <- lm(as.formula(paste0("lr_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
     mTrip_hr <- lm(as.formula(paste0("hr_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
     mTrip_bus <- lm(as.formula(paste0("bus_trips ~ ", paste(use_pred_vars, collapse = " + "))), data = d_rt)
@@ -1068,7 +1068,7 @@ if(run_disaggregate == 'yes'){
 }
 
 # if (params$testing) {
-#   if (use_method == "base" || use_method == "interact") {
+#   if (use_method == "linear" || use_method == "interact") {
 #     coef(mHours)
 #     AIC_hours_rt <- AIC(mHours)
 #     sjPlot::tab_model(mHours)
@@ -1083,9 +1083,9 @@ if(run_disaggregate == 'yes'){
 #   }
 # }
 
-# if (use_method == "base" || use_method == "interact") {
+# if (use_method == "linear" || use_method == "interact") {
 #   if (sd(d_rt$hours) != 0) {
-#     if (use_method == "base") {
+#     if (use_method == "linear") {
 #       mHours_scaled <- lm(as.formula(paste0("scale(hours) ~ ", paste(use_pred_vars, collapse = " + "))),
 #         data = d_rt
 #       )
@@ -1212,7 +1212,7 @@ if (!dir.exists(output_dir)) {
 }
 
 write.csv(preds,
-  file = file.path(output_dir, paste0("Metamodel_scenarios_RT_futureyear_", run_id, ".csv")),
+  file = file.path(output_dir, paste0("Metamodel_scenarios_RT_future_year_", run_id, ".csv")),
   row.names = FALSE
 )
 ```

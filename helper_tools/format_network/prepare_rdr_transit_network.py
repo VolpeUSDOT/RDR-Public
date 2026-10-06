@@ -1,4 +1,3 @@
-import arcpy
 import os
 import pandas as pd
 import numpy as np
@@ -10,39 +9,41 @@ import network_config_reader
 import gtfs_linear_referencing_process
 
 # Import modules from core code (two levels up) by setting path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'metamodel_py'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "metamodel_py"))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "common"))
 
+# Make sure the gdal dll are available
+if "CONDA_PREFIX" in os.environ:
+    conda_path = os.environ["CONDA_PREFIX"]
+
+    if sys.platform == "win32":
+        gdal_path = os.path.join(conda_path, "Library", "share", "gdal")
+        proj_path = os.path.join(conda_path, "Library", "share", "proj")
+    else:
+        gdal_path = os.path.join(conda_path, "share", "gdal")
+        proj_path = os.path.join(conda_path, "share", "proj")
+
+    # Inject paths into the environment if they exist
+    if os.path.exists(gdal_path):
+        os.environ["GDAL_DATA"] = gdal_path
+    if os.path.exists(proj_path):
+        os.environ["PROJ_DATA"] = proj_path
+        os.environ["PROJ_LIB"] = proj_path  # Fallback for older pyproj versions
+
+import geopandas as gpd
+import shapely
+import shared_tools
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2025.1"
-VERSION_DATE = "6/20/2025"
+VERSION_NUMBER = "2026.1"
+VERSION_DATE = "9/30/2026"
+
 # ---------------------------------------------------------------------------------------------------
 # The following code creates transit centroid connectors by building buffer zones around transit
 # boarding nodes and identifying TAZs within the buffer and (optionally) builds a geodatabase of
 # transit network links from GTFS and GMNS network data
 # ---------------------------------------------------------------------------------------------------
-
-def getFieldNames(shp):
-    fieldnames = [f.name for f in arcpy.ListFields(shp)]
-    return fieldnames
-
-
-def feature_class_to_pandas_data_frame(feature_class, field_list):
-    """
-    Load data into a Pandas Data Frame for subsequent analysis.
-    :param feature_class: Input ArcGIS Feature Class.
-    :param field_list: Fields for input.
-    :return: Pandas DataFrame object.
-    """
-    return pd.DataFrame(
-        arcpy.da.FeatureClassToNumPyArray(
-            in_table=feature_class,
-            field_names=field_list,
-            skip_nulls=False,
-            null_value=-99999
-        )
-    )
 
 
 def haversine(lon1, lat1, lon2, lat2):
@@ -61,7 +62,7 @@ def haversine(lon1, lat1, lon2, lat2):
     r = 3959.87433  # this is in miles
     return c * r
 
-
+    
 def transit_overlay(cfg, logger):
 
     # Values from config file
@@ -96,58 +97,80 @@ def transit_overlay(cfg, logger):
 
     # Path to TAZ shapefile
     # This is used to identify which TAZs can access which transit nodes
-    TAZ_shapefile = cfg['TAZ_shapefile']
-    if not os.path.exists(TAZ_shapefile):
-        logger.error('The TAZ shapefile ' + TAZ_shapefile + ' does not exist')
-        raise Exception("TAZ FILE ERROR: input TAZ_shapefile {} can't be found".format(TAZ_shapefile))
+    if not os.path.exists(cfg['TAZ_shapefile']):
+        logger.error('The TAZ shapefile ' + cfg['TAZ_shapefile'] + ' does not exist')
+        raise Exception("TAZ FILE ERROR: input TAZ_shapefile {} can't be found".format(cfg['TAZ_shapefile']))
+    
+    # get the taz data path
+    TAZ_shapefile = shared_tools.get_vector_inputs(cfg['TAZ_shapefile'])
 
     # Search distance
     # Search radius for determining the maximum threshold of travel from a TAZ to a transit node
     # Includes units (e.g., feet, meters, yards)
     search_distance = cfg['search_distance']
-
-    # Make ArcGIS geodatabase if one doesn't exist
+    
     gdb = 'RDR_Transit_Overlay'
-    full_path_gdb = os.path.join(output_dir, gdb + '.gdb')
-    if os.path.exists(full_path_gdb):
-        logger.info('Geodatabase {} has already been created'.format(full_path_gdb))
-        logger.info('Deleted existing geodatabase {}'.format(full_path_gdb))
-        arcpy.Delete_management(full_path_gdb)
+    full_path_gpkg = os.path.join(output_dir, gdb + '.gpkg')
+    # create a geodataframe from the nodes
+    transit_fc = gpd.GeoDataFrame(
+        boarding_nodes,
+        geometry=gpd.points_from_xy(
+            boarding_nodes["x_coord"], boarding_nodes["y_coord"]
+        ),
+        crs="EPSG:4326",
+    )
+    # write to a geopacakage
+    transit_fc.to_file(full_path_gpkg, layer="transit_layer")
+    transit_fc_orig = transit_fc.copy()
 
-    logger.info('Creating geodatabase {}'.format(full_path_gdb))
-    arcpy.CreateFileGDB_management(output_dir, gdb + '.gdb')
-    arcpy.env.workspace = full_path_gdb
-
-    # Create feature layer for transit boarding nodes
-    transit_fc = os.path.join(full_path_gdb, "transit_layer")
-    arcpy.CreateFeatureclass_management(full_path_gdb, "transit_layer", "POINT", "#", "DISABLED", "DISABLED", spatial_reference=4326) # create an empty fc
-    arcpy.AddField_management(transit_fc, "node_id", "LONG")
-    fields = ("SHAPE@X", "SHAPE@Y", "node_id")
-    icursor = arcpy.da.InsertCursor(transit_fc, fields)
-    for index, row in boarding_nodes.iterrows():
-        icursor.insertRow([row['x_coord'], row['y_coord'], row['node_id']])
-    del icursor
+    # project to utm if it is a geographic CRS
+    if transit_fc_orig.crs.is_geographic is True:
+        logger.info(
+            "Projecting to UTM for analysis."
+        )
+        utm_crs = transit_fc_orig.estimate_utm_crs()
+        transit_fc = transit_fc_orig.to_crs(utm_crs)
 
     # Create buffers for transit nodes
-    transit_buffer = arcpy.analysis.Buffer(transit_fc, os.path.join(full_path_gdb, "transit_layer_Buffer"), search_distance, "FULL", "ROUND", "NONE", None, "PLANAR")
+    # Get the search value and distance unit. Get the conversion to utm factor as needed
+    search_distance_value, search_distance_unit = shared_tools.separate_distance_unit(search_distance)
+    search_distance_unit_to_gdf_units = (shared_tools.standardize_units(search_distance_unit), shared_tools.standardize_units(transit_fc.crs.axis_info[0].unit_name))
+    factor = 1 if len(set(search_distance_unit_to_gdf_units)) <= 1 else shared_tools.DISTANCE_CONVERSIONS[search_distance_unit_to_gdf_units]
+    max_distance = search_distance_value * factor
+
+    # buffer the transit layer
+    transit_buffer = transit_fc.copy()
+    transit_buffer_geom = transit_fc.buffer(max_distance)
+    transit_buffer["geometry"] = transit_buffer_geom
+    transit_buffer.to_file(full_path_gpkg, layer="transit_layer_buffer")
     
     # Create feature layer for TAZ polygons
-    TAZ_layer = arcpy.management.MakeFeatureLayer(TAZ_shapefile, 'TAZ_layer')
+    if len(TAZ_shapefile) == 2:
+        TAZ_layer = gpd.read_file(TAZ_shapefile[0], layer=TAZ_shapefile[1])
+    elif len(TAZ_shapefile) == 1:
+        TAZ_layer = gpd.read_file(TAZ_shapefile[0])
+    else:
+        logger.info("Unsupported vector format for TAZ polygon input.")
+        raise Exception("Unsupported vector format for TAZ polygon input.")
 
-    TAZ_transit_intersect = arcpy.analysis.PairwiseIntersect([TAZ_layer, transit_buffer], 'TAZ_transit_intersect')
+    # project to the same crs as the transit data
+    TAZ_layer.to_crs(transit_fc.crs, inplace=True)
+
+    # intersect with the transit buffers
+    TAZ_transit_intersect = gpd.overlay(TAZ_layer, transit_buffer[["node_id","geometry"]], how="intersection")
+    TAZ_transit_intersect.to_file(full_path_gpkg, layer="TAZ_transit_intersect")
     # look up TAZ ID field
     zone_ID = cfg['zone_ID']
-    fieldnames_select = [zone_ID, 'node_id']
+    
     # Create dataframe of centroid -> transit boarding node connectors
-    df = feature_class_to_pandas_data_frame('TAZ_transit_intersect', fieldnames_select).replace(-99999, 0)
+    df = pd.DataFrame(TAZ_transit_intersect.drop(columns=TAZ_transit_intersect.geometry.name)).replace(-99999, 0).reset_index()
     df = df.astype({zone_ID : 'str', 'node_id' : 'str'})
-    df = pd.merge(df, centroid_nodes, how='left', left_on=zone_ID, right_on='node_id', suffixes=(None, '_y'))
+    df = pd.merge(df, centroid_nodes, how='left', left_on=zone_ID, right_on='node_id', suffixes=('', '_y'))
     df.rename({'node_id_y': 'centroid_node_id', 'x_coord': 'from_x', 'y_coord': 'from_y'}, axis='columns', inplace=True)
     df = pd.merge(df, boarding_nodes, how='left', on='node_id')
     df.rename({'node_id': 'transit_node_id', 'x_coord': 'to_x', 'y_coord': 'to_y'}, axis='columns', inplace=True)
     # Create dataframe of transit boarding -> centroid node connectors
     df_copy = df.copy(deep=True)
-
     df.rename({'centroid_node_id': 'from_node_id', 'transit_node_id': 'to_node_id'}, axis='columns', inplace=True)
     df_copy.rename({'centroid_node_id': 'to_node_id', 'transit_node_id': 'from_node_id',
                     'from_x': 'to_x', 'from_y': 'to_y', 'to_x': 'from_x', 'to_y': 'from_y'}, axis='columns', inplace=True)
@@ -192,13 +215,15 @@ def main():
 
     parser = argparse.ArgumentParser(description=program_description, usage=help_text)
 
-    parser.add_argument("config_file", help="The full path to the XML Scenario", type=str)
 
-    if len(sys.argv) == 2:
-        args = parser.parse_args()
-    else:
+    if len(sys.argv) not in (2, 3):
         parser.print_help()
         sys.exit()
+
+    parser.add_argument("config_file", help="The full path to the XML Scenario", type=str)
+    parser.add_argument("root_dir", help="The root dir", type=str, nargs="?", default=None)
+    
+    args = parser.parse_args()
 
     # ---------------------------------------------------------------------------------------------------
     # SETUP
@@ -206,7 +231,7 @@ def main():
         print("ERROR: config file {} can't be found!".format(args.config_file))
         sys.exit()
 
-    cfg = network_config_reader.read_network_config_file(args.config_file)
+    cfg = network_config_reader.read_network_config_file(args.config_file, args.root_dir)
 
     # Output of this helper tool along w/ log files are put in the output dir
     run_name = cfg['run_id']
@@ -273,8 +298,8 @@ def main():
     # Lanes will be reset to 1
     # Facility type field will be converted to corresponding default transit facility types
     transit_link_csv = cfg['transit_link_csv']
-    create_gdb = cfg['create_gdb']
-    if create_gdb:
+    create_gpkg = cfg['create_gpkg']
+    if create_gpkg:
         transit_links = pd.read_csv(transit_link_csv, skip_blank_lines=True,
                                     usecols=['link_id', 'from_node_id', 'to_node_id', 'dir_flag', 'length', 'facility_type',
                                              'link_type', 'capacity', 'free_speed', 'lanes', 'geometry_id'],
@@ -403,7 +428,7 @@ def main():
                             'facility_type', 'capacity', 'free_speed', 'allowed_uses', 'geometry_id',
                             'link_type', 'orig_link_id', 'orig_df'])
     
-    if create_gdb:
+    if create_gpkg:
         new_transit_links = link_df[link_df['orig_df'] == 'transit_links']
         new_transit_links.loc[:, 'geometry_id'] = new_transit_links['geometry_id'].astype('str')
         
@@ -411,7 +436,7 @@ def main():
         if any(new_transit_links['geometry_id'] == '0'):
             orig = new_transit_links.index.size
             new_transit_links = new_transit_links.drop(index=new_transit_links.loc[new_transit_links['geometry_id'] == '0',].index)
-            logger.info('{} records dropped from {} where geometry_id (shape_id) == 0 when creating transit network GDB.'.format(orig - new_transit_links.index.size, transit_link_csv))
+            logger.info('{} records dropped from {} where geometry_id (shape_id) == 0 when creating transit network GPKG.'.format(orig - new_transit_links.index.size, transit_link_csv))
 
         transit_link_gis_csv = os.path.join(output_dir, 'transit_link_gis.csv')
         new_transit_links.to_csv(transit_link_gis_csv, index=False,
@@ -423,9 +448,9 @@ def main():
         transit_nodes.to_csv(transit_node_gis_csv, index=False,
                              columns=['node_id', 'x_coord', 'y_coord', 'node_type', 'orig_node_id'])
         
-        # Create a GDB of transit links consistent with renumbered link_id and node_id for transit network
+        # Create a GPKG of transit links consistent with renumbered link_id and node_id for transit network
         gdb_path = gtfs_linear_referencing_process.create_transit_links_gdb(cfg['GTFS_folder'], output_dir, transit_link_gis_csv, transit_node_gis_csv, logger)
-        logger.info("Created transit link GDB at {}".format(gdb_path))
+        logger.info("Created transit link GPKG at {}".format(gdb_path))
 
     end_time = datetime.datetime.now()
     total_run_time = end_time - start_time

@@ -284,7 +284,7 @@ while (try_count <= max_tries && pass == FALSE) {
   }
 
   # Check coverage of sample
-  # Sufficient for 'base', 'multitarget'
+  # Sufficient for 'linear', 'multitarget'
   sample_level_n <- r_named %>%
     summarize_all(list(function(x) length(unique(x)))) %>%
     t() %>%
@@ -322,7 +322,7 @@ while (try_count <= max_tries && pass == FALSE) {
 
     # Coverage check for hazard and recovery interaction if levels > 1
 
-    # Coverage check for 'no' baseline in each project group subset
+    # Coverage check for 'no' baseline representing "no action" in each project group subset
   }
 
   try_count <- try_count + 1

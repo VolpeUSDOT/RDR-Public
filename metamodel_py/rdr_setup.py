@@ -10,7 +10,7 @@ import re
 import pandas as pd
 from pathlib import Path
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'helper_tools', 'rdr_ui'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'gui'))
 # Import entire params.py file and use params.short_dict
 import params
 
@@ -18,6 +18,17 @@ import params
 
 
 def read_config_file_helper(config, cfg_type, section, key, required_or_optional, error_list):
+    """Read one configuration value from a config object.
+
+    :param config: ConfigParser object or JSON-derived config object.
+    :param cfg_type: Configuration format selector, usually `config` or `json`.
+    :param section: Configuration section name.
+    :param key: Configuration key name.
+    :param required_or_optional: Whether the config entry is required or optional.
+    :param error_list: Mutable list used to accumulate configuration errors.
+    :returns: A tuple containing the updated error list and the parsed value.
+    :rtype: tuple
+    """
     if cfg_type == 'config':
         if not config.has_option(section, key):
             if required_or_optional.upper() == 'REQUIRED':
@@ -56,6 +67,13 @@ def read_config_file_helper(config, cfg_type, section, key, required_or_optional
 
 
 def read_config_file(cfg_file, cfg_type='config'):
+    """Parse a config file into the canonical RDR configuration dictionary.
+
+    :param cfg_file: Path to the configuration file.
+    :param cfg_type: Configuration format selector, usually `config` or `json`.
+    :returns: A tuple containing the error list and the normalized configuration dictionary.
+    :rtype: tuple
+    """
     error_list = []  # list of errors to be written out to Run_RDR.py
 
     cfg_dict = {}  # return value
@@ -106,6 +124,9 @@ def read_config_file(cfg_file, cfg_type='config'):
                 if os.path.exists(os.path.join(cfg_dict['output_dir'], 'logs')):
                     compare_run_id = True
 
+    # Add to cfg_dict the template_dir.
+    cfg_dict['template_dir'] = 'config'
+
     error_list, cfg_dict['run_id'] = read_config_file_helper(cfg, cfg_type, 'common', 'run_id', 'REQUIRED', error_list)
     if compare_run_id:
         if len(os.listdir(os.path.join(cfg_dict['output_dir'], 'logs'))) > 0:
@@ -115,19 +136,19 @@ def read_config_file(cfg_file, cfg_type='config'):
                 error_list.append("CONFIG FILE ERROR: new run ID {} differs from previous run ID {} found in current output directory {}. Specify new output directory for the new run ID.".format(
                                   cfg_dict['run_id'], previous_run_id, cfg_dict['output_dir']))
 
-    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'start_year', 'REQUIRED', error_list)
-    cfg_dict['start_year'] = int(value)
-    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'end_year', 'REQUIRED', error_list)
-    cfg_dict['end_year'] = int(value)
-    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'base_year', 'REQUIRED', error_list)
-    cfg_dict['base_year'] = int(value)
-    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'future_year', 'REQUIRED', error_list)
-    cfg_dict['future_year'] = int(value)
+    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'analysis_period_start_year', 'REQUIRED', error_list)
+    cfg_dict['analysis_period_start_year'] = int(value)
+    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'analysis_period_end_year', 'REQUIRED', error_list)
+    cfg_dict['analysis_period_end_year'] = int(value)
+    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'core_model_run_initial_year', 'REQUIRED', error_list)
+    cfg_dict['core_model_run_initial_year'] = int(value)
+    error_list, value = read_config_file_helper(cfg, cfg_type, 'common', 'core_model_run_future_year', 'REQUIRED', error_list)
+    cfg_dict['core_model_run_future_year'] = int(value)
 
-    if cfg_dict['end_year'] - cfg_dict['start_year'] < 0:
-        error_list.append('Start year must be equal to or before the end year.')
-    if cfg_dict['future_year'] - cfg_dict['base_year'] < 0:
-        error_list.append('Base year must be equal to or before the future year.')
+    if cfg_dict['analysis_period_end_year'] - cfg_dict['analysis_period_start_year'] < 0:
+        error_list.append('Start year of analysis period must be equal to or before the end year.')
+    if cfg_dict['core_model_run_future_year'] - cfg_dict['core_model_run_initial_year'] < 0:
+        error_list.append('Initial year for core model runs must be equal to or before the future year.')
 
     # ===================
     # METAMODEL VALUES
@@ -137,7 +158,7 @@ def read_config_file(cfg_file, cfg_type='config'):
     # Set default to 'multitarget' if this is not specified
     cfg_dict['metamodel_type'] = 'multitarget'
     if metamodel_type is not None:
-        if metamodel_type not in ['base', 'interact', 'projgroupLM', 'multitarget', 'mixedeffects']:
+        if metamodel_type not in ['linear', 'interact', 'projgroupLM', 'multitarget', 'mixedeffects']:
             error_list.append(
                 "CONFIG FILE ERROR: {} is an invalid value for metamodel_type, see config file for possible options (case sensitive)".format(
                     metamodel_type))
@@ -333,10 +354,10 @@ def read_config_file(cfg_file, cfg_type='config'):
     cfg_dict['exposure_damage_approach'] = 'binary'
     if exposure_damage_approach is not None:
         exposure_damage_approach = exposure_damage_approach.lower()
-        if exposure_damage_approach not in ['binary', 'default_damage_table', 'manual']:
+        if exposure_damage_approach not in ['binary', 'default_damage_table', 'manual_bins', 'manual_linear']:
             error_list.append(
                 "CONFIG FILE ERROR: {} is an invalid value for ".format(exposure_damage_approach) +
-                "exposure_damage_approach, should be 'binary', 'default_damage_table', or 'manual'")
+                "exposure_damage_approach, should be 'binary', 'default_damage_table', 'manual_bins', or 'manual_linear'")
         else:
             cfg_dict['exposure_damage_approach'] = exposure_damage_approach
 
@@ -352,7 +373,7 @@ def read_config_file(cfg_file, cfg_type='config'):
     else:
         cfg_dict['exposure_unit'] = None
 
-    if cfg_dict['exposure_damage_approach'] == 'manual':
+    if cfg_dict['exposure_damage_approach'] in ['manual_bins', 'manual_linear']:
         error_list, cfg_dict['exposure_damage_csv'] = read_config_file_helper(cfg, cfg_type, 'recovery', 'exposure_damage_csv', 'REQUIRED', error_list)
     else:
         cfg_dict['exposure_damage_csv'] = None
@@ -416,17 +437,6 @@ def read_config_file(cfg_file, cfg_type='config'):
             cfg_dict['discount_factor'] = discount_factor
     else:
         error_list.append("CONFIG FILE ERROR: discount_factor is a required parameter in the config file")
-
-    error_list, co2_discount_factor = read_config_file_helper(cfg, cfg_type, 'analysis', 'co2_discount_factor', 'REQUIRED', error_list)
-    if co2_discount_factor is not None:
-        co2_discount_factor = float(co2_discount_factor)
-        if co2_discount_factor <= -1:
-            error_list.append("CONFIG FILE ERROR: {} is an invalid value for ".format(str(co2_discount_factor)) +
-                              "co2_discount_factor, should be decimal greater than -1")
-        else:
-            cfg_dict['co2_discount_factor'] = co2_discount_factor
-    else:
-        error_list.append("CONFIG FILE ERROR: co2_discount_factor is a required parameter in the config file")
 
     error_list, vehicle_occupancy = read_config_file_helper(cfg, cfg_type, 'analysis', 'vehicle_occupancy_car', 'REQUIRED', error_list)
     if vehicle_occupancy is not None:
@@ -593,22 +603,6 @@ def read_config_file(cfg_file, cfg_type='config'):
     else:
         cfg_dict['non_co2_cost_bus'] = None
 
-    # Parameters for CO2 costs
-    error_list, co2_cost = read_config_file_helper(cfg, cfg_type, 'analysis', 'co2_cost', 'REQUIRED', error_list)
-    if co2_cost is not None:
-        cfg_dict['co2_cost'] = float(co2_cost.replace('$', '').replace(',', ''))
-    else:
-        error_list.append("CONFIG FILE ERROR: co2_cost is a required parameter in the config file")
-
-    error_list, co2_cost_bus = read_config_file_helper(cfg, cfg_type, 'analysis', 'co2_cost_bus', 'OPTIONAL', error_list)
-    if cfg_dict['calc_transit_metrics']:
-        if co2_cost_bus is not None:
-            cfg_dict['co2_cost_bus'] = float(co2_cost_bus.replace('$', '').replace(',', ''))
-        else:
-            error_list.append("CONFIG FILE ERROR: co2_cost_bus is a required parameter if calc_transit_metrics is set to 1")
-    else:
-        cfg_dict['co2_cost_bus'] = None
-
     # Coordinate reference system
     error_list, crs = read_config_file_helper(cfg, cfg_type, 'analysis', 'crs', 'OPTIONAL', error_list)
     if os.path.exists(os.path.join(cfg_dict['input_dir'], 'LookupTables', 'TrueShape.csv')):
@@ -623,62 +617,62 @@ def read_config_file(cfg_file, cfg_type='config'):
     # UI NON-CONFIG VALUES
     # ===================
 
-    # For cfg_type == 'json', save non-config parameters to cfg_dict
-    if cfg_type == 'json':
-        # Hazards dataframe with columns name, fpath, dim1, dim2, prob
-        if 'haz' not in cfg or not cfg['haz']:  # missing 'haz' or cfg['haz'] is empty list
-            error_list.append("CONFIG FILE ERROR: Can't find 'haz' in UI-prepared config file")
-        else:
-            hazard_events = pd.DataFrame(cfg['haz'])
-            hazard_events = hazard_events.rename(columns={"name": "Hazard Event",
-                                                          "fpath": "Filename",
-                                                          "dim1": "HazardDim1",
-                                                          "dim2": "HazardDim2",
-                                                          "prob": "Event Probability in Start Year"})
-            # Hazard files are moved and renamed by UI, given hazard name as filename
-            hazard_events['Filename'] = hazard_events['Hazard Event']
-            hazard_events['HazardDim1'] = hazard_events['HazardDim1'].astype(str).astype(int)
-            hazard_events['HazardDim2'] = hazard_events['HazardDim2'].astype(str).astype(int)
-            hazard_events['Event Probability in Start Year'] = hazard_events['Event Probability in Start Year'].astype(str).astype(float)
-            cfg_dict['hazards'] = hazard_events
+    # # For cfg_type == 'json', save non-config parameters to cfg_dict
+    # if cfg_type == 'json':
+    #     # Hazards dataframe with columns name, fpath, dim1, dim2, prob
+    #     if 'haz' not in cfg or not cfg['haz']:  # missing 'haz' or cfg['haz'] is empty list
+    #         error_list.append("CONFIG FILE ERROR: Can't find 'haz' in UI-prepared config file")
+    #     else:
+    #         hazard_events = pd.DataFrame(cfg['haz'])
+    #         hazard_events = hazard_events.rename(columns={"name": "Hazard Event",
+    #                                                       "fpath": "Filename",
+    #                                                       "dim1": "HazardDim1",
+    #                                                       "dim2": "HazardDim2",
+    #                                                       "prob": "Event Probability in Start Year"})
+    #         # Hazard files are moved and renamed by UI, given hazard name as filename
+    #         hazard_events['Filename'] = hazard_events['Hazard Event']
+    #         hazard_events['HazardDim1'] = hazard_events['HazardDim1'].astype(str).astype(int)
+    #         hazard_events['HazardDim2'] = hazard_events['HazardDim2'].astype(str).astype(int)
+    #         hazard_events['Event Probability in Start Year'] = hazard_events['Event Probability in Start Year'].astype(str).astype(float)
+    #         cfg_dict['hazards'] = hazard_events
 
-        # Set of recovery stages
-        error_list, num_stages = read_config_file_helper(cfg, cfg_type, 'common', 'num_recovery_stages', 'REQUIRED', error_list)
-        num_stages = int(num_stages)
-        cfg_dict['recovery_stages'] = set([str(x) for x in list(range(num_stages+1))])
+    #     # Set of recovery stages
+    #     error_list, num_stages = read_config_file_helper(cfg, cfg_type, 'common', 'num_recovery_stages', 'REQUIRED', error_list)
+    #     num_stages = int(num_stages)
+    #     cfg_dict['recovery_stages'] = set([str(x) for x in list(range(num_stages+1))])
 
-        # Socioeconomic futures dataframe with columns name, fpath
-        if 'ecf' not in cfg or not cfg['ecf']:  # missing 'ecf' or cfg['ecf'] is empty list
-            error_list.append("CONFIG FILE ERROR: Can't find 'ecf' in UI-prepared config file")
-        else:
-            socios = pd.DataFrame(cfg['ecf'])
-            cfg_dict['socios'] = socios.rename(columns={"name": "Economic Scenarios",
-                                                        "fpath": "Filename"})
+    #     # Socioeconomic futures dataframe with columns name, fpath
+    #     if 'ecf' not in cfg or not cfg['ecf']:  # missing 'ecf' or cfg['ecf'] is empty list
+    #         error_list.append("CONFIG FILE ERROR: Can't find 'ecf' in UI-prepared config file")
+    #     else:
+    #         socios = pd.DataFrame(cfg['ecf'])
+    #         cfg_dict['socios'] = socios.rename(columns={"name": "Economic Scenarios",
+    #                                                     "fpath": "Filename"})
 
-        # Set of trip elasticity values
-        if 'tle' not in cfg or not cfg['tle']:  # missing 'tle' or cfg['tle'] is empty list
-            error_list.append("CONFIG FILE ERROR: Can't find 'tle' in UI-prepared config file")
-        else:
-            elasticities = pd.DataFrame(cfg['tle'])
-            cfg_dict['elasticities'] = set([float(x) for x in elasticities['value'].dropna().tolist()])
+    #     # Set of trip elasticity values
+    #     if 'tle' not in cfg or not cfg['tle']:  # missing 'tle' or cfg['tle'] is empty list
+    #         error_list.append("CONFIG FILE ERROR: Can't find 'tle' in UI-prepared config file")
+    #     else:
+    #         elasticities = pd.DataFrame(cfg['tle'])
+    #         cfg_dict['elasticities'] = set([float(x) for x in elasticities['value'].dropna().tolist()])
         
-        # Set of event frequency factors
-        if 'eff' not in cfg or not cfg['eff']:  # missing 'eff' or cfg['eff'] is empty list
-            error_list.append("CONFIG FILE ERROR: Can't find 'eff' in UI-prepared config file")
-        else:
-            event_frequencies = pd.DataFrame(cfg['eff'])
-            cfg_dict['event_frequencies'] = set([float(x) for x in event_frequencies['value'].dropna().tolist()])
+    #     # Set of event frequency factors
+    #     if 'eff' not in cfg or not cfg['eff']:  # missing 'eff' or cfg['eff'] is empty list
+    #         error_list.append("CONFIG FILE ERROR: Can't find 'eff' in UI-prepared config file")
+    #     else:
+    #         event_frequencies = pd.DataFrame(cfg['eff'])
+    #         cfg_dict['event_frequencies'] = set([float(x) for x in event_frequencies['value'].dropna().tolist()])
         
-        # Resilience projects dataframe with columns name, group
-        if 'rep' not in cfg or not cfg['rep']:  # missing 'rep' or cfg['rep'] is empty list
-            error_list.append("CONFIG FILE ERROR: Can't find 'rep' in UI-prepared config file")
-        else:
-            projects = pd.DataFrame(cfg['rep'])
-            cfg_dict['projects'] = projects.rename(columns={"name": "Project ID",
-                                                            "group": "Project Groups"})
+    #     # Resilience projects dataframe with columns name, group
+    #     if 'rep' not in cfg or not cfg['rep']:  # missing 'rep' or cfg['rep'] is empty list
+    #         error_list.append("CONFIG FILE ERROR: Can't find 'rep' in UI-prepared config file")
+    #     else:
+    #         projects = pd.DataFrame(cfg['rep'])
+    #         cfg_dict['projects'] = projects.rename(columns={"name": "Project ID",
+    #                                                         "group": "Project Groups"})
 
-        # Not using UI parameters 'go_to', 'bl', 'py', 'rd'
-        # UI parameters 'net', 'nwn', 'prt', 'pri', 'byf' are already validated by the UI code
+    #     # Not using UI parameters 'go_to', 'bl', 'py', 'rd'
+    #     # UI parameters 'net', 'nwn', 'prt', 'pri', 'byf' are already validated by the UI code
 
     # ===================
     # TESTING VALUES

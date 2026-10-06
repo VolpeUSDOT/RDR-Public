@@ -17,49 +17,47 @@ loadpacks <- c(
   "tools"
 )
 
-use_lib <- ifelse(any(grepl("RDRenv", .libPaths())),
-  .libPaths()[grepl("RDRenv", .libPaths())],
-  .libPaths()
+
+# Look for the exact directory name "RDRenv" bordered by path separators
+is_rdr_env <- grepl("[/\\\\]RDRenv[/\\\\]", .libPaths())
+
+use_lib <- ifelse(any(is_rdr_env),
+  .libPaths()[is_rdr_env][1],
+  .libPaths()[1]
 )
 
-num_to_install <- sum(is.na(match(loadpacks, (.packages(all.available = TRUE, lib.loc = use_lib)))))
+# Explicitly set library paths to avoid pulling in outdated packages from personal user libraries
+# while preserving core R libraries (.Library).
+# Tier 1: conda env site library (highest priority, where our environment.yml packages install)
+# Tier 2: base R library (for core/recommended system packages)
+.libPaths(unique(c(use_lib, .Library)))
 
-if (num_to_install == 1) {
-  print(paste("Installing", num_to_install,
-              "R package and dependencies, this one-time operation might take several minutes."))
-}
+# We rely on Conda to manage the environment accurately for most packages.
+# mlegp is not available on conda-forge, so we install it from CRAN if missing.
+missing_packages <- loadpacks[is.na(match(loadpacks, .packages(all.available = TRUE)))]
 
-if (num_to_install > 1) {
-  print(paste("Installing", num_to_install,
-              "R packages and dependencies, this one-time operation might take several minutes."))
-}
-
-completed_installs <- 0
-
-for (i in loadpacks) {
-  if (length(grep(i, (.packages(
-    all.available = TRUE,
-    lib.loc = use_lib
-  )))) == 0) {
-    print(paste("<<>> Installing R package", i, "in", use_lib, "<<>>"))
-
-    suppressMessages(
-      install.packages(i,
-        dependencies = c("Depends", "Imports"),
-        repos = "https://cloud.r-project.org/",
-        type = "binary",
-        lib = use_lib,
-        quiet = TRUE,
-        verbose = FALSE
-      )
+if ("mlegp" %in% missing_packages) {
+  print(paste("<<>> Installing R package mlegp from CRAN in", use_lib, "<<>>"))
+  suppressMessages(
+    install.packages("mlegp",
+      dependencies = c("Depends", "Imports"),
+      repos = "https://cloud.r-project.org/",
+      type = "binary",
+      lib = use_lib,
+      quiet = TRUE,
+      verbose = FALSE
     )
-
-    completed_installs <- completed_installs + 1
-  }
+  )
+  # Remove mlegp from missing_packages check after installing
+  missing_packages <- missing_packages[missing_packages != "mlegp"]
 }
 
-if (completed_installs > 0) {
-  cat("Successfully installed", completed_installs, "packages for R at", Sys.getenv("R_HOME"))
+if (length(missing_packages) > 0) {
+  stop(paste(
+    "The following required R packages are missing from the conda environment:",
+    paste(missing_packages, collapse = ", "),
+    "\nPlease ensure you built the Anaconda environment correctly using environment.yml."
+  ))
 }
 
 rm(i, loadpacks)

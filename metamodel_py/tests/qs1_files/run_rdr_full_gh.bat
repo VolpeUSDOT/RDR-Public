@@ -14,11 +14,6 @@ set batdir=%~dp0
 for %%A in ("%batdir%") do set TESTPATH=%%~dpA
 for %%A in ("%TESTPATH%\..\..\") do set RDRPATH=%%~dpA
 
-REM Check to see if running on a local machine on a C: drive. If not, do not alter PATH or set Python
-REM set drive=%~d0
-REM if %drive%==C: set PATH=C:\Users\%USERNAME%\Anaconda3\Scripts;%PATH%
-REM if %drive%==C: (set PYTHON="C:\Users\%USERNAME%\Anaconda3\envs\RDRenv\python.exe") else (set PYTHON="python")
-
 set RDR="%RDRPATH%Run_RDR.py"
 
 set CONFIG="%TESTPATH%QS1.config"

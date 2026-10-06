@@ -11,7 +11,6 @@
 
 import os
 import subprocess
-import re
 import shutil
 import pandas as pd
 import sys
@@ -23,10 +22,27 @@ file_dir_path = os.path.join(
     test_file_location
     )
 
-def call_rs3_bat():
-    is_local = list(filter(lambda x: re.match('^C', x), os.path.abspath(__file__)))
+def copy_qs1_inputs(source, destination, copy_files):
+    """Copy the QS1 input file into the RS3 workspace.
 
-    if 'C' in is_local:
+    :param source: Source path.
+    :param destination: Destination path.
+    :param copy_files: Relative file path to copy.
+    :returns: None. The helper copies the requested input file in place.
+    :rtype: None
+    """
+    shutil.copy(os.path.normpath(os.path.join(source, copy_files)), os.path.normpath(os.path.join(destination, copy_files)))
+
+def call_rs3_bat():
+    """Run the RS3 batch file.
+
+    :returns: The batch-process return code.
+    :rtype: int
+    """
+    file_path = os.path.abspath(__file__)
+    is_local = file_path.startswith('C:')
+
+    if is_local:
         bat_file = 'run_TAZ_metrics_rs3test.bat'
     else:
         bat_file = 'run_TAZ_metrics_rs3test_gh.bat'
@@ -35,11 +51,30 @@ def call_rs3_bat():
     return returncode
 
 def test_rs3():
+    """Run the RS3 TAZ metrics integration test.
 
-    # Find output_folder
+    :returns: None. The assertions fail if the RS3 outputs are wrong.
+    :rtype: None
+    """
     import rdr_setup
-    import rdr_supporting
 
+    path_to_config = os.path.join(file_dir_path, 'RS3.config')
+    error_list, cfg = rdr_setup.read_config_file(path_to_config, 'config')
+    assert len(error_list) == 0
+
+    print(cfg)
+
+    input_folder = os.path.normpath(cfg['input_dir'])
+    output_folder = os.path.normpath(cfg['output_dir'])
+    # Find QS1 generated files from output_folder
+    tests_root = os.path.dirname(os.path.dirname(os.path.dirname(output_folder)))
+    qs1_inputs = os.path.join(tests_root, 'qs1_files', 'Data', 'inputs')
+    # Must already have input files QS1 including project_database
+    assert os.path.exists(qs1_inputs)
+
+    # This copies input files from QS1 to the input folder of this reference scenario
+    copy_qs1_inputs(qs1_inputs, input_folder, 'AEMaster/project_database.sqlite')
+    
     # Run RS3
     returncode = call_rs3_bat()
     assert returncode == 0

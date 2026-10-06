@@ -11,7 +11,6 @@
 
 import os
 import subprocess
-import re
 import shutil
 import pandas as pd
 
@@ -23,8 +22,12 @@ file_dir_path = os.path.join(
     )
 
 def copy_qs1_generated(source, destination):
-    """
-    Copy over the generated_files directory from QS1 tests as generated_files
+    """Copy the QS1 generated outputs into the RS2 workspace.
+
+    :param source: Source path.
+    :param destination: Destination path.
+    :returns: None. The helper copies files in place.
+    :rtype: None
     """
     # If destination exists, remove completely, then copy over from source again
     if os.path.exists(destination):
@@ -33,20 +36,30 @@ def copy_qs1_generated(source, destination):
     shutil.copytree(source, destination)
 
 def call_rs2_bat():
-    is_local = list(filter(lambda x: re.match('^C', x), os.path.abspath(__file__)))
+    """Run the RS2 batch file.
 
-    if 'C' in is_local:
+    :returns: The batch-process return code.
+    :rtype: int
+    """
+    file_path = os.path.abspath(__file__)
+    is_local = file_path.startswith('C:')
+
+    if is_local:
         bat_file = 'run_rdr_full.bat'
     else:
         bat_file = 'run_rdr_full_gh.bat'
 
-    ps = subprocess.Popen(('echo', 'r'), stdout=subprocess.PIPE)
+    ps = subprocess.Popen(('echo', 'r'), stdout=subprocess.PIPE, shell=True)
     returncode = subprocess.call(os.path.join(file_dir_path, bat_file), stdin=ps.stdout)
     return returncode
 
 def test_rs2(add_sample = True):
+    """Run the RS2 integration test.
 
-    # Find output_folder
+    :param add_sample: Legacy test flag kept for compatibility with pytest parameterization.
+    :returns: None. The assertions fail if the RS2 outputs are wrong.
+    :rtype: None
+    """
     import rdr_setup
     import rdr_supporting
 
@@ -106,4 +119,4 @@ def test_rs2(add_sample = True):
 
     # Average net benefits
     avg_net_benef = tableau_file.groupby('ResiliencyProject')['NetBenefits_Discounted'].mean().sort_values(ascending = False)
-    assert avg_net_benef[0] > 10000000
+    assert avg_net_benef.iloc[0] > 10000000

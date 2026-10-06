@@ -24,8 +24,51 @@ import rdr_AESingleRun
 import rdr_setup
 import rdr_supporting
 
-VERSION_NUMBER = "2025.1.1"
-VERSION_DATE = "10/16/2025"
+from pandas.api.types import is_string_dtype
+
+VERSION_NUMBER = "2026.1"
+VERSION_DATE = "9/30/2026"
+
+
+def select_metrics_notebook(taz_attribute, category_name, logger, category_filename=None):
+    """Choose the metrics notebook based on the TAZ feature dtype and cardinality."""
+    category_series = taz_attribute[category_name]
+    unique_count = category_series.nunique(dropna=True)
+    dtype_name = str(category_series.dtype)
+    notebook_categorical = 'MetricsByTAZ_categorical.ipynb'
+    notebook_continuous = 'MetricsByTAZ_continuous.ipynb'
+
+    if is_string_dtype(category_series):
+        if unique_count >= 20:
+            logger.warning(
+                "TAZ feature column {} has string-like dtype ({}) with {} unique values. "
+                "Running the categorical notebook, but the chart may be difficult to read due to the large number of categories.".format(
+                    category_name, dtype_name, unique_count
+                )
+            )
+            return notebook_categorical
+        logger.warning(
+            "TAZ feature column {} has string-like dtype ({}) with {} unique values. "
+            "Running the categorical notebook.".format(category_name, dtype_name, unique_count)
+        )
+        return notebook_categorical
+
+    if unique_count < 20:
+        logger.info(
+            "TAZ feature column {} has dtype {} with {} unique values. "
+            "Running the categorical notebook because unique values are fewer than 20.".format(
+                category_name, dtype_name, unique_count
+            )
+        )
+        return notebook_categorical
+
+    logger.info(
+        "TAZ feature column {} has dtype {} with {} unique values. "
+        "Running the continuous notebook because unique values are 20 or more.".format(
+            category_name, dtype_name, unique_count
+        )
+    )
+    return notebook_continuous
 
 def main():
 
@@ -64,6 +107,7 @@ def main():
     # The helper tool requires AequilibraE inputs from the main RDR input directory input_dir
     # Logs and the benefits analysis core model outputs are stored in the benefits analysis output directory output_dir
     input_dir = cfg['input_dir']
+    template_dir = cfg['template_dir']
 
     logger.info("Starting TAZ metrics run...")
     logger.info("Checking required inputs for TAZ metrics run")
@@ -76,6 +120,7 @@ def main():
     # Create list of input validation errors to put in a log file for users
     # If there is an error, it does not stop checking and just spits them all out at the end
     error_list = []
+    valid_network_project_ids = None
 
     # Model_Parameters.xlsx
     # 1) Is it present
@@ -86,30 +131,48 @@ def main():
     if not os.path.exists(model_params_file):
         error_text = "MODEL PARAMETERS FILE ERROR: {} could not be found".format(model_params_file)
         logger.error(error_text)
+        error_list.append(error_text)
     else:
         # XLSX STEP 2: Check each tab exists
+        required_columns = ['Project Groups', 'Project ID']
         try:
-            projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups')
-        except:
-            error_text = "MODEL PARAMETERS FILE ERROR: ProjectGroups tab could not be found"
+            available_columns = pd.read_excel(
+                model_params_file, sheet_name='ProjectGroups', nrows=0).columns
+        except Exception as exc:
+            error_text = "MODEL PARAMETERS FILE ERROR: ProjectGroups tab could not be read. Reason: {}".format(exc)
             logger.error(error_text)
+            error_list.append(error_text)
         else:
             # XLSX STEP 3: Check each tab has necessary columns
-            try:
-                projgroup_to_resil = pd.read_excel(model_params_file, sheet_name='ProjectGroups',
-                                                   converters={'Project Groups': str, 'Project ID': str})
-                projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
-            except:
-                error_text = "MODEL PARAMETERS FILE ERROR: ProjectGroups tab is missing required columns"
+            missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+            if missing_columns:
+                error_text = ("MODEL PARAMETERS FILE ERROR: ProjectGroups tab has an invalid header. " +
+                              "Required columns expected but not found: {}").format(missing_columns)
                 logger.error(error_text)
+                error_list.append(error_text)
             else:
-                # Confirm resilience project and project group match
                 try:
-                    assert(TAZ_metrics_cfg['projgroup'] == projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] == TAZ_metrics_cfg['resil'], 'Project Groups'].iloc[0])
-                except:
-                    error_text = "MODEL PARAMETERS FILE ERROR: Resilience project and project group specified in TAZ metrics config file do not match"
+                    projgroup_to_resil = pd.read_excel(
+                        model_params_file,
+                        sheet_name='ProjectGroups',
+                        usecols=required_columns,
+                        converters={column: str for column in required_columns})
+                except Exception as exc:
+                    error_text = "MODEL PARAMETERS FILE ERROR: ProjectGroups tab could not be read. Reason: {}".format(exc)
                     logger.error(error_text)
                     error_list.append(error_text)
+                else:
+                    projgroup_to_resil = projgroup_to_resil.rename(columns={'Project ID': 'Resiliency Projects'})
+                    valid_network_project_ids = rdr_supporting.get_valid_network_project_ids(
+                        projgroup_to_resil['Resiliency Projects'])
+
+                    # Confirm resilience project and project group match
+                    try:
+                        assert(TAZ_metrics_cfg['projgroup'] == projgroup_to_resil.loc[projgroup_to_resil['Resiliency Projects'] == TAZ_metrics_cfg['resil'], 'Project Groups'].iloc[0])
+                    except:
+                        error_text = "MODEL PARAMETERS FILE ERROR: Resilience project and project group specified in TAZ metrics config file do not match"
+                        logger.error(error_text)
+                        error_list.append(error_text)
 
     # Resilience projects files
     # 1) Is project_table.csv file present
@@ -126,21 +189,43 @@ def main():
             error_list.append(error_text)
         else:
             # CSV STEP 2: Check file has necessary columns
+            resil_mitigation_approach = cfg['resil_mitigation_approach']
+            required_columns = ['Project ID', 'link_id', 'Category']
+            if resil_mitigation_approach == 'manual':
+                required_columns.append('Exposure Reduction')
+
+            project_table = None
             try:
-                resil_mitigation_approach = cfg['resil_mitigation_approach']
-                if resil_mitigation_approach == 'binary':
-                    project_table = pd.read_csv(project_table_file, usecols=['Project ID', 'link_id', 'Category'],
-                                                converters={'Project ID': str, 'link_id': str, 'Category': str})
-                    # NOTE: use 99999 to create dummy Exposure Reduction column
-                    project_table['Exposure Reduction'] = 99999.0
-                elif resil_mitigation_approach == 'manual':
-                    project_table = pd.read_csv(project_table_file, usecols=['Project ID', 'link_id', 'Category', 'Exposure Reduction'],
-                                                converters={'Project ID': str, 'link_id': str, 'Category': str, 'Exposure Reduction': str})
-            except:
-                error_text = "RESILIENCE PROJECTS FILE ERROR: Project table input file is missing required columns"
+                available_columns = pd.read_csv(project_table_file, nrows=0).columns
+            except Exception as exc:
+                error_text = ("RESILIENCE PROJECTS FILE ERROR: Project table input file could not be read. " +
+                              "Reason: {}").format(exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("RESILIENCE PROJECTS FILE ERROR: Project table input file has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(missing_columns)
+                    logger.error(error_text)
+                    error_list.append(error_text)
+                else:
+                    try:
+                        project_table = pd.read_csv(
+                            project_table_file,
+                            usecols=required_columns,
+                            converters={column: str for column in required_columns})
+                    except Exception as exc:
+                        error_text = ("RESILIENCE PROJECTS FILE ERROR: Project table input file could not be read. " +
+                                      "Reason: {}").format(exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+                    else:
+                        if resil_mitigation_approach == 'binary':
+                            # NOTE: use 99999 to create dummy Exposure Reduction column
+                            project_table['Exposure Reduction'] = 99999.0
+
+            if project_table is not None:
                 # Test Exposure Reduction can be converted to float
                 try:
                     project_table['Exposure Reduction'] = pd.to_numeric(project_table['Exposure Reduction'], downcast='float')
@@ -177,14 +262,36 @@ def main():
             error_list.append(error_text)
         else:
             # CSV STEP 2: Check file has necessary columns
+            required_columns = ['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']]
+            exposures = None
             try:
-                exposures = pd.read_csv(f, usecols=['link_id', 'from_node_id', 'to_node_id', cfg['exposure_field']],
-                                        converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, cfg['exposure_field']: str})
-            except:
-                error_text = "EXPOSURE ANALYSIS FILE ERROR: File for hazard {} is missing required columns".format(TAZ_metrics_cfg['hazard'])
+                available_columns = pd.read_csv(f, nrows=0).columns
+            except Exception as exc:
+                error_text = ("EXPOSURE ANALYSIS FILE ERROR: File for hazard {} could not be read. " +
+                              "Reason: {}").format(TAZ_metrics_cfg['hazard'], exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("EXPOSURE ANALYSIS FILE ERROR: File for hazard {} has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(
+                                      TAZ_metrics_cfg['hazard'], missing_columns)
+                    logger.error(error_text)
+                    error_list.append(error_text)
+                else:
+                    try:
+                        exposures = pd.read_csv(
+                            f,
+                            usecols=required_columns,
+                            converters={column: str for column in required_columns})
+                    except Exception as exc:
+                        error_text = ("EXPOSURE ANALYSIS FILE ERROR: File for hazard {} could not be read. " +
+                                      "Reason: {}").format(TAZ_metrics_cfg['hazard'], exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+
+            if exposures is not None:
                 # Test from_node_id can be converted to int
                 try:
                     exposures['from_node_id'] = pd.to_numeric(exposures['from_node_id'], downcast='integer')
@@ -220,8 +327,9 @@ def main():
     # For socio and project group in TAZ metrics config file:
     # 1) Is there a links CSV file
     # 2) Check that link_id, from_node_id, to_node_id, directed, length, facility_type, capacity, free_speed, lanes, allowed_uses, toll, travel_time exist;
+    #    project_id is optional for legacy network files
     #    from_node_id, to_node_id, directed, lanes must be int, length, capacity, free_speed, toll, travel_time must be float
-    # 3) Check that link_id has no duplicate values
+    # 3) Check that the link_id and project_id combination is unique; for legacy files, check that link_id is unique
     # 4) Check that directed is always 1, allowed_uses is always c
     # 5) If 'nocar' trip table matrix exists, check that toll_nocar, travel_time_nocar exist; both must be float
     networks_folder = os.path.join(input_dir, 'Networks')
@@ -235,14 +343,33 @@ def main():
             error_list.append(error_text)
         else:
             # CSV STEP 2: Check file has necessary columns
+            required_columns = ['node_id', 'x_coord', 'y_coord', 'node_type']
+            nodes = None
             try:
-                nodes = pd.read_csv(node_file, usecols=['node_id', 'x_coord', 'y_coord', 'node_type'],
-                                    converters={'node_id': str, 'x_coord': str, 'y_coord': str, 'node_type': str})
-            except:
-                error_text = "NETWORK NODE FILE ERROR: Node input file is missing required columns"
+                available_columns = pd.read_csv(node_file, nrows=0).columns
+            except Exception as exc:
+                error_text = "NETWORK NODE FILE ERROR: Node input file could not be read. Reason: {}".format(exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
+                missing_columns = rdr_supporting.get_missing_columns(required_columns, available_columns)
+                if missing_columns:
+                    error_text = ("NETWORK NODE FILE ERROR: Node input file has an invalid header. " +
+                                  "Required columns expected but not found: {}").format(missing_columns)
+                    logger.error(error_text)
+                    error_list.append(error_text)
+                else:
+                    try:
+                        nodes = pd.read_csv(
+                            node_file,
+                            usecols=required_columns,
+                            converters={column: str for column in required_columns})
+                    except Exception as exc:
+                        error_text = "NETWORK NODE FILE ERROR: Node input file could not be read. Reason: {}".format(exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+
+            if nodes is not None:
                 # Test node_id can be converted to int
                 try:
                     nodes['node_id'] = pd.to_numeric(nodes['node_id'], downcast='integer')
@@ -285,25 +412,55 @@ def main():
             error_list.append(error_text)
         else:
             # CSV STEP 2: Check file has necessary columns
+            link_path = os.path.join(networks_folder, link_file)
+            required_link_columns = ['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
+                                     'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time']
+            link_converters = {'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': str,
+                               'length': str, 'facility_type': str, 'capacity': str, 'free_speed': str,
+                               'lanes': str, 'allowed_uses': str, 'toll': str, 'travel_time': str,
+                               'project_id': str}
+            links = None
             try:
-                links = pd.read_csv(os.path.join(networks_folder, link_file),
-                                    usecols=['link_id', 'from_node_id', 'to_node_id', 'directed', 'length', 'facility_type',
-                                                'capacity', 'free_speed', 'lanes', 'allowed_uses', 'toll', 'travel_time'],
-                                    converters={'link_id': str, 'from_node_id': str, 'to_node_id': str, 'directed': str,
-                                                'length': str, 'facility_type': str, 'capacity': str, 'free_speed': str,
-                                                'lanes': str, 'allowed_uses': str, 'toll': str, 'travel_time': str})
-            except:
-                error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns".format(i, j)
+                available_columns = pd.read_csv(link_path, nrows=0).columns
+            except Exception as exc:
+                error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                              "could not be read. Reason: {}").format(i, j, exc)
                 logger.error(error_text)
                 error_list.append(error_text)
             else:
-                # Test link_id is a unique identifier
-                try:
-                    assert(not links.duplicated(subset=['link_id']).any())
-                except:
-                    error_text = "NETWORK LINK FILE ERROR: Column link_id is not a unique identifier for socio {} and project group {}".format(i, j)
+                missing_columns = rdr_supporting.get_missing_columns(
+                    required_link_columns, available_columns)
+                if missing_columns:
+                    error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                  "has an invalid header. Required columns expected but not found: {}").format(
+                                      i, j, missing_columns)
                     logger.error(error_text)
                     error_list.append(error_text)
+                else:
+                    try:
+                        links = rdr_supporting.read_csv_with_optional_columns(
+                            link_path,
+                            required_usecols=required_link_columns,
+                            optional_usecols=['project_id'],
+                            converters=link_converters)
+                    except Exception as exc:
+                        error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                      "could not be read. Reason: {}").format(i, j, exc)
+                        logger.error(error_text)
+                        error_list.append(error_text)
+
+            if links is not None:
+                error_text = rdr_supporting.build_helper_network_link_uniqueness_error(links, i, j)
+                if error_text is not None:
+                    logger.error(error_text)
+                    error_list.append(error_text)
+
+                if valid_network_project_ids is not None:
+                    error_text = rdr_supporting.build_helper_network_project_id_error(
+                        links, i, j, valid_network_project_ids)
+                    if error_text is not None:
+                        logger.error(error_text)
+                        error_list.append(error_text)
 
                 # Test from_node_id can be converted to int
                 try:
@@ -370,13 +527,18 @@ def main():
                     logger.error(error_text)
                     error_list.append(error_text)
 
-                # Test travel_time can be converted to float
+                # Test travel_time can be converted to float and is greater than zero
                 try:
                     links['travel_time'] = pd.to_numeric(links['travel_time'], downcast='float')
                 except:
                     error_text = "NETWORK LINK FILE ERROR: Column travel_time could not be converted to float for socio {} and project group {}".format(i, j)
                     logger.error(error_text)
                     error_list.append(error_text)
+                else:
+                    error_text = rdr_supporting.build_helper_travel_time_error(links, i, j)
+                    if error_text is not None:
+                        logger.error(error_text)
+                        error_list.append(error_text)
 
                 # Test allowed_uses is always equal to 'c'
                 try:
@@ -405,18 +567,41 @@ def main():
                         nocar = True
 
                     if nocar:
+                        required_nocar_columns = ['toll_nocar', 'travel_time_nocar']
+                        links_nocar = None
                         try:
-                            links = pd.read_csv(os.path.join(networks_folder, link_file),
-                                    usecols=['toll_nocar', 'travel_time_nocar'],
-                                    converters={'toll': str, 'travel_time': str})
-                        except:
-                            error_text = "NETWORK LINK FILE ERROR: File for socio {} and project group {} is missing required columns corresponding to no car trip table".format(i, j)
+                            available_columns = pd.read_csv(link_path, nrows=0).columns
+                        except Exception as exc:
+                            error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                          "could not be read. Reason: {}").format(i, j, exc)
                             logger.error(error_text)
                             error_list.append(error_text)
                         else:
+                            missing_columns = rdr_supporting.get_missing_columns(
+                                required_nocar_columns, available_columns)
+                            if missing_columns:
+                                error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                              "has an invalid no car trip table header. " +
+                                              "Required columns expected but not found: {}").format(
+                                                  i, j, missing_columns)
+                                logger.error(error_text)
+                                error_list.append(error_text)
+                            else:
+                                try:
+                                    links_nocar = pd.read_csv(
+                                        link_path,
+                                        usecols=required_nocar_columns,
+                                        converters={'toll_nocar': str, 'travel_time_nocar': str})
+                                except Exception as exc:
+                                    error_text = ("NETWORK LINK FILE ERROR: File for socio {} and project group {} " +
+                                                  "could not be read. Reason: {}").format(i, j, exc)
+                                    logger.error(error_text)
+                                    error_list.append(error_text)
+
+                        if links_nocar is not None:
                             # Test toll_nocar can be converted to float
                             try:
-                                links['toll_nocar'] = pd.to_numeric(links['toll_nocar'], downcast='float')
+                                links_nocar['toll_nocar'] = pd.to_numeric(links_nocar['toll_nocar'], downcast='float')
                             except:
                                 error_text = "NETWORK LINK FILE ERROR: Column toll_nocar could not be converted to float for socio {} and project group {}".format(i, j)
                                 logger.error(error_text)
@@ -424,7 +609,7 @@ def main():
 
                             # Test travel_time_nocar can be converted to float
                             try:
-                                links['travel_time_nocar'] = pd.to_numeric(links['travel_time_nocar'], downcast='float')
+                                links_nocar['travel_time_nocar'] = pd.to_numeric(links_nocar['travel_time_nocar'], downcast='float')
                             except:
                                 error_text = "NETWORK LINK FILE ERROR: Column travel_time_nocar could not be converted to float for socio {} and project group {}".format(i, j)
                                 logger.error(error_text)
@@ -514,7 +699,7 @@ def main():
     # ---------------------------------------------------------------------------------------------
     # SETUP SQLITE NODES DATA
     logger.info("Setting up SQLite database nodes table")
-    setup_sql_nodes(input_dir, logger)
+    setup_sql_nodes(input_dir, template_dir, logger)
 
     # ---------------------------------------------------------------------------------------------------
     # AEQ SINGLE RUNS
@@ -622,12 +807,9 @@ def run_notebook(full_path_to_config_file, TAZ_metrics_cfg, logger):
         logger.error('ERROR: {} not found. Please run the TAZ_attribute_overlay first or directly provide your own TAZ mapping data file and specify the filename for it as TAZ_mapping in the TAZ_metrics.config file.'.format(category_filename))
         raise Exception('ERROR: {} not found.'.format(category_filename))
 
-    # Check that the TAZ mapping data are numeric
+    # Read the TAZ mapping data and choose the notebook based on dtype and cardinality
     taz_attribute = pd.read_csv(category_filename,
-                             usecols=[TAZ_col_name, category_name])
-    if taz_attribute[category_name].dtype == 'O':
-        logger.error("ERROR: Some of the data in {} are not numeric. The TAZ mapping data must be binary, ordinal, or continuous for the current version of this tool.".format(category_filename))
-        raise Exception("ERROR: Some of the data in {} are not numeric. The TAZ mapping data must be binary, ordinal, or continuous for the current version of this tool.".format(category_filename))
+                                usecols=[TAZ_col_name, category_name])
 
     # Check for blank values in TAZ mapping category
     if any(pd.isna(taz_attribute[category_name])):
@@ -669,21 +851,26 @@ def run_notebook(full_path_to_config_file, TAZ_metrics_cfg, logger):
     with open('temp.txt', 'w') as f:
         f.write(full_path_to_config_file)
 
-    # Point to categorical or continuous notebook based on the number of unique values in the TAZ mapping variable
-    if taz_attribute[category_name].nunique() < 20:
-        notebookname = 'MetricsByTAZ_categorical.ipynb'
-    else:
-        notebookname = 'MetricsByTAZ_continuous.ipynb'
+    # Point to categorical or continuous notebook based on the TAZ mapping data type and number of unique values
+    notebookname = select_metrics_notebook(taz_attribute, category_name, logger, category_filename)
 
     # Normalize the path for the output directory
     output_dir_norm = os.path.normpath(os.path.join(os.getcwd(), output_dir))
 
     # Run the notebook
-    subprocess.call(['jupyter', 'nbconvert', '--to=html', 
-                     '--no-input',
-                     '--output-dir=' + output_dir_norm,
-                     '--output', 'MetricsByTAZ_' + run_id + '.html',
-                     '--execute', notebookname])
+    notebook_return_code = subprocess.call([
+        sys.executable, '-m', 'nbconvert',
+        '--to=html',
+        '--no-input',
+        '--output-dir=' + output_dir_norm,
+        '--output', 'MetricsByTAZ_' + run_id + '.html',
+        '--execute',
+        notebookname
+    ])
+    if notebook_return_code != 0:
+        error_text = "ERROR: {} execution failed with return code {}.".format(notebookname, notebook_return_code)
+        logger.error(error_text)
+        raise Exception(error_text)
 
     logger.info('Output_dir: {}, run_id: {}, notebookname: {}'.format(output_dir_norm, run_id, notebookname))
 
@@ -698,9 +885,21 @@ def run_notebook(full_path_to_config_file, TAZ_metrics_cfg, logger):
 # ==============================================================================
 
 
-def setup_sql_nodes(input_dir, logger):
+def setup_sql_nodes(input_dir, template_dir, logger):
     # AequilibraE requires a SQLite database to be setup first--this code is copied from rdr_RunAE.py
     # Set up AEMaster SQLite database with node information
+    master_folder = os.path.join(input_dir, 'AEMaster')
+    if not os.path.exists(master_folder):
+        logger.error("AEQ DIRECTORY ERROR: AEMaster folder {} could not be found".format(master_folder))
+        raise Exception("AEQ DIRECTORY ERROR: AEMaster folder {} could not be found".format(master_folder))
+    # if project database not found in AEMaster folder, copy an empty project database from the config folder
+    db_file = os.path.join(master_folder, 'project_database.sqlite')
+    if not os.path.exists(db_file):
+        logger.info("copying SQLite database from template")
+        # NOTE: Helper tools are located an additional level down from main codebase (metamodel_py), so two os.pardir are required
+        db_template = os.path.join(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir)), template_dir, 'project_database.sqlite')
+        shutil.copy2(db_template, db_file)
+
     logger.info("importing node input file into SQLite database")
     node_file = os.path.join(input_dir, 'Networks', 'node.csv')
     network_db = os.path.join(input_dir, 'AEMaster', 'project_database.sqlite')

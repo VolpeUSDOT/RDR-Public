@@ -15,6 +15,15 @@ from rdr_supporting import log_subprocess_output, log_subprocess_error
 
 
 def main(input_folder, output_folder, cfg, logger):
+    """Render the metamodel regression report and collect the generated outputs.
+
+    :param input_folder: Path to the RDR input directory.
+    :param output_folder: Output directory for generated files.
+    :param cfg: Parsed configuration dictionary.
+    :param logger: Logger used for status, warning, and error reporting.
+    :returns: None. The function renders and moves the regression report.
+    :rtype: None
+    """
     logger.info("Start: regression module")
 
     """
